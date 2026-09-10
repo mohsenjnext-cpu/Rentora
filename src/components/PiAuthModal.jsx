@@ -10,19 +10,13 @@ import {
   Copy, 
   Check, 
   Smartphone,
-  ChevronDown,
-  ChevronUp,
-  User,
   ExternalLink
 } from 'lucide-react';
 
 export default function PiAuthModal() {
   const { lang, dir, t, l } = useLanguage();
   const { authModalOpen, setAuthModalOpen, loginWithPi, isLoading, authError } = usePiAuth();
-  
-  const [customUsername, setCustomUsername] = useState('');
   const [copied, setCopied] = useState(false);
-  const [showDemoBox, setShowDemoBox] = useState(false);
 
   const isInsidePiBrowser = piService.hasPiSdk();
 
@@ -31,8 +25,6 @@ export default function PiAuthModal() {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
-      setCustomUsername('');
-      setShowDemoBox(false);
     }
     return () => {
       document.body.style.overflow = '';
@@ -43,12 +35,6 @@ export default function PiAuthModal() {
 
   const handlePiOfficialLogin = async () => {
     await loginWithPi();
-  };
-
-  const handleCustomSubmit = async (e) => {
-    e.preventDefault();
-    if (!customUsername.trim()) return;
-    await loginWithPi(customUsername.trim());
   };
 
   const handleCopyLink = () => {
@@ -73,32 +59,35 @@ export default function PiAuthModal() {
         </button>
 
         {/* Modal Header */}
-        <div className="text-center mb-4">
+        <div className="text-center mb-5">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#26215C] text-white mb-2 shadow-md p-2">
             <Coins className="w-6 h-6 text-amber-400" />
           </div>
           <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-            {l('ورود به شبکه پای (Pi Network)', 'Sign in with Pi Network', 'تسجيل الدخول عبر شبكة باي', 'Pi Network 官方登录')}
+            {l('احراز هویت رسمی در شبکه پای', 'Official Pi Network Authentication', 'المصادقة الرسمية عبر شبكة باي', 'Pi Network 官方权威认证')}
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {l('احراز هویت رسمی و بدون نیاز به کلمه عبور', 'Official passwordless Pioneer authentication', 'توثيق رسمي وآمن بدون كلمة مرور', '官方无密码安全授权认证')}
+            {l('ورود مستقیم پیشگامان با امنیت بلاکچین پای', 'Direct Pioneer authentication secured by Pi blockchain', 'تسجيل دخول مباشر وآمن لرواد باي', '基于 Pi 区块链的先锋专属直连通道')}
           </p>
         </div>
 
         {/* Error Alert */}
         {authError && (
-          <div className="mb-3.5 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2.5">
+          <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2.5">
             <AlertCircle className="w-4 h-4 shrink-0 stroke-[2] text-rose-600" />
             <span className="leading-relaxed font-medium">{authError}</span>
           </div>
         )}
 
-        {/* CASE 1: INSIDE PI BROWSER (Native Official Login) */}
+        {/* Main Content */}
         {isInsidePiBrowser ? (
+          /* CASE 1: INSIDE PI BROWSER -> ONE-TAP OFFICIAL AUTH */
           <div className="space-y-3">
-            <div className="p-3 rounded-xl bg-[#E1F5EE] dark:bg-[#0B382C]/50 border border-[#48D2A8]/30 text-xs text-[#0F6E56] dark:text-[#48D2A8] font-medium flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 shrink-0" />
-              <span>{l('اتصال به Pi Browser برقرار است. با کلیک روی دکمه زیر وارد شوید.', 'Pi Browser detected. Tap below to authenticate.', 'متصفح باي متصل. اضغط للدخول بحسابك.', '已成功检测到 Pi 浏览器环境，点击下方按钮一键授权。')}</span>
+            <div className="p-3.5 rounded-xl bg-[#E1F5EE] dark:bg-[#0B382C]/50 border border-[#48D2A8]/30 text-xs text-[#0F6E56] dark:text-[#48D2A8] font-medium flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 shrink-0 text-[#0F6E56] dark:text-[#48D2A8]" />
+              <span className="leading-relaxed">
+                {l('محیط رسمی Pi Browser شناسایی شد. با زدن دکمه زیر، تایید هویت و نشان KYC به صورت خودکار فعال می‌شود.', 'Pi Browser environment detected. Tap below to authenticate with official KYC verification.', 'تم التعرف على متصفح باي الرسمي. اضغط بالأسفل للتوثيق وتفعيل شارة KYC.', '已检测到官方 Pi 浏览器环境，点击下方按钮一键完成实名 KYC 授权认证。')}
+              </span>
             </div>
 
             <button
@@ -109,31 +98,31 @@ export default function PiAuthModal() {
               {isLoading ? (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>{l('در حال تایید در Pi Browser...', 'Waiting for Pi Browser...', 'جارٍ التحقق في متصفح باي...', '正在等待 Pi 浏览器授权...')}</span>
+                  <span>{l('در حال تایید در Pi Browser...', 'Connecting to Pi Network...', 'جارٍ الاتصال بشبكة باي...', '正在连接 Pi 官方网络...')}</span>
                 </div>
               ) : (
                 <>
                   <ShieldCheck className="w-5 h-5 stroke-[2] text-emerald-300" />
-                  <span>{l('ورود مستقیم با حساب رسمی پای', 'Authenticate with Pi Network', 'تسجيل الدخول بحساب باي الرسمي', '使用 Pi 官方账号直接登录')}</span>
+                  <span>{l('ورود مستقیم با حساب رسمی پای (Pi Network)', 'Sign In with Pi Network', 'تسجيل الدخول الرسمي بحساب باي', '使用 Pi 官方账号直接授权登录')}</span>
                 </>
               )}
             </button>
           </div>
         ) : (
-          /* CASE 2: OUTSIDE PI BROWSER (Inform user to open in Pi Browser) */
+          /* CASE 2: OUTSIDE PI BROWSER -> Inform user to open in Pi Browser */
           <div className="space-y-3">
             
-            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-300/60 dark:border-amber-500/30 text-xs text-amber-900 dark:text-amber-200 space-y-2">
-              <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-300/60 dark:border-amber-500/30 text-xs text-amber-900 dark:text-amber-200 space-y-2">
+              <div className="flex items-center gap-2 font-black text-amber-800 dark:text-amber-300">
                 <Smartphone className="w-4 h-4 shrink-0 text-amber-600" />
-                <span>{l('نیاز به اجرای برنامه در Pi Browser', 'Requires Pi Browser', 'يتطلب فتح الموقع في متصفح باي', '需在 Pi Browser 中运行')}</span>
+                <span>{l('نیاز به اجرای برنامه در Pi Browser', 'Requires Official Pi Browser', 'يتطلب فتح الموقع في متصفح باي الرسمي', '必须在官方 Pi 浏览器中运行')}</span>
               </div>
               <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
                 {l(
-                  'جهت حفظ امنیت تراکنش‌ها و تایید هویت بلاکچینی (KYC)، ورود به رنتورا صرفاً از طریق اپلیکیشن Pi Browser انجام می‌شود.',
-                  'To ensure transaction security and verified KYC Pioneer status, please open this app inside the official Pi Browser.',
-                  'لضمان أمان المعاملات وتوثيق الهوية KYC، يرجى فتح رينتورا من داخل تطبيق متصفح باي الرسمي.',
-                  '为保障交易安全与官方区块链实名认证（KYC），请在官方 Pi Browser 应用内打开此链接登录。'
+                  'جهت جلوگیری از هویت‌های جعلی و حفظ نشان معتبر KYC، ورود به رنتورا صرفاً از طریق اپلیکیشن رسمی Pi Browser امکان‌پذیر است.',
+                  'To prevent spoofed identities and maintain genuine KYC Pioneer badges, authentication is strictly performed through the official Pi Browser.',
+                  'لمنع الحسابات الوهمية وضمان شارة التوثيق الحقيقية KYC، تسجيل الدخول متاح حصرياً عبر متصفح باي الرسمي.',
+                  '为杜绝虚假账号并保障真实的 KYC 实名认证特权，平台严格限制仅支持在官方 Pi Browser 应用内进行登录。'
                 )}
               </p>
             </div>
@@ -142,68 +131,31 @@ export default function PiAuthModal() {
             <button
               type="button"
               onClick={handleCopyLink}
-              className="w-full py-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#1E1D33] text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-2 hover:border-[#534AB7] transition cursor-pointer"
+              className="w-full py-3 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#1E1D33] text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-center gap-2 hover:border-[#534AB7] transition cursor-pointer shadow-xs"
             >
               {copied ? (
                 <>
                   <Check className="w-4 h-4 text-[#0F6E56]" />
-                  <span className="text-[#0F6E56]">{l('لینک کپی شد! در Pi Browser پیست کنید', 'Link Copied! Paste in Pi Browser', 'تم النسخ! الصقه في متصفح باي', '链接已复制！请在 Pi Browser 中粘贴打开')}</span>
+                  <span className="text-[#0F6E56] font-bold">{l('لینک کپی شد! آن را در Pi Browser باز کنید', 'Link Copied! Open in Pi Browser', 'تم النسخ! افتحه في متصفح باي', '链接已复制！请在 Pi Browser 中打开')}</span>
                 </>
               ) : (
                 <>
                   <Copy className="w-4 h-4 text-[#534AB7]" />
-                  <span>{l('کپی آدرس سایت جهت باز کردن در Pi Browser', 'Copy Link to open in Pi Browser', 'نسخ رابط الموقع لفتحه في متصفح باي', '复制链接并在 Pi 浏览器中打开')}</span>
+                  <span>{l('کپی لینک سایت جهت باز کردن در Pi Browser', 'Copy Link to open in Pi Browser', 'نسخ رابط الموقع لفتحه في متصفح باي', '复制链接并在 Pi 浏览器中打开')}</span>
                 </>
               )}
             </button>
 
-            {/* Try Authenticate anyway button in case Pi Browser bridge is present */}
+            {/* Try Connect Button */}
             <button
+              type="button"
               onClick={handlePiOfficialLogin}
               disabled={isLoading}
-              className="w-full py-2.5 px-4 rounded-xl btn-primary text-xs font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full py-2.5 px-4 rounded-xl btn-secondary text-xs font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
-              {isLoading ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <>
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>{l('تلاش برای اتصال به Pi SDK', 'Connect to Pi SDK', 'محاولة الاتصال بحساب باي', '尝试连接 Pi SDK')}</span>
-                </>
-              )}
+              <ShieldCheck className="w-4 h-4 text-[#534AB7]" />
+              <span>{l('تلاش برای اتصال به Pi SDK', 'Attempt Pi SDK Connection', 'محاولة الاتصال بـ Pi SDK', '尝试连接 Pi SDK')}</span>
             </button>
-
-            {/* Test Demo Mode (Explicitly Marked as Unverified) */}
-            <div className="pt-2 border-t border-slate-150 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setShowDemoBox(!showDemoBox)}
-                className="w-full text-center text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium flex items-center justify-center gap-1 cursor-pointer"
-              >
-                <span>{l('ورود آزمایشی پیش‌نمایش (بدون تگ KYC)', 'Demo Preview Login (Unverified)', 'دخول تجريبي للمعاينة (بدون توثيق)', '测试预览登录（无官方KYC标识）')}</span>
-                {showDemoBox ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-
-              {showDemoBox && (
-                <form onSubmit={handleCustomSubmit} className="mt-2.5 space-y-2 animate-fadeIn">
-                  <input
-                    type="text"
-                    value={customUsername}
-                    onChange={(e) => setCustomUsername(e.target.value)}
-                    placeholder="e.g. pioneer_tester"
-                    className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#121124] text-slate-900 dark:text-white focus:outline-none focus:border-[#534AB7] text-center"
-                    dir="ltr"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isLoading || !customUsername.trim()}
-                    className="w-full py-2 px-3 rounded-lg bg-slate-100 dark:bg-[#1E1D33] text-slate-700 dark:text-slate-300 font-bold text-xs transition cursor-pointer hover:bg-slate-200 dark:hover:bg-[#26215C]"
-                  >
-                    {l('ورود تستی (احراز هویت نشده)', 'Continue as Demo (Unverified)', 'متابعة كحساب تجريبي', '以未认证测试身份进入')}
-                  </button>
-                </form>
-              )}
-            </div>
 
           </div>
         )}

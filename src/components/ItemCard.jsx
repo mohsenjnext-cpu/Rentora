@@ -51,10 +51,12 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
                 <span>PRO</span>
               </span>
             )}
-            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold badge-trust flex items-center gap-0.5 shadow-xs">
-              <ShieldCheck className="w-2.5 h-2.5 stroke-[2.2]" />
-              <span>KYC</span>
-            </span>
+            {item.ownerKYC && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold badge-trust flex items-center gap-0.5 shadow-xs">
+                <ShieldCheck className="w-2.5 h-2.5 stroke-[2.2]" />
+                <span>KYC</span>
+              </span>
+            )}
           </div>
 
           {/* Favorite Button */}

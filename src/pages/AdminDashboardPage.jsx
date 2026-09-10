@@ -538,9 +538,15 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile }) 
                                 PRO VIP
                               </span>
                             )}
-                            <span className="text-[9px] badge-trust px-1.5 py-0.2 rounded font-bold">
-                              KYC ✓
-                            </span>
+                            {u.kycStatus === 'verified' ? (
+                              <span className="text-[9px] badge-trust px-1.5 py-0.2 rounded font-bold">
+                                KYC ✓
+                              </span>
+                            ) : (
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-400 font-medium">
+                                Unverified
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>

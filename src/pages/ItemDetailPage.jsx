@@ -200,7 +200,7 @@ export default function ItemDetailPage({
               )}
             </div>
             <div className="text-[10px] text-slate-400 mt-0.5">
-              {t('itemOwnerInfo')} • <span className="text-[#0F6E56] font-semibold">KYC ✓</span>
+              {t('itemOwnerInfo')} {item.ownerKYC ? <>• <span className="text-[#0F6E56] font-semibold">KYC ✓</span></> : <>• <span className="text-slate-400">({l('احراز نشده', 'Unverified', 'غير موثق', '未认证')})</span></>}
             </div>
           </div>
         </div>

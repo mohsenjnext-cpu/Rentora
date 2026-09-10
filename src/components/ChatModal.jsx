@@ -190,10 +190,12 @@ export default function ChatModal({
                       PRO
                     </span>
                   )}
-                  <span className="text-[9px] badge-trust px-1.5 py-0.2 rounded font-bold flex items-center gap-0.5">
-                    <CheckCheck className="w-2.5 h-2.5" />
-                    KYC
-                  </span>
+                  {activeItem?.ownerKYC && (
+                    <span className="text-[9px] badge-trust px-1.5 py-0.2 rounded font-bold flex items-center gap-0.5">
+                      <CheckCheck className="w-2.5 h-2.5" />
+                      KYC
+                    </span>
+                  )}
                 </div>
                 <div className="text-[10px] text-slate-400 truncate max-w-[180px] sm:max-w-[260px]">
                   {itemTitle || currentThread?.itemTitle || l('گفتگوی امن رنتورا', 'Rentora Secure Chat', 'محادثة رنتورا الآمنة', 'Rentora 安全聊天')}
