@@ -9,14 +9,17 @@
     <link rel="manifest" href="/manifest.json" />
     <title>Rentora | Peer-to-Peer Rental Marketplace</title>
     
-    <!-- Browser Environment Polyfills -->
+    <!-- Official Pi Network SDK -->
+    <script src="https://sdk.minepi.com/pi-sdk.js"></script>
     <script>
       window.global = window;
       window.process = window.process || { env: { NODE_ENV: 'production' } };
+      try {
+        if (window.Pi && typeof window.Pi.init === 'function') {
+          window.Pi.init({ version: "2.0", sandbox: false });
+        }
+      } catch (e) {}
     </script>
-
-    <!-- Official Pi Network SDK (Deferred so it never blocks page rendering) -->
-    <script defer src="https://sdk.minepi.com/pi-sdk.js"></script>
 
     <!-- Vazirmatn font for Persian & Arabic, Inter for English -->
     <link rel="preconnect" href="https://fonts.googleapis.com">

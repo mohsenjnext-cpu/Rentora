@@ -10,19 +10,29 @@ import {
   Copy, 
   Check, 
   Smartphone,
-  ExternalLink
+  ExternalLink,
+  RotateCw
 } from 'lucide-react';
 
 export default function PiAuthModal() {
   const { lang, dir, t, l } = useLanguage();
   const { authModalOpen, setAuthModalOpen, loginWithPi, isLoading, authError } = usePiAuth();
   const [copied, setCopied] = useState(false);
-
-  const isInsidePiBrowser = piService.hasPiSdk();
+  const [isInsidePiBrowser, setIsInsidePiBrowser] = useState(() => piService.hasPiSdk());
 
   useEffect(() => {
     if (authModalOpen) {
       document.body.style.overflow = 'hidden';
+      const checkSdk = () => {
+        setIsInsidePiBrowser(piService.hasPiSdk());
+      };
+      checkSdk();
+      const t1 = setTimeout(checkSdk, 400);
+      const t2 = setTimeout(checkSdk, 1200);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
     } else {
       document.body.style.overflow = '';
     }
@@ -154,7 +164,7 @@ export default function PiAuthModal() {
               className="w-full py-2.5 px-4 rounded-xl btn-secondary text-xs font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               <ShieldCheck className="w-4 h-4 text-[#534AB7]" />
-              <span>{l('تلاش برای اتصال به Pi SDK', 'Attempt Pi SDK Connection', 'محاولة الاتصال بـ Pi SDK', '尝试连接 Pi SDK')}</span>
+              <span>{l('تلاش مجدد برای اتصال به Pi SDK', 'Retry Pi SDK Connection', 'إعادة محاولة الاتصال بـ Pi SDK', '重试连接 Pi SDK')}</span>
             </button>
 
           </div>
