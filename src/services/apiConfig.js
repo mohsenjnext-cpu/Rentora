@@ -17,7 +17,11 @@ export const getApiBaseUrl = () => {
     if (window.RENTORA_API_BASE_URL) {
       return String(window.RENTORA_API_BASE_URL).trim().replace(/\/$/, '');
     }
-    // 3. Admin Saved Local Storage
+    // 3. If on PiNet, route API calls directly to Cloudflare Pages backend
+    if (window.location && window.location.hostname && window.location.hostname.includes('pinet.com')) {
+      return 'https://rentora-6zs.pages.dev';
+    }
+    // 4. Admin Saved Local Storage
     try {
       const saved = localStorage.getItem(STORAGE_API_KEY);
       if (saved && saved.trim()) {
