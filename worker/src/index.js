@@ -113,7 +113,7 @@ export default {
         return jsonResponse({
           status: 'ok',
           service: 'Rentora Cloudflare Backend',
-          version: '2.4.0',
+          version: '2.5.0',
           piApiKeyConfigured: Boolean(PI_API_KEY),
           storage: (env && env.RENTORA_KV) ? 'Cloudflare KV (Persistent)' : 'Memory',
           timestamp: new Date().toISOString()
@@ -176,13 +176,21 @@ export default {
         if (!paymentId) return errorResponse('Missing paymentId', 400);
 
         if (PI_API_KEY) {
-          var approveRes = await fetch(PI_API_URL + '/payments/' + paymentId + '/approve', {
-            method: 'POST',
-            headers: { 'Authorization': 'Key ' + PI_API_KEY, 'Content-Type': 'application/json' }
-          });
-          var approveData = await approveRes.json().catch(function() { return {}; });
-          if (approveRes.ok) {
-            return jsonResponse({ approved: true, paymentId: paymentId, verifiedWithPiApi: true, data: approveData });
+          try {
+            var approveRes = await fetch(PI_API_URL + '/payments/' + paymentId + '/approve', {
+              method: 'POST',
+              headers: { 
+                'Authorization': 'Key ' + PI_API_KEY, 
+                'Content-Type': 'application/json' 
+              },
+              body: JSON.stringify({})
+            });
+            var approveData = await approveRes.json().catch(function() { return {}; });
+            if (approveRes.ok) {
+              return jsonResponse({ approved: true, paymentId: paymentId, verifiedWithPiApi: true, data: approveData });
+            }
+          } catch (apiErr) {
+            console.error('Approve exception:', apiErr);
           }
         }
         return jsonResponse({ approved: true, paymentId: paymentId, fallbackMode: true });
@@ -197,12 +205,18 @@ export default {
 
         if (PI_API_KEY && cPaymentId && txid) {
           try {
-            await fetch(PI_API_URL + '/payments/' + cPaymentId + '/complete', {
+            var compRes = await fetch(PI_API_URL + '/payments/' + cPaymentId + '/complete', {
               method: 'POST',
-              headers: { 'Authorization': 'Key ' + PI_API_KEY, 'Content-Type': 'application/json' },
+              headers: { 
+                'Authorization': 'Key ' + PI_API_KEY, 
+                'Content-Type': 'application/json' 
+              },
               body: JSON.stringify({ txid: txid })
             });
-          } catch (e) {}
+            var compData = await compRes.json().catch(function() { return {}; });
+          } catch (e) {
+            console.error('Complete exception:', e);
+          }
         }
 
         var cDb = await getDatabase(env);
