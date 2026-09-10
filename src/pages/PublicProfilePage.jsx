@@ -72,9 +72,15 @@ export default function PublicProfilePage({
               )}
             </div>
 
-            <div className="flex items-center gap-1 text-xs text-[#0F6E56] font-bold">
-              <ShieldCheck className="w-3.5 h-3.5 stroke-[2.2]" />
-              <span>KYC Verified Pioneer</span>
+            <div className="flex items-center gap-1 text-xs font-bold">
+              {targetUser?.kycStatus === 'verified' || !targetUser ? (
+                <>
+                  <ShieldCheck className="w-3.5 h-3.5 stroke-[2.2] text-[#0F6E56]" />
+                  <span className="text-[#0F6E56]">KYC Verified Pioneer</span>
+                </>
+              ) : (
+                <span className="text-slate-400 font-normal">({l('احراز هویت نشده', 'Unverified', 'غير موثق', '未认证')})</span>
+              )}
             </div>
 
             <p className="text-xs text-slate-500 dark:text-slate-400 pt-1">

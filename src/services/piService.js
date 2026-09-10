@@ -1,6 +1,6 @@
 /**
- * Official Pi Network Client & Payment Integration Service (v3.5 Strict Blockchain Verification)
- * Supports Native Pi Browser SDK and Graceful Pioneer Verification.
+ * Official Pi Network Client & Payment Integration Service (v4.0 Strict Pioneer Auth)
+ * Native Pi Browser SDK with authentic blockchain verification.
  */
 import { getApiBaseUrl } from './apiConfig';
 
@@ -62,6 +62,7 @@ class PiNetworkService {
 
   /**
    * Authenticate user with Pi Network
+   * Real Pi Browser authentication with authentic Pioneer data.
    */
   async authenticate(customIncompleteHandler = null) {
     await this.init(this.isSandbox);
@@ -77,50 +78,38 @@ class PiNetworkService {
       } catch (err) {}
     });
 
-    let authResult = null;
-
     if (this.hasPiSdk()) {
       try {
-        console.log('[Pi SDK] Calling window.Pi.authenticate...');
+        console.log('[Pi SDK] Requesting Pioneer authentication from Pi Browser...');
         
-        // Timeout safety: if Pi Browser dialog takes too long, timeout after 7s
+        // Generous 45-second timeout allowing user to review and tap Allow in Pi Browser
         const authPromise = window.Pi.authenticate(["payments", "username"], onIncompletePayment);
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error("پاسخ تایید از Pi Browser دریافت نشد. می‌توانید با کادر پایین، شناسه کاربری خود را وارد کنید.")), 7000);
+          setTimeout(() => reject(new Error("پاسخی از Pi Browser دریافت نشد. لطفاً دوباره روی دکمه ورود کلیک کنید.")), 45000);
         });
 
-        authResult = await Promise.race([authPromise, timeoutPromise]);
-        console.log('[Pi SDK] Real Pi.authenticate returned user:', authResult?.user?.username);
-      } catch (sdkError) {
-        console.warn('[Pi SDK] Pi.authenticate notice:', sdkError);
-        throw new Error(sdkError?.message || "اتصال به Pi Browser با خطا مواجه شد. لطفاً نام کاربری خود را در کادر زیر وارد کنید.");
-      }
-    } else {
-      let existingUsername = 'pioneer';
-      try {
-        const storedUser = localStorage.getItem('rentora_live_v1_session');
-        if (storedUser) {
-          const parsed = JSON.parse(storedUser);
-          if (parsed.username) existingUsername = parsed.username;
-        }
-      } catch (e) {}
+        const authResult = await Promise.race([authPromise, timeoutPromise]);
+        console.log('[Pi SDK] Real Pi.authenticate returned verified Pioneer:', authResult?.user?.username);
 
-      authResult = {
-        accessToken: "pi_token_" + Math.random().toString(36).substring(2, 12),
-        user: {
-          uid: "pi_usr_" + existingUsername.replace('@', ''),
-          username: existingUsername.replace('@', '')
-        }
-      };
+        const backendVerification = await this.verifyAccessTokenWithBackend({
+          accessToken: authResult.accessToken,
+          username: authResult.user?.username,
+          uid: authResult.user?.uid
+        });
+
+        return {
+          ...backendVerification,
+          isOfficialSdk: true,
+          kycStatus: 'verified'
+        };
+      } catch (sdkError) {
+        console.warn('[Pi SDK] Pi.authenticate error:', sdkError);
+        throw new Error(sdkError?.message || "درخواست احراز هویت در Pi Browser لغو شد یا با خطا متوقف گردید.");
+      }
     }
 
-    const backendVerification = await this.verifyAccessTokenWithBackend({
-      accessToken: authResult.accessToken,
-      username: authResult.user?.username,
-      uid: authResult.user?.uid
-    });
-
-    return backendVerification;
+    // If outside Pi Browser
+    throw new Error("NOT_IN_PI_BROWSER");
   }
 
   /**
@@ -208,7 +197,6 @@ class PiNetworkService {
 
   /**
    * Create Real Pi Payment using Pi Network SDK
-   * Strictly enforces payment confirmation; fails if cancelled or outside Pi Browser.
    */
   async createPayment({ paymentData, callbacks, rentalData = null }) {
     await this.init(false);
@@ -303,9 +291,8 @@ class PiNetworkService {
       });
     }
 
-    // 2. If outside Pi Browser (e.g. standard Chrome/Safari browser):
-    // DO NOT fake success! Throw an explicit error requiring Pi Browser.
-    throw new Error("پرداخت مستقیم با ارز پای تنها درون مرورگر رسمی Pi Browser امکان‌پذیر است. لطفاً لینک وب‌سایت را در Pi Browser باز کنید.");
+    // 2. If outside Pi Browser:
+    throw new Error("پرداخت مستقیم با ارز پای تنها درون مرورگر رسمی Pi Browser امکان‌پذیر است. لطفاً برنامه را در Pi Browser باز کنید.");
   }
 }
 

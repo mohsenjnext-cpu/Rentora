@@ -75,20 +75,21 @@ export function PiAuthProvider({ children }) {
     return () => unsubscribe();
   }, []);
 
-  const createNewUserObject = (cleanUser, customUid = null) => {
+  const createNewUserObject = (cleanUser, customUid = null, isOfficialSdk = false) => {
     const isAdminRole = isUsernameAdmin(cleanUser);
     return {
       uid: customUid || ("pi_usr_" + cleanUser.replace('@', '')),
       username: cleanUser.replace('@', ''),
       displayName: cleanUser.replace('@', ''),
       avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUser}`,
-      bio: isAdminRole ? "مدیر کل پلتفرم رنتورا در شبکه پای" : "پیشگام تاییدشده شبکه پای در رنتورا",
+      bio: isAdminRole ? "مدیر کل پلتفرم رنتورا در شبکه پای" : (isOfficialSdk ? "پیشگام تاییدشده شبکه پای در رنتورا" : "کاربر آزمایشی رنتورا"),
       location: "ایران",
       role: isAdminRole ? 'admin' : 'user',
-      kycStatus: 'verified',
+      kycStatus: isOfficialSdk ? 'verified' : 'unverified',
+      isOfficialSdk: !!isOfficialSdk,
       reputation: null,
       totalRentals: 0,
-      piWalletConnected: true,
+      piWalletConnected: !!isOfficialSdk,
       joinedDate: new Date().toISOString().split('T')[0],
       phoneMasked: "+98 9•• ••• ••••",
       status: "active"
@@ -102,13 +103,16 @@ export function PiAuthProvider({ children }) {
     try {
       let cleanUser = '';
       let uid = null;
+      let isOfficialSdk = false;
 
       if (customUsername) {
         cleanUser = customUsername.toLowerCase().replace('@', '').trim();
+        isOfficialSdk = false; // Custom manual entry is unverified demo
       } else {
         const authData = await piService.authenticate();
         cleanUser = authData.username?.toLowerCase() || 'pioneer';
         uid = authData.uid;
+        isOfficialSdk = !!authData.isOfficialSdk;
       }
 
       const existingUser = users.find(u => u.username?.toLowerCase() === cleanUser);
@@ -118,10 +122,12 @@ export function PiAuthProvider({ children }) {
         userObj = {
           ...existingUser,
           role: isUsernameAdmin(cleanUser) ? 'admin' : (existingUser.role || 'user'),
+          kycStatus: isOfficialSdk ? 'verified' : (existingUser.kycStatus || 'unverified'),
+          isOfficialSdk: isOfficialSdk || existingUser.isOfficialSdk || false,
           status: existingUser.status || 'active'
         };
       } else {
-        userObj = createNewUserObject(cleanUser, uid);
+        userObj = createNewUserObject(cleanUser, uid, isOfficialSdk);
       }
 
       setCurrentUser(userObj);
@@ -137,7 +143,11 @@ export function PiAuthProvider({ children }) {
       return userObj;
     } catch (err) {
       console.warn('[PiAuth] Login note:', err.message);
-      setAuthError(err.message || 'اتصال به شبکه پای با خطا مواجه شد.');
+      if (err.message === 'NOT_IN_PI_BROWSER') {
+        setAuthError('ورود رسمی فقط درون برنامه Pi Browser امکان‌پذیر است.');
+      } else {
+        setAuthError(err.message || 'اتصال به شبکه پای با خطا مواجه شد.');
+      }
     } finally {
       setIsLoading(false);
     }
