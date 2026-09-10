@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --primary-dark: #26215C;
+    --primary-mid: #534AB7;
+    --purple-tint: #EEEDFE;
+    --purple-accent: #7F77DD;
+    --trust-text: #0F6E56;
+    --trust-bg: #E1F5EE;
+    --amber-text: #854F0B;
+    --amber-bg: #FAEEDA;
+    --amber-border: #FAC775;
+    --card-radius: 14px;
+    --btn-radius: 10px;
+    --border-subtle: 0.5px solid rgba(148, 163, 184, 0.28);
+  }
+
+  .dark {
+    --primary-dark: #1A173B;
+    --primary-mid: #7F77DD;
+    --purple-tint: #1E1B3D;
+    --purple-accent: #AFA9EC;
+    --trust-text: #48D2A8;
+    --trust-bg: #0B382C;
+    --amber-text: #F3B061;
+    --amber-bg: #382405;
+    --amber-border: #7A4E0B;
+    --border-subtle: 0.5px solid rgba(255, 255, 255, 0.12);
+  }
+
+  body {
+    font-family: 'Vazirmatn', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.65;
+    letter-spacing: normal;
+    background-color: #FAFAFC;
+    color: #1E1E2F;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .dark body {
+    background-color: #0E0D1B;
+    color: #F1F1F6;
+  }
+}
+
+/* Card & Surface Tokens */
+.rentora-card {
+  background-color: #FFFFFF;
+  border-radius: var(--card-radius);
+  border: 0.5px solid rgba(203, 213, 225, 0.7);
+}
+
+.dark .rentora-card {
+  background-color: #16152B;
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Primary Solid Button */
+.btn-primary {
+  background-color: #26215C;
+  color: #FFFFFF;
+  border-radius: var(--btn-radius);
+  font-weight: 700;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.btn-primary:hover {
+  background-color: #1B1742;
+  opacity: 0.95;
+}
+
+.dark .btn-primary {
+  background-color: #534AB7;
+  color: #FFFFFF;
+}
+
+.dark .btn-primary:hover {
+  background-color: #645AC7;
+}
+
+/* Secondary Button */
+.btn-secondary {
+  background-color: transparent;
+  color: #26215C;
+  border: 0.5px solid #26215C;
+  border-radius: var(--btn-radius);
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.dark .btn-secondary {
+  color: #EEEDFE;
+  border-color: #7F77DD;
+}
+
+/* Trust / KYC Green Badge */
+.badge-trust {
+  background-color: #E1F5EE;
+  color: #0F6E56;
+  border: 0.5px solid rgba(15, 110, 86, 0.25);
+  border-radius: 8px;
+}
+
+.dark .badge-trust {
+  background-color: #0B382C;
+  color: #48D2A8;
+  border: 0.5px solid rgba(72, 210, 168, 0.25);
+}
+
+/* Needs-Action Amber Alert */
+.badge-amber {
+  background-color: #FAEEDA;
+  color: #854F0B;
+  border: 0.5px solid #FAC775;
+  border-radius: 12px;
+}
+
+.dark .badge-amber {
+  background-color: #382405;
+  color: #F3B061;
+  border: 0.5px solid #7A4E0B;
+  border-radius: 12px;
+}
+
+/* Purple Tint Banner */
+.banner-purple {
+  background-color: #EEEDFE;
+  border: 0.5px solid rgba(83, 74, 183, 0.2);
+  border-radius: 16px;
+}
+
+.dark .banner-purple {
+  background-color: #1E1B3D;
+  border: 0.5px solid rgba(127, 119, 221, 0.25);
+  border-radius: 16px;
+}
+
+/* Scrollbar Utility */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

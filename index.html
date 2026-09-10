@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#6D5DF5" />
+    <meta name="description" content="Rentora - Peer-to-Peer Rental Marketplace powered by Pi Network. Rent tools, electronics, camping gear, and equipment nearby." />
+    <link rel="manifest" href="/manifest.json" />
+    <title>Rentora | Peer-to-Peer Rental Marketplace</title>
+    
+    <!-- Browser Environment Polyfills -->
+    <script>
+      window.global = window;
+      window.process = window.process || { env: { NODE_ENV: 'production' } };
+    </script>
+
+    <!-- Official Pi Network SDK (Deferred so it never blocks page rendering) -->
+    <script defer src="https://sdk.minepi.com/pi-sdk.js"></script>
+
+    <!-- Vazirmatn font for Persian & Arabic, Inter for English -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-[#FAFAFC] dark:bg-[#0E0D1B] text-[#111827] dark:text-[#F3F4F6] antialiased selection:bg-[#534AB7]/20 selection:text-[#26215C] transition-colors duration-200">
+    <div id="root">
+      <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #FAFAFC; font-family: system-ui, -apple-system, sans-serif; direction: rtl;">
+        <div style="width: 52px; height: 52px; border-radius: 14px; background: #26215C; display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-size: 26px; font-weight: bold; box-shadow: 0 6px 16px rgba(38,33,92,0.25);">
+          π
+        </div>
+        <div style="margin-top: 16px; font-weight: 800; font-size: 16px; color: #26215C;">
+          رنتورا (Rentora)
+        </div>
+        <div style="margin-top: 6px; font-size: 12px; color: #64748B;">
+          در حال بارگذاری پلتفرم امن اجاره...
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

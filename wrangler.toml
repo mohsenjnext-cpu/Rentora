@@ -1,0 +1,8 @@
+name = "rentora"
+main = "_worker.js"
+compatibility_date = "2024-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+PI_API_URL = "https://api.minepi.com/v2"
+NODE_ENV = "production"

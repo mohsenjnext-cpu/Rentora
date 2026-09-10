@@ -1,0 +1,19 @@
+{
+  "short_name": "Rentora",
+  "name": "Rentora - Peer-to-Peer Pi Rental Marketplace",
+  "description": "Rent tools, cameras, camping gear, and equipment nearby with Pi Network payments.",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#F8F9FC",
+  "theme_color": "#6D5DF5",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "categories": ["shopping", "productivity", "utilities"]
+}
