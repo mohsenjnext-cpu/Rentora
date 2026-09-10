@@ -58,7 +58,9 @@ export default function PiAuthModal() {
 
   const handleCopyLink = () => {
     try {
-      const url = typeof window !== 'undefined' ? window.location.href : 'https://rentora-6zs.pages.dev';
+      const url = typeof window !== 'undefined' && window.location.origin.includes('pinet.com') 
+        ? window.location.href 
+        : 'https://rentoraff9805.pinet.com/Rentora';
       navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
