@@ -258,6 +258,30 @@ export function RentoraProvider({ children }) {
     return false;
   };
 
+  // Activate Pro directly for admin / testing
+  const activateProImmediately = (planId = 'plan_monthly') => {
+    if (!currentUser) throw new Error("ابتدا وارد حساب کاربری شوید.");
+    const plan = SUBSCRIPTION_PLANS.find(p => p.id === planId) || SUBSCRIPTION_PLANS[1];
+    const now = new Date();
+    const expiryDate = new Date(now.getTime() + (plan.durationDays * 24 * 60 * 60 * 1000));
+
+    const updatedSubs = {
+      ...proSubscriptions,
+      [currentUser.username.toLowerCase()]: {
+        planId: plan.id,
+        planName: plan.nameFa,
+        activeUntil: expiryDate.toISOString(),
+        isPro: true,
+        purchasedAt: now.toISOString(),
+        paymentId: 'dev_instant_' + Date.now(),
+        txid: '0x' + Math.random().toString(16).substring(2, 10)
+      }
+    };
+
+    setProSubscriptions(updatedSubs);
+    return { success: true, plan };
+  };
+
   // Subscribe to Pro Plan with Pi SDK Payment
   const purchaseProSubscription = async (planId) => {
     if (!currentUser) throw new Error("برای فعال‌سازی اشتراک، ابتدا با حساب پای وارد شوید.");
@@ -725,6 +749,7 @@ export function RentoraProvider({ children }) {
         toggleFavorite,
         isUserPro,
         purchaseProSubscription,
+        activateProImmediately,
         calculatePricing,
         addItem,
         createItemListing: addItem,

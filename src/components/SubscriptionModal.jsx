@@ -15,26 +15,62 @@ import {
   Zap,
   LogIn,
   ShieldCheck,
-  Smartphone
+  Smartphone,
+  FlaskConical,
+  Check
 } from 'lucide-react';
 
 export default function SubscriptionModal({ isOpen, onClose }) {
   const { lang, dir, t, l } = useLanguage();
-  const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
-  const { purchaseProSubscription, isUserPro } = useRentora();
+  const { currentUser, isAuthenticated, isAdmin, setAuthModalOpen } = usePiAuth();
+  const { purchaseProSubscription, activateProImmediately, isUserPro } = useRentora();
 
   const [selectedPlanId, setSelectedPlanId] = useState('plan_monthly');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isInstantActivating, setIsInstantActivating] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isSandbox, setIsSandbox] = useState(() => piService.isSandbox);
 
   if (!isOpen) return null;
 
   const isAlreadyPro = isUserPro(currentUser?.username);
-  const isInsidePiBrowser = piService.hasPiSdk();
+  const isDeveloperOrAdmin = isAdmin || currentUser?.username?.toLowerCase() === 'avina60';
+
+  const handleToggleSandbox = (mode) => {
+    setIsSandbox(mode);
+    piService.setSandboxMode(mode);
+  };
+
+  const handleInstantAdminActivation = () => {
+    try {
+      setIsInstantActivating(true);
+      setErrorMessage('');
+      const result = activateProImmediately(selectedPlanId);
+      setSuccessMessage(l(
+        'اشتراک طلایی Rentora Pro برای شما (سازنده و ادمین) فوراً فعال شد!',
+        'Rentora Pro VIP status instantly activated for Owner / Developer!',
+        'تم تفعيل اشتراك برو الذهبي فوراً للمطور والمدير!',
+        '已为开发者/管理员账户立即开通黄金 Pro VIP 权益！'
+      ));
+      try {
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+      } catch (e) {}
+      setTimeout(() => {
+        onClose();
+      }, 2000);
+    } catch (e) {
+      setErrorMessage(e.message);
+    } finally {
+      setIsInstantActivating(false);
+    }
+  };
 
   const handlePurchase = async () => {
-    // 1. Strict verification: user MUST be authenticated with Pi account
     if (!isAuthenticated || !currentUser) {
       setErrorMessage(l(
         'جهت خرید اشتراک و کسر پای از کیف پول، ابتدا باید وارد حساب پای خود شوید.',
@@ -141,7 +177,7 @@ export default function SubscriptionModal({ isOpen, onClose }) {
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 text-xs">
 
           {/* Success Banner */}
           {successMessage && (
@@ -159,20 +195,6 @@ export default function SubscriptionModal({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* Authentication Warning if not logged in */}
-          {!isAuthenticated && (
-            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-300 text-amber-900 dark:text-amber-300 flex items-center justify-between gap-2">
-              <span className="font-semibold">{l('برای پرداخت مستقیم پای، ابتدا به حساب خود متصل شوید.', 'Please sign in with Pi to execute payment.', 'يرجى تسجيل الدخول بحساب باي للمتابعة.', '请先登录 Pi 账户以继续支付。')}</span>
-              <button
-                type="button"
-                onClick={() => setAuthModalOpen(true)}
-                className="btn-primary px-3 py-1 text-xs font-bold shrink-0 cursor-pointer"
-              >
-                {t('navLogin')}
-              </button>
-            </div>
-          )}
-
           {/* Current Pro Active Banner */}
           {isAlreadyPro && (
             <div className="p-3 rounded-xl badge-trust flex items-center justify-between">
@@ -180,6 +202,24 @@ export default function SubscriptionModal({ isOpen, onClose }) {
                 <Crown className="w-4 h-4 text-amber-500 fill-amber-400" />
                 <span className="font-bold text-[#0F6E56]">{l('حساب شما در حال حاضر Pro فعال است!', 'Your account has active Pro VIP status!', 'حسابك لديه اشتراك Pro فعال حالياً!', '您的账户当前已是有效的 Pro VIP 状态！')}</span>
               </div>
+            </div>
+          )}
+
+          {/* Developer / Admin Instant Bypass */}
+          {isDeveloperOrAdmin && (
+            <div className="p-3 rounded-xl bg-purple-50 dark:bg-[#201D40] border border-purple-200 dark:border-purple-800 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-purple-900 dark:text-purple-200">
+                <Zap className="w-4 h-4 text-amber-500 fill-amber-400 shrink-0" />
+                <span className="font-bold text-[11px]">{l('دسترسی ویژه سازنده و ادمین:', 'Developer / Admin Quick Mode:', 'وضع المطور والمدير السريع:', '开发者/管理员专属通道：')}</span>
+              </div>
+              <button
+                type="button"
+                disabled={isInstantActivating}
+                onClick={handleInstantAdminActivation}
+                className="px-3 py-1.5 rounded-lg bg-amber-400 text-[#26215C] font-black text-xs hover:bg-amber-300 transition cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                {l('فعال‌سازی فوری بدون کسر پای', 'Instant Free Activation', 'تفعيل فوري مجاني', '一键免费开通')}
+              </button>
             </div>
           )}
 
@@ -257,17 +297,6 @@ export default function SubscriptionModal({ isOpen, onClose }) {
                 <span>{l('نردبان خودکار و نمایش در صدر نتایج', 'Priority ranking at top of search', 'أولوية الظهور في صدارة نتائج البحث', '搜索结果置顶与搜索权重优先推荐')}</span>
               </div>
             </div>
-          </div>
-
-          {/* Pi Network Direct Payment Notice */}
-          <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-[#1A1930] border border-slate-200 dark:border-slate-800 flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-            <Smartphone className="w-4 h-4 text-[#534AB7] shrink-0" />
-            <span>{l(
-              'تراکنش خرید اشتراک مستقیماً در کیف پول رسمی Pi Browser با کسر پای تسویه می‌گردد.',
-              'Subscription payment settles directly from your Pi Wallet inside Pi Browser.',
-              'تتم تسوية عملية الشراء مباشرة من محفظة باي الرسمية داخل متصفح Pi Browser.',
-              '会员支付将直接在 Pi Browser 的官方 Pi 钱包中完成扣除与链上结算。'
-            )}</span>
           </div>
 
         </div>
