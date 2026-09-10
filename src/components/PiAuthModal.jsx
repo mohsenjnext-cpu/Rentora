@@ -11,13 +11,17 @@ import {
   Check, 
   Smartphone,
   ExternalLink,
-  RotateCw
+  RotateCw,
+  FlaskConical,
+  Radio
 } from 'lucide-react';
 
 export default function PiAuthModal() {
   const { lang, dir, t, l } = useLanguage();
   const { authModalOpen, setAuthModalOpen, loginWithPi, isLoading, authError } = usePiAuth();
+  
   const [copied, setCopied] = useState(false);
+  const [isSandbox, setIsSandbox] = useState(false);
   const [isInsidePiBrowser, setIsInsidePiBrowser] = useState(() => piService.hasPiSdk());
 
   useEffect(() => {
@@ -28,7 +32,7 @@ export default function PiAuthModal() {
       };
       checkSdk();
       const t1 = setTimeout(checkSdk, 400);
-      const t2 = setTimeout(checkSdk, 1200);
+      const t2 = setTimeout(checkSdk, 1000);
       return () => {
         clearTimeout(t1);
         clearTimeout(t2);
@@ -42,6 +46,11 @@ export default function PiAuthModal() {
   }, [authModalOpen]);
 
   if (!authModalOpen) return null;
+
+  const handleToggleSandbox = (mode) => {
+    setIsSandbox(mode);
+    piService.setSandboxMode(mode);
+  };
 
   const handlePiOfficialLogin = async () => {
     await loginWithPi();
@@ -69,7 +78,7 @@ export default function PiAuthModal() {
         </button>
 
         {/* Modal Header */}
-        <div className="text-center mb-5">
+        <div className="text-center mb-4">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#26215C] text-white mb-2 shadow-md p-2">
             <Coins className="w-6 h-6 text-amber-400" />
           </div>
@@ -77,13 +86,42 @@ export default function PiAuthModal() {
             {l('احراز هویت رسمی در شبکه پای', 'Official Pi Network Authentication', 'المصادقة الرسمية عبر شبكة باي', 'Pi Network 官方权威认证')}
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {l('ورود مستقیم پیشگامان با امنیت بلاکچین پای', 'Direct Pioneer authentication secured by Pi blockchain', 'تسجيل دخول مباشر وآمن لرواد باي', '基于 Pi 区块链的先锋专属直连通道')}
+            {l('ورود مستقیم پیشگامان با تایید هویت KYC', 'Direct Pioneer login with authentic KYC badge', 'تسجيل دخول مباشر وآمن لرواد باي الموثقين', '基于 Pi 区块链的 KYC 实名认证通道')}
           </p>
+        </div>
+
+        {/* Network Selector Tabs (Mainnet / Sandbox) */}
+        <div className="mb-3.5 p-1 bg-slate-100 dark:bg-[#1C1B30] rounded-xl flex items-center gap-1 text-xs">
+          <button
+            type="button"
+            onClick={() => handleToggleSandbox(false)}
+            className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              !isSandbox 
+                ? 'bg-white dark:bg-[#26215C] text-[#26215C] dark:text-white shadow-2xs' 
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-[#0F6E56]" />
+            <span>{l('شبکه اصلی (Mainnet)', 'Mainnet', 'الشبكة الرئيسية', '主网模式')}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleToggleSandbox(true)}
+            className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              isSandbox 
+                ? 'bg-amber-400 text-[#26215C] shadow-2xs' 
+                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            }`}
+          >
+            <FlaskConical className="w-3.5 h-3.5" />
+            <span>{l('سندباکس تستی (Sandbox)', 'Testnet Sandbox', 'وضع الاختبار', '沙盒测试')}</span>
+          </button>
         </div>
 
         {/* Error Alert */}
         {authError && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2.5">
+          <div className="mb-3.5 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2.5">
             <AlertCircle className="w-4 h-4 shrink-0 stroke-[2] text-rose-600" />
             <span className="leading-relaxed font-medium">{authError}</span>
           </div>
@@ -93,10 +131,15 @@ export default function PiAuthModal() {
         {isInsidePiBrowser ? (
           /* CASE 1: INSIDE PI BROWSER -> ONE-TAP OFFICIAL AUTH */
           <div className="space-y-3">
-            <div className="p-3.5 rounded-xl bg-[#E1F5EE] dark:bg-[#0B382C]/50 border border-[#48D2A8]/30 text-xs text-[#0F6E56] dark:text-[#48D2A8] font-medium flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 shrink-0 text-[#0F6E56] dark:text-[#48D2A8]" />
+            <div className="p-3 rounded-xl bg-[#E1F5EE] dark:bg-[#0B382C]/50 border border-[#48D2A8]/30 text-xs text-[#0F6E56] dark:text-[#48D2A8] font-medium flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 shrink-0 text-[#0F6E56] dark:text-[#48D2A8]" />
               <span className="leading-relaxed">
-                {l('محیط رسمی Pi Browser شناسایی شد. با زدن دکمه زیر، تایید هویت و نشان KYC به صورت خودکار فعال می‌شود.', 'Pi Browser environment detected. Tap below to authenticate with official KYC verification.', 'تم التعرف على متصفح باي الرسمي. اضغط بالأسفل للتوثيق وتفعيل شارة KYC.', '已检测到官方 Pi 浏览器环境，点击下方按钮一键完成实名 KYC 授权认证。')}
+                {l(
+                  isSandbox ? 'حالت سندباکس توسعه فعال است. روی دکمه زیر کلیک کنید.' : 'محیط رسمی Pi Browser شناسایی شد. روی دکمه زیر کلیک کنید.',
+                  isSandbox ? 'Sandbox mode active. Tap below to authenticate.' : 'Pi Browser detected. Tap below to authenticate.',
+                  isSandbox ? 'وضع الاختبار مفعل. اضغط بالأسفل للمصادقة.' : 'تم التعرف على متصفح باي. اضغط بالأسفل للمصادقة.',
+                  isSandbox ? '沙盒测试环境已启用，点击下方按钮登录。' : '已检测到 Pi 浏览器，点击下方按钮一键登录。'
+                )}
               </span>
             </div>
 
@@ -122,7 +165,7 @@ export default function PiAuthModal() {
           /* CASE 2: OUTSIDE PI BROWSER -> Inform user to open in Pi Browser */
           <div className="space-y-3">
             
-            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-300/60 dark:border-amber-500/30 text-xs text-amber-900 dark:text-amber-200 space-y-2">
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-300/60 dark:border-amber-500/30 text-xs text-amber-900 dark:text-amber-200 space-y-1.5">
               <div className="flex items-center gap-2 font-black text-amber-800 dark:text-amber-300">
                 <Smartphone className="w-4 h-4 shrink-0 text-amber-600" />
                 <span>{l('نیاز به اجرای برنامه در Pi Browser', 'Requires Official Pi Browser', 'يتطلب فتح الموقع في متصفح باي الرسمي', '必须在官方 Pi 浏览器中运行')}</span>
@@ -164,7 +207,7 @@ export default function PiAuthModal() {
               className="w-full py-2.5 px-4 rounded-xl btn-secondary text-xs font-bold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               <ShieldCheck className="w-4 h-4 text-[#534AB7]" />
-              <span>{l('تلاش مجدد برای اتصال به Pi SDK', 'Retry Pi SDK Connection', 'إعادة محاولة الاتصال بـ Pi SDK', '重试连接 Pi SDK')}</span>
+              <span>{l('تلاش برای اتصال به Pi SDK', 'Attempt Pi SDK Connection', 'محاولة الاتصال بـ Pi SDK', '尝试连接 Pi SDK')}</span>
             </button>
 
           </div>

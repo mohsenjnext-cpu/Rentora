@@ -1,6 +1,6 @@
 /**
- * Official Pi Network Client & Payment Integration Service (v5.0 Strict & Resilient)
- * Native Pi Browser SDK with timeout protection and robust state management.
+ * Official Pi Network Client & Payment Integration Service (v5.5 Production & Sandbox Dual Mode)
+ * Native Pi Browser SDK with automatic Sandbox/Mainnet fallback and resilient authentication.
  */
 import { getApiBaseUrl } from './apiConfig';
 
@@ -18,10 +18,26 @@ class PiNetworkService {
   }
 
   /**
+   * Set Sandbox or Mainnet mode
+   */
+  setSandboxMode(enabled = false) {
+    this.isSandbox = !!enabled;
+    this.isInitialized = false;
+    if (typeof window !== 'undefined' && window.Pi && typeof window.Pi.init === 'function') {
+      try {
+        window.Pi.init({ version: "2.0", sandbox: this.isSandbox });
+        this.isInitialized = true;
+      } catch (e) {}
+    }
+  }
+
+  /**
    * Initialize Pi Network SDK
    */
-  async init(sandbox = false) {
-    this.isSandbox = sandbox;
+  async init(sandbox = null) {
+    if (sandbox !== null) {
+      this.isSandbox = !!sandbox;
+    }
     if (typeof window !== 'undefined' && window.Pi && typeof window.Pi.init === 'function') {
       try {
         window.Pi.init({ version: "2.0", sandbox: this.isSandbox });
@@ -36,12 +52,15 @@ class PiNetworkService {
   /**
    * Authenticate user strictly with official Pi Network SDK
    */
-  async authenticate(customIncompleteHandler = null) {
+  async authenticate(customIncompleteHandler = null, forceSandbox = null) {
     if (!this.hasPiSdk()) {
       throw new Error("NOT_IN_PI_BROWSER");
     }
 
-    // Try initializing Pi SDK
+    if (forceSandbox !== null) {
+      this.isSandbox = !!forceSandbox;
+    }
+
     await this.init(this.isSandbox);
 
     const onIncompletePayment = customIncompleteHandler || (async (payment) => {
@@ -58,19 +77,19 @@ class PiNetworkService {
     });
 
     try {
-      console.log('[Pi SDK] Requesting Pi.authenticate with scopes ["payments", "username"]...');
+      console.log(`[Pi SDK] Calling Pi.authenticate (sandbox: ${this.isSandbox})...`);
 
-      // 12-second timeout race to prevent infinite loading spinners
+      // 30-second timeout to handle VPN latency in Pi Browser
       const authPromise = window.Pi.authenticate(["payments", "username"], onIncompletePayment);
       
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
-          reject(new Error("پاسخی از Pi Browser دریافت نشد. لطفاً صفحه را رفرش کرده یا مطمئن شوید که دامنه در پورتال توسعه‌دهندگان تایید شده است."));
-        }, 12000);
+          reject(new Error("پاسخی از Pi Browser دریافت نشد. در صورت تست اولیه، دکمه 'حالت سندباکس (Sandbox)' را فعال کنید."));
+        }, 30000);
       });
 
       const authResult = await Promise.race([authPromise, timeoutPromise]);
-      console.log('[Pi SDK] Real Pi.authenticate returned verified Pioneer:', authResult);
+      console.log('[Pi SDK] Real Pi.authenticate returned Pioneer:', authResult);
 
       if (!authResult || !authResult.user || !authResult.user.username) {
         throw new Error("اطلاعات کاربری از Pi Browser دریافت نشد.");
