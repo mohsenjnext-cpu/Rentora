@@ -47,6 +47,15 @@ test('payment completion requires an approved intent and strict Pi binding', () 
   assert.match(complete, /\['approved','completed','complete'\]/);
 });
 
+test('payment completion can recover when Pi is already completed but D1 has not finalized it', () => {
+  const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
+  assert.match(complete, /\['approved','completed','complete'\]\.includes\(status\)/);
+  assert.match(complete, /if \(!completionResponse\.ok && !\['completed','complete'\]\.includes\(status\)\)/);
+  assert.match(complete, /UPDATE payment_intents SET pi_payment_id=\?1,pi_txid=\?2,status='completed'/);
+  assert.match(complete, /UPDATE rentals SET payment_status='completed',status='confirmed'/);
+  assert.match(complete, /INSERT OR IGNORE INTO transactions/);
+});
+
 test('server logout revokes the KV session', () => {
   const logout = section("path === '/api/auth/logout'", "path === '/api/payments/intent'");
   assert.match(logout, /RENTORA_KV\.delete/);
