@@ -11,17 +11,13 @@ import {
   Sparkles, 
   Coins, 
   CheckCheck, 
-  Crown,
-  AlertTriangle,
-  ShieldCheck,
-  MessageSquare,
-  LogIn,
-  ArrowRight,
-  ArrowLeft,
-  User,
-  Clock,
-  RotateCw,
-  Trash2
+  ShieldCheck, 
+  MessageSquare, 
+  LogIn, 
+  ArrowRight, 
+  ArrowLeft, 
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function ChatModal({ 
@@ -35,43 +31,59 @@ export default function ChatModal({
 }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
-  const { chats = [], sendChatMessage, deleteChatThread, isUserPro, refreshApp } = useRentora();
+  const { 
+    chats = [], 
+    sendChatMessage, 
+    deleteChatThread, 
+    deleteChatMessage, 
+    clearAllChats,
+    isUserPro, 
+    refreshApp 
+  } = useRentora();
 
   const [messageText, setMessageText] = useState('');
   const [filterWarningMessage, setFilterWarningMessage] = useState('');
   const [selectedThread, setSelectedThread] = useState(null);
   const [threadToDelete, setThreadToDelete] = useState(null);
+  const [messageToDelete, setMessageToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const messagesEndRef = useRef(null);
 
   const activeItem = itemContext || initialItem;
 
-  // Determine current active chat thread or target recipient
+  // Determine current active recipient
   const targetRecipientUsername = activeItem?.ownerUsername || activeItem?.recipientUsername || null;
   const itemTitle = activeItem?.title || '';
 
-  // Filter threads that belong to currentUser
+  // Filter threads belonging to current user
   const myThreads = (chats || []).filter(th => {
     if (!currentUser?.username) return false;
     const myName = currentUser.username.toLowerCase();
-    return th.renterUsername?.toLowerCase() === myName || th.ownerUsername?.toLowerCase() === myName;
+    return (
+      (th.renterUsername && th.renterUsername.toLowerCase() === myName) ||
+      (th.ownerUsername && th.ownerUsername.toLowerCase() === myName)
+    );
   });
 
-  // Determine which thread is currently open inside the chat
+  // Find currently open thread
   let currentThread = null;
   if (selectedThread) {
     currentThread = (chats || []).find(th => th.id === selectedThread.id) || selectedThread;
   } else if (targetRecipientUsername) {
-    currentThread = (chats || []).find(th => 
-      (th.renterUsername?.toLowerCase() === currentUser?.username?.toLowerCase() && th.ownerUsername?.toLowerCase() === targetRecipientUsername?.toLowerCase()) ||
-      (th.ownerUsername?.toLowerCase() === currentUser?.username?.toLowerCase() && th.renterUsername?.toLowerCase() === targetRecipientUsername?.toLowerCase())
-    );
+    currentThread = (chats || []).find(th => {
+      const u1 = (th.renterUsername || '').toLowerCase();
+      const u2 = (th.ownerUsername || '').toLowerCase();
+      const myName = (currentUser?.username || '').toLowerCase();
+      const targetName = targetRecipientUsername.toLowerCase();
+      return (u1 === myName && u2 === targetName) || (u2 === myName && u1 === targetName);
+    });
   }
 
-  // Active recipient in the conversation
+  // Active recipient
   let activeRecipient = targetRecipientUsername;
   if (!activeRecipient && currentThread) {
-    activeRecipient = currentThread.renterUsername?.toLowerCase() === currentUser?.username?.toLowerCase()
+    const myName = (currentUser?.username || '').toLowerCase();
+    activeRecipient = (currentThread.renterUsername || '').toLowerCase() === myName
       ? currentThread.ownerUsername
       : currentThread.renterUsername;
   }
@@ -83,10 +95,8 @@ export default function ChatModal({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Real-time Chat Sync interval (every 3 seconds while chat is open)
   useEffect(() => {
     if (!isOpen) return;
-
     if (activeItem) {
       setSelectedThread(null);
     }
@@ -149,7 +159,6 @@ export default function ChatModal({
     else if (onBookDirectly && activeItem) onBookDirectly(activeItem);
   };
 
-  // Check if we should show thread list view (e.g. opened from header and no target item)
   const isThreadListView = !activeItem && !selectedThread && myThreads.length > 0;
 
   return (
@@ -162,8 +171,10 @@ export default function ChatModal({
         className="bg-white dark:bg-[#151426] rounded-2xl w-full max-w-lg h-[88vh] max-h-[640px] flex flex-col border border-slate-200 dark:border-slate-800 shadow-2xl animate-scaleIn overflow-hidden"
       >
         
-        {/* Header */}
-        <div className="p-3.5 border-b border-slate-150 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-[#1A1930]/70">
+        {/* ========================================================= */}
+        {/* TOP HEADER                                                */}
+        {/* ========================================================= */}
+        <div className="p-3.5 border-b border-slate-150 dark:border-slate-800 flex items-center justify-between bg-slate-50/90 dark:bg-[#1A1930]/90">
           
           {isThreadListView ? (
             <div className="flex items-center gap-2">
@@ -180,12 +191,13 @@ export default function ChatModal({
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
               {!activeItem && selectedThread && (
                 <button
                   type="button"
                   onClick={() => setSelectedThread(null)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800 transition cursor-pointer shrink-0"
+                  title={t('btnBack')}
                 >
                   {dir === 'rtl' ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
                 </button>
@@ -194,33 +206,34 @@ export default function ChatModal({
               <img
                 src={`https://api.dicebear.com/7.x/bottts/svg?seed=${activeRecipient || 'pioneer'}`}
                 alt=""
-                className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600"
+                className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 shrink-0"
               />
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white font-mono" dir="ltr">
+                  <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white font-mono truncate" dir="ltr">
                     @{activeRecipient || 'pioneer'}
                   </span>
                   {isRecipientPro && (
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-400 text-[#26215C]">
+                    <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-400 text-[#26215C] shrink-0">
                       PRO
                     </span>
                   )}
                   {activeItem?.ownerKYC && (
-                    <span className="text-[9px] badge-trust px-1.5 py-0.2 rounded font-bold flex items-center gap-0.5">
+                    <span className="text-[9px] badge-trust px-1.5 py-0.2 rounded font-bold flex items-center gap-0.5 shrink-0">
                       <CheckCheck className="w-2.5 h-2.5" />
                       KYC
                     </span>
                   )}
                 </div>
-                <div className="text-[10px] text-slate-400 truncate max-w-[180px] sm:max-w-[260px]">
+                <div className="text-[10px] text-slate-400 truncate max-w-[140px] sm:max-w-[200px]">
                   {itemTitle || currentThread?.itemTitle || l('گفتگوی امن رنتورا', 'Rentora Secure Chat', 'محادثة رنتورا الآمنة', 'Rentora 安全聊天')}
                 </div>
               </div>
             </div>
           )}
 
-          <div className="flex items-center gap-1.5">
+          {/* Action Buttons in Header */}
+          <div className="flex items-center gap-1.5 shrink-0">
             {activeItem && (
               <button
                 type="button"
@@ -232,34 +245,44 @@ export default function ChatModal({
               </button>
             )}
 
-            {currentThread && !isThreadListView && (
+            {/* DEDICATED VISIBLE DELETE CHAT BUTTON */}
+            {!isThreadListView && (
               <button
                 type="button"
-                onClick={() => setThreadToDelete(currentThread)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                onClick={() => {
+                  const target = currentThread || {
+                    id: activeItem?.id || targetRecipientUsername || 'current',
+                    recipientUsername: activeRecipient,
+                    itemTitle: itemTitle || currentThread?.itemTitle
+                  };
+                  setThreadToDelete(target);
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-950/70 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-2xs"
                 title={t('chatDeleteBtn')}
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                <span className="text-[11px]">{t('chatDeleteBtn')}</span>
               </button>
             )}
 
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition cursor-pointer"
+              aria-label="Close"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Security / Policy Banner */}
+        {/* Security Banner */}
         <div className="p-2 px-3 bg-[#EEEDFE]/70 dark:bg-[#1E1B3D]/70 border-b border-[#7F77DD]/20 text-[10px] sm:text-[11px] text-[#26215C] dark:text-[#EEEDFE] flex items-center gap-2 font-medium">
           <ShieldCheck className="w-4 h-4 text-[#534AB7] dark:text-[#AFA9EC] shrink-0" />
           <span className="truncate">{t('chatNotice')}</span>
         </div>
 
-        {/* Phone Number Anti-Bypass Alert Warning */}
+        {/* Safety Warning */}
         {filterWarningMessage && (
           <div className="p-2.5 bg-rose-500/10 border-b border-rose-300/40 text-[11px] text-rose-700 dark:text-rose-300 flex items-start gap-2 font-semibold animate-fadeIn">
             <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -267,23 +290,43 @@ export default function ChatModal({
           </div>
         )}
 
-        {/* THREAD LIST VIEW (If opened with multiple conversations) */}
+        {/* ========================================================= */}
+        {/* VIEW 1: THREAD LIST VIEW                                  */}
+        {/* ========================================================= */}
         {isThreadListView ? (
           <div className="flex-1 p-3 overflow-y-auto space-y-2">
+            <div className="flex items-center justify-between pb-1 px-1">
+              <span className="text-[11px] text-slate-500 font-bold">
+                {l('لیست گفتگوهای شما', 'Your conversation list', 'قائمة محادثاتك', '您的会话列表')}
+              </span>
+              {myThreads.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setThreadToDelete('ALL_CHATS')}
+                  className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>{l('حذف همه گفتگوها', 'Delete all chats', 'حذف جميع المحادثات', '清除全部会话')}</span>
+                </button>
+              )}
+            </div>
+
             {myThreads.map(th => {
-              const otherUser = th.renterUsername?.toLowerCase() === currentUser?.username?.toLowerCase() 
+              const myName = (currentUser?.username || '').toLowerCase();
+              const otherUser = (th.renterUsername || '').toLowerCase() === myName
                 ? th.ownerUsername 
                 : th.renterUsername;
               const lastMsg = th.messages?.[th.messages.length - 1];
+
               return (
                 <div
                   key={th.id}
                   onClick={() => setSelectedThread(th)}
-                  className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#18172E] hover:border-[#534AB7] transition-all cursor-pointer flex items-center justify-between gap-3"
+                  className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#18172E] hover:border-[#534AB7] transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs group"
                 >
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <img
-                      src={`https://api.dicebear.com/7.x/bottts/svg?seed=${otherUser}`}
+                      src={`https://api.dicebear.com/7.x/bottts/svg?seed=${otherUser || 'pioneer'}`}
                       alt=""
                       className="w-10 h-10 rounded-xl bg-slate-150 dark:bg-slate-700 border border-slate-200 dark:border-slate-700 shrink-0"
                     />
@@ -298,18 +341,19 @@ export default function ChatModal({
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[200px]">
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[180px] sm:max-w-[240px]">
                         {lastMsg?.text || th.itemTitle || 'پیام جدید'}
                       </p>
                     </div>
                   </div>
 
+                  {/* Actions on Card: Timestamp + Red Delete Button */}
                   <div className="flex items-center gap-2 shrink-0">
                     <div className="text-right">
                       <span className="text-[9px] text-slate-400 block font-mono">
                         {lastMsg?.timestamp || ''}
                       </span>
-                      <span className="text-[10px] text-[#534AB7] dark:text-[#AFA9EC] font-semibold">
+                      <span className="text-[10px] text-[#534AB7] dark:text-[#AFA9EC] font-semibold truncate max-w-[90px] block">
                         {th.itemTitle}
                       </span>
                     </div>
@@ -320,10 +364,11 @@ export default function ChatModal({
                         e.stopPropagation();
                         setThreadToDelete(th);
                       }}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-950/70 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-2xs"
                       title={t('chatDeleteBtn')}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
+                      <span>{t('btnDelete')}</span>
                     </button>
                   </div>
                 </div>
@@ -331,8 +376,35 @@ export default function ChatModal({
             })}
           </div>
         ) : (
-          /* ACTIVE CHAT MESSAGES BODY */
+          /* ========================================================= */
+          /* VIEW 2: ACTIVE CONVERSATION MESSAGES                      */
+          /* ========================================================= */
           <div className="flex-1 p-3.5 sm:p-4 overflow-y-auto space-y-3 bg-slate-50/40 dark:bg-[#121124]/40 text-xs">
+            
+            {/* Clear messages banner if conversation has messages */}
+            {messagesList.length > 0 && (
+              <div className="flex items-center justify-between px-3 py-1.5 mb-2 bg-slate-100 dark:bg-[#191830] rounded-xl border border-slate-200/70 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-300">
+                <span className="font-medium">
+                  {messagesList.length} {l('پیام ثبت‌شده در این گفتگو', 'messages in this chat', 'رسائل في هذه المحادثة', '条聊天记录')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = currentThread || {
+                      id: activeItem?.id || targetRecipientUsername || 'current',
+                      recipientUsername: activeRecipient,
+                      itemTitle: itemTitle || currentThread?.itemTitle
+                    };
+                    setThreadToDelete(target);
+                  }}
+                  className="text-rose-600 dark:text-rose-400 hover:text-rose-700 font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>{l('حذف کامل این گفتگو', 'Delete conversation', 'حذف المحادثة', '清空本段会话')}</span>
+                </button>
+              </div>
+            )}
+
             {messagesList.length === 0 ? (
               <div className="py-12 text-center space-y-3">
                 <div className="w-12 h-12 mx-auto rounded-2xl bg-[#EEEDFE] dark:bg-[#26215C] text-[#534AB7] dark:text-white flex items-center justify-center shadow-xs">
@@ -349,22 +421,36 @@ export default function ChatModal({
               </div>
             ) : (
               messagesList.map((msg, idx) => {
-                const isMe = msg.senderUsername?.toLowerCase() === currentUser?.username?.toLowerCase();
+                const myName = (currentUser?.username || '').toLowerCase();
+                const isMe = (msg.senderUsername || '').toLowerCase() === myName;
                 return (
                   <div
                     key={msg.id || idx}
-                    className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                    className={`flex flex-col group ${isMe ? 'items-end' : 'items-start'}`}
                   >
-                    <div
-                      className={`max-w-[82%] p-2.5 rounded-2xl text-xs leading-relaxed ${
-                        isMe
-                          ? 'bg-[#26215C] dark:bg-[#534AB7] text-white rounded-br-xs shadow-xs'
-                          : 'bg-white dark:bg-[#1E1D33] text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-bl-xs shadow-2xs'
-                      }`}
-                    >
-                      {msg.text}
+                    <div className={`flex items-center gap-1.5 max-w-[90%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                      <div
+                        className={`p-2.5 rounded-2xl text-xs leading-relaxed ${
+                          isMe
+                            ? 'bg-[#26215C] dark:bg-[#534AB7] text-white rounded-br-xs shadow-xs'
+                            : 'bg-white dark:bg-[#1E1D33] text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-bl-xs shadow-2xs'
+                        }`}
+                      >
+                        {msg.text}
+                      </div>
+
+                      {/* Delete Individual Message Button */}
+                      <button
+                        type="button"
+                        onClick={() => setMessageToDelete(msg)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer shrink-0"
+                        title={l('حذف این پیام', 'Delete message', 'حذف الرسالة', '删除此消息')}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                     </div>
-                    <span className="text-[9px] text-slate-400 mt-1 px-1 font-mono">
+
+                    <span className="text-[9px] text-slate-400 mt-0.5 px-1 font-mono">
                       {msg.timestamp || 'هم‌اکنون'}
                     </span>
                   </div>
@@ -375,7 +461,7 @@ export default function ChatModal({
           </div>
         )}
 
-        {/* Not Logged In CTA Banner */}
+        {/* Not Logged In Banner */}
         {!isAuthenticated && (
           <div className="p-3 bg-amber-500/10 border-t border-amber-300/40 flex items-center justify-between gap-2">
             <span className="text-xs text-amber-900 dark:text-amber-300 font-medium">
@@ -392,7 +478,7 @@ export default function ChatModal({
           </div>
         )}
 
-        {/* Quick Question Chips (Only when inside active chat) */}
+        {/* Quick Question Chips */}
         {!isThreadListView && isAuthenticated && (
           <div className="p-2 border-t border-slate-150 dark:border-slate-800 bg-white dark:bg-[#151426] flex items-center gap-1.5 overflow-x-auto scrollbar-none">
             {QUICK_QUESTIONS.map(q => {
@@ -411,7 +497,7 @@ export default function ChatModal({
           </div>
         )}
 
-        {/* Input Bar (Only when inside active chat) */}
+        {/* Input Bar */}
         {!isThreadListView && (
           <form
             onSubmit={(e) => {
@@ -442,7 +528,9 @@ export default function ChatModal({
           </form>
         )}
 
-        {/* Confirmation Modal for Chat Deletion */}
+        {/* ========================================================= */}
+        {/* CONFIRMATION DIALOG: DELETE ENTIRE CONVERSATION            */}
+        {/* ========================================================= */}
         {threadToDelete && (
           <div 
             onClick={() => !isDeleting && setThreadToDelete(null)}
@@ -457,10 +545,16 @@ export default function ChatModal({
               </div>
               <div>
                 <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                  {t('chatDeleteConfirmTitle')}
+                  {threadToDelete === 'ALL_CHATS' 
+                    ? l('حذف تمامی گفتگوها', 'Delete All Conversations', 'حذف جميع المحادثات', '清除所有会话')
+                    : t('chatDeleteConfirmTitle')
+                  }
                 </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                  {t('chatDeleteConfirmDesc')}
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+                  {threadToDelete === 'ALL_CHATS'
+                    ? l('آیا از حذف تمام گفتگوها و پیام‌ها اطمینان دارید؟ این عمل غیرقابل بازگشت است.', 'Are you sure you want to delete all chat threads? This cannot be undone.', 'هل أنت متأكد من حذف جميع المحادثات والرسائل؟ لا يمكن التراجع عن هذا الإجراء.', '您确定要清空所有聊天记录吗？此操作不可恢复。')
+                    : t('chatDeleteConfirmDesc')
+                  }
                 </p>
               </div>
               <div className="flex items-center gap-2 pt-2">
@@ -470,9 +564,14 @@ export default function ChatModal({
                   onClick={async () => {
                     setIsDeleting(true);
                     try {
-                      await deleteChatThread(threadToDelete.id);
-                      if (selectedThread?.id === threadToDelete.id) {
+                      if (threadToDelete === 'ALL_CHATS') {
+                        await clearAllChats();
                         setSelectedThread(null);
+                      } else {
+                        await deleteChatThread(threadToDelete);
+                        if (selectedThread?.id === threadToDelete.id) {
+                          setSelectedThread(null);
+                        }
                       }
                       setThreadToDelete(null);
                     } finally {
@@ -489,6 +588,53 @@ export default function ChatModal({
                   disabled={isDeleting}
                   onClick={() => setThreadToDelete(null)}
                   className="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                  {t('btnCancel')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* CONFIRMATION DIALOG: DELETE INDIVIDUAL MESSAGE            */}
+        {/* ========================================================= */}
+        {messageToDelete && (
+          <div 
+            onClick={() => setMessageToDelete(null)}
+            className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn"
+          >
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-[#1A1930] rounded-2xl p-5 max-w-sm w-full border border-slate-200 dark:border-slate-700 shadow-2xl space-y-3 animate-scaleIn text-center"
+            >
+              <div className="w-10 h-10 mx-auto rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-xs text-slate-900 dark:text-white">
+                  {l('حذف این پیام؟', 'Delete this message?', 'حذف هذه الرسالة؟', '删除此条消息？')}
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 px-2 bg-slate-50 dark:bg-[#141324] py-1.5 rounded-lg border border-slate-200 dark:border-slate-800">
+                  "{messageToDelete.text}"
+                </p>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await deleteChatMessage(messageToDelete.id);
+                    setMessageToDelete(null);
+                  }}
+                  className="flex-1 py-2 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1 shadow-xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{t('btnDelete')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMessageToDelete(null)}
+                  className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   {t('btnCancel')}
                 </button>

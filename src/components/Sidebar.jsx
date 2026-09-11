@@ -17,14 +17,19 @@ import {
   Sun,
   Globe,
   ChevronDown,
-  Check
+  Check,
+  MessageSquare
 } from 'lucide-react';
 
 export default function Sidebar({ 
   currentTab = 'home', 
   onNavigate, 
   mobileOpen = false, 
-  setMobileOpen
+  setMobileOpen,
+  onOpenChat,
+  onOpenHelp,
+  onOpenSecurity,
+  onOpenSupport
 }) {
   const { lang, dir, t, l, changeLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
@@ -226,7 +231,20 @@ export default function Sidebar({
             <span>{t('navActivity')}</span>
           </button>
 
-          {/* 4. حساب کاربری و پروفایل */}
+          {/* 4. پیام‌ها و گفتگوها */}
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof onOpenChat === 'function') onOpenChat();
+              if (typeof setMobileOpen === 'function') setMobileOpen(false);
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#1C1B30] transition-colors cursor-pointer"
+          >
+            <MessageSquare className="w-4 h-4 stroke-[1.8] text-[#534AB7]" />
+            <span>{t('chatTitle')}</span>
+          </button>
+
+          {/* 5. حساب کاربری و پروفایل */}
           <button
             type="button"
             onClick={() => handleNavClick('profile')}

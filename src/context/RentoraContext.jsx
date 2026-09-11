@@ -742,19 +742,70 @@ export function RentoraProvider({ children }) {
     return newMsg;
   };
 
-  const deleteChatThread = async (threadId) => {
-    if (!threadId) return { success: false };
+  const deleteChatThread = async (target) => {
+    if (!target) return { success: false };
+    const targetId = typeof target === 'object' ? target.id : target;
+    const targetRecipient = typeof target === 'object' ? (target.recipientUsername || target.ownerUsername || target.renterUsername) : (typeof target === 'string' ? target : null);
+
     setChats(prev => {
-      const updated = prev.filter(c => c.id !== threadId);
+      const updated = prev.filter(c => {
+        if (targetId && c.id === targetId) return false;
+        if (targetRecipient) {
+          const u1 = (c.ownerUsername || '').toLowerCase();
+          const u2 = (c.renterUsername || '').toLowerCase();
+          const tr = targetRecipient.toLowerCase();
+          if (u1 === tr || u2 === tr || c.id?.toLowerCase() === tr) return false;
+        }
+        return true;
+      });
       cloudSyncService.saveCachedChats(updated);
       return updated;
     });
+
     try {
-      await cloudSyncService.deleteChatThread(threadId);
+      if (targetId) {
+        await cloudSyncService.deleteChatThread(targetId);
+      }
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };
     }
+  };
+
+  const deleteChatMessage = async (messageId) => {
+    if (!messageId) return { success: false };
+    let targetThreadToBroadcast = null;
+    setChats(prev => {
+      const updated = prev.map(c => {
+        const hasMsg = (c.messages || []).some(m => m.id === messageId);
+        if (hasMsg) {
+          const filtered = (c.messages || []).filter(m => m.id !== messageId);
+          const uThread = { ...c, messages: filtered };
+          targetThreadToBroadcast = uThread;
+          return uThread;
+        }
+        return c;
+      });
+      cloudSyncService.saveCachedChats(updated);
+      return updated;
+    });
+
+    if (targetThreadToBroadcast) {
+      cloudSyncService.broadcastChatMessage(targetThreadToBroadcast);
+    }
+    return { success: true };
+  };
+
+  const clearAllChats = async () => {
+    const prevChats = [...chats];
+    setChats([]);
+    cloudSyncService.saveCachedChats([]);
+    for (const c of prevChats) {
+      if (c.id) {
+        try { await cloudSyncService.deleteChatThread(c.id); } catch (e) {}
+      }
+    }
+    return { success: true };
   };
 
   const addReport = (reportData) => {
@@ -826,6 +877,8 @@ export function RentoraProvider({ children }) {
         sendChatMessage,
         deleteChatThread,
         deleteChat: deleteChatThread,
+        deleteChatMessage,
+        clearAllChats,
         addReport,
         resolveReport,
         addReview,

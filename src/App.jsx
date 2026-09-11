@@ -216,6 +216,7 @@ function MainApp() {
         onNavigate={handleNavigate}
         mobileOpen={mobileSidebarOpen}
         setMobileOpen={setMobileSidebarOpen}
+        onOpenChat={() => handleOpenChat(null)}
         onOpenHelp={handleOpenHelp}
         onOpenSecurity={handleOpenSecurity}
         onOpenSupport={handleOpenSupport}
