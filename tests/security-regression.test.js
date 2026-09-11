@@ -74,5 +74,5 @@ test('frontend sync bridge upgrades legacy identity headers to a signed Bearer s
   assert.match(piAuthContext, /headers\.delete\('x-pi-uid'\)/);
   assert.match(piAuthContext, /headers\.delete\('x-pi-username'\)/);
   assert.match(piAuthContext, /headers\.set\('Authorization', `Bearer \$\{session\.sessionToken\}`\)/);
-  assert.match(piAuthContext, /!isPiLogin/);
+  assert.match(piAuthContext, /const isPiLogin = url\.includes\('\/api\/auth\/pi-login'\)/);
 });
