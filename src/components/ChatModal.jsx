@@ -231,6 +231,14 @@ export default function ChatModal({
                       KYC
                     </span>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => cloudSyncService.fetchSharedData(true)}
+                    className="p-1 rounded-md text-slate-400 hover:text-[#534AB7] dark:hover:text-[#AFA9EC] transition cursor-pointer"
+                    title={l('همگام‌سازی زنده', 'Live Sync', 'تزامن مباشر', '实时同步')}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse block"></span>
+                  </button>
                 </div>
                 <div className="text-[10px] text-slate-400 truncate max-w-[140px] sm:max-w-[200px]">
                   {itemTitle || currentThread?.itemTitle || l('گفتگوی امن رنتورا', 'Rentora Secure Chat', 'محادثة رنتورا الآمنة', 'Rentora 安全聊天')}

@@ -19,14 +19,32 @@ export class CloudSyncService {
     this.lastSyncedHash = '';
 
     // Initialize cross-tab BroadcastChannel
-    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    if (typeof window !== 'undefined') {
+      if ('BroadcastChannel' in window) {
+        try {
+          this.broadcastChannel = new BroadcastChannel('rentora_cross_device_bus');
+          this.broadcastChannel.onmessage = (event) => {
+            if (event.data && event.data.type) {
+              this.handleIncomingBroadcast(event.data);
+            }
+          };
+        } catch (e) {}
+      }
+
+      // Android Emulator & Mobile App Focus / Visibility Handlers:
+      // When switching back from emulator or background tab, trigger immediate instant sync
       try {
-        this.broadcastChannel = new BroadcastChannel('rentora_cross_device_bus');
-        this.broadcastChannel.onmessage = (event) => {
-          if (event.data && event.data.type) {
-            this.handleIncomingBroadcast(event.data);
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) {
+            this.fetchSharedData(true).catch(() => {});
           }
-        };
+        });
+        window.addEventListener('focus', () => {
+          this.fetchSharedData(true).catch(() => {});
+        });
+        window.addEventListener('pageshow', () => {
+          this.fetchSharedData(true).catch(() => {});
+        });
       } catch (e) {}
     }
 
