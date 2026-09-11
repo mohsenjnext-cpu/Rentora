@@ -169,7 +169,9 @@ export function RentoraProvider({ children }) {
   // Subscribe to Multi-Device Cloud Sync with change detection to prevent lag
   useEffect(() => {
     const unsubscribe = cloudSyncService.subscribe((event, data) => {
-      if (data) {
+      if (event === 'CHAT_DELETED' && data?.threadId) {
+        setChats(prev => prev.filter(c => c.id !== data.threadId));
+      } else if (data) {
         if (Array.isArray(data.items)) {
           setItems(prev => JSON.stringify(prev) === JSON.stringify(data.items) ? prev : data.items);
         }
@@ -740,6 +742,21 @@ export function RentoraProvider({ children }) {
     return newMsg;
   };
 
+  const deleteChatThread = async (threadId) => {
+    if (!threadId) return { success: false };
+    setChats(prev => {
+      const updated = prev.filter(c => c.id !== threadId);
+      cloudSyncService.saveCachedChats(updated);
+      return updated;
+    });
+    try {
+      await cloudSyncService.deleteChatThread(threadId);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  };
+
   const addReport = (reportData) => {
     const newReport = {
       id: "rep_" + Date.now(),
@@ -807,6 +824,8 @@ export function RentoraProvider({ children }) {
         confirmHandoverOneTap,
         confirmReturnOneTap,
         sendChatMessage,
+        deleteChatThread,
+        deleteChat: deleteChatThread,
         addReport,
         resolveReport,
         addReview,

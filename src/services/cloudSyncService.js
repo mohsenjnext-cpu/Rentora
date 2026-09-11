@@ -67,6 +67,11 @@ export class CloudSyncService {
       }
       this.saveCachedChats(updated);
       this.notifySubscribers('CHAT_SYNC', { chats: updated, chat: data });
+    } else if (type === 'CHAT_DELETED' && data && data.id) {
+      const chats = this.getCachedChats();
+      const updated = chats.filter(c => c.id !== data.id);
+      this.saveCachedChats(updated);
+      this.notifySubscribers('CHAT_DELETED', { chats: updated, threadId: data.id });
     }
   }
 
@@ -228,6 +233,33 @@ export class CloudSyncService {
           method: 'POST',
           headers: this.getAuthHeaders(),
           body: JSON.stringify(chatThread)
+        });
+        return res.ok;
+      } catch (e) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async deleteChatThread(threadId) {
+    if (!threadId) return false;
+
+    const cached = this.getCachedChats();
+    const updated = cached.filter(c => c.id !== threadId);
+    this.saveCachedChats(updated);
+
+    try {
+      this.broadcastChannel?.postMessage({ type: 'CHAT_DELETED', data: { id: threadId } });
+    } catch (e) {}
+
+    const apiBase = getApiBaseUrl();
+    if (apiBase) {
+      try {
+        const res = await fetch(`${apiBase}/api/sync/chat/delete`, {
+          method: 'POST',
+          headers: this.getAuthHeaders(),
+          body: JSON.stringify({ id: threadId })
         });
         return res.ok;
       } catch (e) {

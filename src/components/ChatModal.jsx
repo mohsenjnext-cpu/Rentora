@@ -20,7 +20,8 @@ import {
   ArrowLeft,
   User,
   Clock,
-  RotateCw
+  RotateCw,
+  Trash2
 } from 'lucide-react';
 
 export default function ChatModal({ 
@@ -34,11 +35,13 @@ export default function ChatModal({
 }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
-  const { chats = [], sendChatMessage, isUserPro, refreshApp } = useRentora();
+  const { chats = [], sendChatMessage, deleteChatThread, isUserPro, refreshApp } = useRentora();
 
   const [messageText, setMessageText] = useState('');
   const [filterWarningMessage, setFilterWarningMessage] = useState('');
   const [selectedThread, setSelectedThread] = useState(null);
+  const [threadToDelete, setThreadToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const messagesEndRef = useRef(null);
 
   const activeItem = itemContext || initialItem;
@@ -229,6 +232,17 @@ export default function ChatModal({
               </button>
             )}
 
+            {currentThread && !isThreadListView && (
+              <button
+                type="button"
+                onClick={() => setThreadToDelete(currentThread)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                title={t('chatDeleteBtn')}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onClose}
@@ -290,13 +304,27 @@ export default function ChatModal({
                     </div>
                   </div>
 
-                  <div className="text-right shrink-0">
-                    <span className="text-[9px] text-slate-400 block font-mono">
-                      {lastMsg?.timestamp || ''}
-                    </span>
-                    <span className="text-[10px] text-[#534AB7] dark:text-[#AFA9EC] font-semibold">
-                      {th.itemTitle}
-                    </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-right">
+                      <span className="text-[9px] text-slate-400 block font-mono">
+                        {lastMsg?.timestamp || ''}
+                      </span>
+                      <span className="text-[10px] text-[#534AB7] dark:text-[#AFA9EC] font-semibold">
+                        {th.itemTitle}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setThreadToDelete(th);
+                      }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                      title={t('chatDeleteBtn')}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               );
@@ -412,6 +440,61 @@ export default function ChatModal({
               <Send className={`w-4 h-4 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
             </button>
           </form>
+        )}
+
+        {/* Confirmation Modal for Chat Deletion */}
+        {threadToDelete && (
+          <div 
+            onClick={() => !isDeleting && setThreadToDelete(null)}
+            className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn"
+          >
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-[#1A1930] rounded-2xl p-5 max-w-sm w-full border border-slate-200 dark:border-slate-700 shadow-2xl space-y-4 animate-scaleIn text-center"
+            >
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                  {t('chatDeleteConfirmTitle')}
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                  {t('chatDeleteConfirmDesc')}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    try {
+                      await deleteChatThread(threadToDelete.id);
+                      if (selectedThread?.id === threadToDelete.id) {
+                        setSelectedThread(null);
+                      }
+                      setThreadToDelete(null);
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  }}
+                  className="flex-1 py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-xs"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{isDeleting ? l('در حال حذف...', 'Deleting...', 'جارٍ الحذف...', '正在删除...') : t('btnDelete')}</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setThreadToDelete(null)}
+                  className="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                  {t('btnCancel')}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
       </div>

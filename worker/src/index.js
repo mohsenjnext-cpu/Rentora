@@ -115,7 +115,7 @@ export default {
         return jsonResponse({
           status: 'ok',
           service: 'Rentora Cloudflare Worker API',
-          version: '2.6.0',
+          version: '2.7.0',
           piApiKeyConfigured: Boolean(PI_API_KEY),
           storage: (env && env.RENTORA_KV) ? 'Cloudflare KV (Persistent)' : 'Memory',
           timestamp: new Date().toISOString()
@@ -328,7 +328,7 @@ export default {
         return jsonResponse({ success: true, review: review });
       }
 
-      // 11. Sync Chat (Cross-Phone Real-Time Chat)
+      // 11. Sync Chat (Create or Update Chat Thread)
       if (method === 'POST' && path === '/api/sync/chat') {
         var chatPayload = await request.json().catch(function() { return {}; });
         if (!chatPayload || !chatPayload.id) return errorResponse('Invalid chat payload', 400);
@@ -344,7 +344,19 @@ export default {
         return jsonResponse({ success: true, chat: chatPayload });
       }
 
-      // 12. Purge (Admin Only)
+      // 12. Delete Chat Thread Endpoint
+      if (method === 'POST' && (path === '/api/sync/chat/delete' || path === '/api/sync/chat-delete')) {
+        var delBody = await request.json().catch(function() { return {}; });
+        var threadId = delBody.id || delBody.threadId;
+        if (!threadId) return errorResponse('Missing chat thread ID', 400);
+
+        var delDb = await getDatabase(env);
+        delDb.chats = (delDb.chats || []).filter(function(c) { return c.id !== threadId; });
+        await saveDatabase(env, delDb);
+        return jsonResponse({ success: true, deletedThreadId: threadId });
+      }
+
+      // 13. Purge (Admin Only)
       if (method === 'POST' && path === '/api/sync/purge') {
         var purgeDb = { items: [], rentals: [], transactions: [], users: [], reviews: [], reports: [], chats: [] };
         await saveDatabase(env, purgeDb);
