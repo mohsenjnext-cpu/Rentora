@@ -149,7 +149,7 @@ export function RentoraProvider({ children }) {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Initialize known message IDs from cache so we only notify for truly new incoming messages
+  // Initialize known message IDs from cache on first mount
   useEffect(() => {
     const cached = cloudSyncService.getCachedChats();
     cached.forEach(c => {
@@ -157,37 +157,42 @@ export function RentoraProvider({ children }) {
         if (m.id) knownMsgIdsRef.current.add(m.id);
       });
     });
-    isInitialLoadDoneRef.current = true;
+    // Enable live notification after initial cache population
+    setTimeout(() => {
+      isInitialLoadDoneRef.current = true;
+    }, 1200);
   }, []);
 
   const handleIncomingChats = useCallback((newChatsList) => {
     if (!Array.isArray(newChatsList)) return;
-    setChats(newChatsList);
+    setChats([...newChatsList]);
 
-    if (!isInitialLoadDoneRef.current || !currentUser?.username) return;
-    const myName = currentUser.username.toLowerCase();
+    const myName = (currentUser?.username || '').toLowerCase();
 
+    // Check for newly arrived incoming messages
     newChatsList.forEach(c => {
       (c.messages || []).forEach(m => {
-        if (m.id && !knownMsgIdsRef.current.has(m.id)) {
-          knownMsgIdsRef.current.add(m.id);
+        if (m && m.id) {
+          if (!knownMsgIdsRef.current.has(m.id)) {
+            knownMsgIdsRef.current.add(m.id);
 
-          const sender = (m.senderUsername || '').toLowerCase();
-          // Trigger notification only if sender is the OTHER Pioneer
-          if (sender && sender !== myName) {
-            const notif = {
-              id: m.id,
-              senderUsername: m.senderUsername,
-              text: m.text,
-              itemTitle: c.itemTitle || 'گفتگوی رنتورا',
-              itemId: c.itemId,
-              threadId: c.id,
-              recipientUsername: m.senderUsername
-            };
-            setLatestNotification(notif);
-            playNotificationChime();
-            triggerVibration();
-            showNativeNotification(`Rentora - @${m.senderUsername}`, m.text);
+            const sender = (m.senderUsername || '').toLowerCase();
+            // Trigger notification only if sender is the other Pioneer and initial boot is done
+            if (isInitialLoadDoneRef.current && sender && (sender !== myName || !myName)) {
+              const notif = {
+                id: m.id,
+                senderUsername: m.senderUsername,
+                text: m.text,
+                itemTitle: c.itemTitle || 'گفتگوی رنتورا',
+                itemId: c.itemId,
+                threadId: c.id,
+                recipientUsername: m.senderUsername
+              };
+              setLatestNotification(notif);
+              playNotificationChime();
+              triggerVibration();
+              showNativeNotification(`Rentora - @${m.senderUsername}`, m.text);
+            }
           }
         }
       });
@@ -249,18 +254,18 @@ export function RentoraProvider({ children }) {
     return () => unsubscribe();
   }, [handleIncomingChats]);
 
-  // Global background sync every 2.5 seconds for instant chat notification
+  // Global background sync every 1.5 seconds for instant chat notification across all screens
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const pollInterval = setInterval(async () => {
       try {
-        const freshChats = await cloudSyncService.pollChatsFast();
-        if (freshChats) {
-          handleIncomingChats(freshChats);
+        const result = await cloudSyncService.fetchSharedData(true);
+        if (result && Array.isArray(result.chats)) {
+          handleIncomingChats(result.chats);
         }
       } catch (e) {}
-    }, 2500);
+    }, 1500);
 
     return () => clearInterval(pollInterval);
   }, [handleIncomingChats]);

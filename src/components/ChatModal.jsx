@@ -47,7 +47,25 @@ export default function ChatModal({
   const [threadToDelete, setThreadToDelete] = useState(null);
   const [messageToDelete, setMessageToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [localChats, setLocalChats] = useState(chats);
   const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    setLocalChats(chats);
+  }, [chats]);
+
+  // Direct subscription to cloudSyncService for instant 0ms latency in ChatModal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const unsubscribe = cloudSyncService.subscribe((event, data) => {
+      if ((event === 'CHAT_POLL_SYNC' || event === 'CHAT_SYNC' || event === 'DATA_SYNC') && data?.chats) {
+        setLocalChats([...data.chats]);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [isOpen]);
 
   const activeItem = itemContext || initialItem;
 
@@ -56,7 +74,7 @@ export default function ChatModal({
   const itemTitle = activeItem?.title || '';
 
   // Filter threads belonging to current user
-  const myThreads = (chats || []).filter(th => {
+  const myThreads = (localChats || []).filter(th => {
     if (!currentUser?.username) return false;
     const myName = currentUser.username.toLowerCase();
     return (
@@ -70,7 +88,7 @@ export default function ChatModal({
   if (selectedThread) {
     const sP1 = (selectedThread.ownerUsername || '').toLowerCase();
     const sP2 = (selectedThread.renterUsername || '').toLowerCase();
-    currentThread = (chats || []).find(th => {
+    currentThread = (localChats || []).find(th => {
       if (th.id === selectedThread.id) return true;
       const u1 = (th.ownerUsername || '').toLowerCase();
       const u2 = (th.renterUsername || '').toLowerCase();
@@ -80,7 +98,7 @@ export default function ChatModal({
       return false;
     }) || selectedThread;
   } else if (targetRecipientUsername) {
-    currentThread = (chats || []).find(th => {
+    currentThread = (localChats || []).find(th => {
       const u1 = (th.renterUsername || '').toLowerCase();
       const u2 = (th.ownerUsername || '').toLowerCase();
       const myName = (currentUser?.username || '').toLowerCase();
@@ -113,14 +131,14 @@ export default function ChatModal({
     scrollToBottom();
 
     // Immediate fast sync on modal open
-    cloudSyncService.fetchSharedData().catch(() => {});
+    cloudSyncService.fetchSharedData(true).catch(() => {});
 
-    // Fast polling every 1.0 second while chat screen is open
+    // Polling every 800ms while chat screen is open
     const interval = setInterval(async () => {
       try {
-        await cloudSyncService.fetchSharedData();
+        await cloudSyncService.fetchSharedData(true);
       } catch (e) {}
-    }, 1000);
+    }, 800);
 
     return () => clearInterval(interval);
   }, [isOpen, activeItem]);
