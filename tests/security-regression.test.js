@@ -13,7 +13,7 @@ function section(start, end) {
 
 test('payment intent amount is server-owned', () => {
   const intent = section("path === '/api/payments/intent'", "path === '/api/payments/approve'");
-  assert.match(intent, /SELECT r\.\*, l\.title/);
+  assert.match(intent, /SELECT r\\.\\*, l\\.title/);
   assert.match(intent, /bind\(body\.rentalId, user\.id\)/);
   assert.match(intent, /rental\.platform_fee/);
   assert.doesNotMatch(intent, /body\.amount/);
@@ -27,6 +27,13 @@ test('payment approval binds payment to the authenticated Pioneer', () => {
   assert.match(approve, /metadataIntent/);
   assert.match(approve, /Pi payment metadata binding is missing or invalid/);
   assert.match(approve, /\['created','pending','approved'\]/);
+});
+
+test('payment approval uses an atomic D1 claim for the Pi payment ID', () => {
+  const approve = section("path === '/api/payments/approve'", "path === '/api/payments/complete'");
+  assert.match(approve, /status='created' AND pi_payment_id IS NULL/);
+  assert.match(approve, /claim\?\.meta\?\.changes/);
+  assert.match(approve, /concurrently claimed by another payment/);
 });
 
 test('payment completion requires an approved intent and strict Pi binding', () => {
