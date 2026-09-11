@@ -1,9 +1,9 @@
 /**
- * Rentora Anti-Bypass & Security Filter Service
+ * Rentora Anti-Bypass & Security Filter Service (Strict Mode)
  * 
- * Protects users against disintermediation, fraud, off-platform scams,
- * and premature exchange of contact information (Phone, Telegram, Instagram, 
- * WhatsApp, Rubika, Eitaa, Bale, Email, External URLs).
+ * Unconditionally blocks off-platform contact leaks:
+ * Phone numbers, Telegram, WhatsApp, Instagram, Rubika, Eitaa, Bale,
+ * ID / Handles, Usernames with @, Emails, External Links, and Direct Contact Requests.
  */
 
 const PERSIAN_ARABIC_DIGITS = {
@@ -18,7 +18,8 @@ export function normalizeText(text) {
 
   let normalized = text;
   normalized = normalized.replace(/[۰-۹٠-٩]/g, (digit) => PERSIAN_ARABIC_DIGITS[digit] || digit);
-  normalized = normalized.replace(/[\u200B-\u200D\uFEFF]/g, '');
+  // Remove zero-width spaces, joiners, and control characters
+  normalized = normalized.replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ');
   return normalized;
 }
 
@@ -36,19 +37,82 @@ export function inspectMessageSafety(rawText) {
   const normalized = normalizeText(rawText);
   const lowerCase = normalized.toLowerCase();
   
-  // Strip all whitespace, dots, dashes, commas, colons, slashes to reveal hidden numbers
-  const strippedSeparators = lowerCase.replace(/[\s\-_.,،;:\\/()[\]{}|@+*#]/g, '');
+  // Clean text without separator characters for hidden pattern inspection
+  const strippedSeparators = lowerCase.replace(/[\s\-_.,،;:\\/()[\]{}|+*#~`!?"'<>]/g, '');
 
-  // 1. SEQUENCE OF 7 OR MORE DIGITS (Covers all phone and landline numbers)
-  if (/\d{7,}/.test(strippedSeparators)) {
+  // 1. BLOCKED MESSENGERS & SOCIAL NETWORKS (Unconditional strict block)
+  const messengerKeywords = [
+    'تلگرام', 'تلگ', 'واتساپ', 'واتس‌اپ', 'واتس اپ', 'واتساپم', 'واتس',
+    'اینستاگرام', 'اینستا', 'اینستام', 'اینستامو', 'توییتر', 'تویتر',
+    'روبیکا', 'ایتا', 'ایتاء', 'بله', 'سروش', 'شاد', 'گپ', 'آی‌گپ', 'ایگپ',
+    'telegram', 'tg', 't.me', 'whatsapp', 'wa.me', 'instagram', 'insta',
+    'twitter', 'rubika', 'eitaa', 'bale', 'soroush', 'gap'
+  ];
+
+  for (const keyword of messengerKeywords) {
+    if (lowerCase.includes(keyword) || strippedSeparators.includes(keyword.replace(/\s+/g, ''))) {
+      return {
+        isViolating: true,
+        matchedType: 'messenger',
+        message: `ارسال پیام‌رسان یا شبکه اجتماعی (${keyword}) در گفتگوی قبل از رزرو مسدود است. لطفاً تمام هماهنگی‌ها را از طریق چت امن رنتورا انجام دهید.`
+      };
+    }
+  }
+
+  // 2. BLOCKED ID / USERNAME / HANDLE KEYWORDS
+  const handleKeywords = [
+    'آیدی', 'ایدی', 'ای دی', 'آی دی', 'ایدیم', 'آیدیم', 'آیدیمو', 'ایدیمو',
+    'اکانت', 'اکانتم', 'پیج', 'پیجم', 'کانال', 'چنل', 'دایرکت', 'دایرکتم',
+    'username', 'user id', 'userid', 'handle', 'dm me', 'direct me'
+  ];
+
+  for (const keyword of handleKeywords) {
+    if (lowerCase.includes(keyword)) {
+      return {
+        isViolating: true,
+        matchedType: 'handle',
+        message: 'ارسال آیدی، پیج یا اکانت در گفتگوی قبل از رزرو مجاز نیست. گفتگو فقط در پلتفرم رنتورا مجاز است.'
+      };
+    }
+  }
+
+  // 3. ANY '@' USERNAME OR HANDLE MENTION
+  if (/@[\w\u0600-\u06FF]{2,}/.test(normalized) || lowerCase.includes('@')) {
     return {
       isViolating: true,
-      matchedType: 'phone_digits',
-      message: 'جهت امنیت شما و پیشگیری از کلاهبرداری، ارسال شماره تماس قبل از نهایی‌شدن رزرو در چت مسدود است. شماره تماس پس از تایید رزرو خودکار نمایش داده می‌شود.'
+      matchedType: 'at_handle',
+      message: 'ارسال آیدی با علامت @ قبل از ثبت رزرو کالا مسدود است.'
     };
   }
 
-  // 2. IRANIAN & INTERNATIONAL PHONE PATTERNS
+  // 4. CALL / CONTACT INTENT KEYWORDS
+  const contactIntentKeywords = [
+    'شماره', 'شمارم', 'شمارمو', 'شمارمو بدم', 'شماره تماس', 'شماره بده',
+    'تلفن', 'تلفنم', 'موبایل', 'موبایلم', 'تماس بگیرید', 'تماس بگیر', 'تماس بگیرین',
+    'زنگ بزن', 'زنگ بزنید', 'پیامک بده', 'اس ام اس بده', 'اس‌ام‌اس',
+    'call me', 'phone number', 'contact me', 'text me'
+  ];
+
+  for (const keyword of contactIntentKeywords) {
+    if (lowerCase.includes(keyword)) {
+      return {
+        isViolating: true,
+        matchedType: 'contact_intent',
+        message: 'تبادل اطلاعات تماس در چت مسدود است. شماره تلفن طرفین پس از رزرو به‌صورت خودکار در اختیارتان قرار می‌گیرد.'
+      };
+    }
+  }
+
+  // 5. DIGIT SEQUENCES (Any sequence of 6 or more digits anywhere in message)
+  if (/\d{6,}/.test(strippedSeparators)) {
+    return {
+      isViolating: true,
+      matchedType: 'phone_digits',
+      message: 'ارسال شماره تماس و ارقام طولانی در چت مجاز نیست. شماره هماهنگی پس از تایید رزرو فعال خواهد شد.'
+    };
+  }
+
+  // 6. IRANIAN PHONE PATTERNS (09..., +989..., 989...)
   const phonePatterns = [
     /(?:(?:\+98|0098|98|0)?9\d{9})/,
     /(?:(?:\+98|0098|98|0)?[1-8]\d{8,9})/,
@@ -62,50 +126,22 @@ export function inspectMessageSafety(rawText) {
       return {
         isViolating: true,
         matchedType: 'phone',
-        message: 'ارسال شماره تماس مستقیم مجاز نیست. هماهنگی و دریافت شماره تماس پس از ثبت رزرو انجام می‌شود.'
+        message: 'ارسال شماره همراه در چت مسدود است.'
       };
     }
   }
 
-  // 3. SPELLED-OUT PERSIAN NUMBER WORDS & CONTACT INTENT
-  const persianNumberWordsRegex = /(صفر|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|یازده|دوازده|سیزده|چهارده|پانزده|شانزده|هفده|هجده|نوزده|بیست|سی|چهل|پنجاه|شصت|هفتاد|هشتاد|نود|نهصد|دویست|سیصد|چهارصد|پانصد)/i;
-  const contactKeywords = ['شماره', 'تماس', 'زنگ', 'خط', 'تلفن', 'واتس', 'تلگرام', 'روبیکا', 'ایتا', 'بله', 'پیامک', 'اس ام اس', 'آیدی', 'ایدی', 'phone', 'call', 'whatsapp', 'telegram', 'contact'];
-
-  const hasContactKeyword = contactKeywords.some(kw => lowerCase.includes(kw));
-
-  if (hasContactKeyword) {
-    // If text contains contact intent and either digits or spelled out numbers
-    if (/\d{4,}/.test(strippedSeparators) || persianNumberWordsRegex.test(normalized)) {
-      return {
-        isViolating: true,
-        matchedType: 'contact_intent',
-        message: 'تبادل اطلاعات تماس یا پیام‌رسان‌های خارجی قبل از رزرو در پلتفرم رنتورا مسدود است.'
-      };
-    }
+  // 7. SPELLED-OUT PERSIAN DIGITS (نهصد و دوازده، صفر نه...)
+  const persianNumberWordsRegex = /(صفر|نه|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نهصد|دویست|سیصد|چهارصد|پانصد|شصت|هفتاد|هشتاد|نود)[\s‌]+(نه|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نود|دوازده|سیزده|چهارده|پانزده|شانزده|هفده|هجده|نوزده)/i;
+  if (persianNumberWordsRegex.test(normalized)) {
+    return {
+      isViolating: true,
+      matchedType: 'phone_words',
+      message: 'نوشتن شماره تماس به صورت حروفی در چت مجاز نمی‌باشد.'
+    };
   }
 
-  // 4. MESSAGING APPS & SOCIAL MEDIA HANDLES
-  const socialPatterns = [
-    /(?:تلگرام|telegram|t\.me|tg)[\s:؛=@_-]*[a-zA-Z0-9_]{3,}/i,
-    /(?:واتساپ|واتس‌اپ|whatsapp|wa\.me)[\s:؛=@_-]*[0-9a-zA-Z_]{3,}/i,
-    /(?:اینستاگرام|اینستا|instagram|insta|ig)[\s:؛=@_-]*[a-zA-Z0-9_.]{3,}/i,
-    /(?:روبیکا|rubika)[\s:؛=@_-]*[a-zA-Z0-9_.]{3,}/i,
-    /(?:ایتا|eitaa)[\s:؛=@_-]*[a-zA-Z0-9_.]{3,}/i,
-    /(?:بله|bale)[\s:؛=@_-]*[a-zA-Z0-9_.]{3,}/i,
-    /@(?:[a-zA-Z0-9_]{4,})/i
-  ];
-
-  for (const regex of socialPatterns) {
-    if (regex.test(normalized) || regex.test(lowerCase)) {
-      return {
-        isViolating: true,
-        matchedType: 'social',
-        message: 'ارسال آیدی یا لینک شبکه‌های اجتماعی مجاز نیست. لطفاً تمام هماهنگی‌ها را از طریق چت امن رنتورا انجام دهید.'
-      };
-    }
-  }
-
-  // 5. EMAIL ADDRESSES
+  // 8. EMAIL ADDRESSES
   const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/i;
   if (emailPattern.test(normalized)) {
     return {
@@ -115,13 +151,13 @@ export function inspectMessageSafety(rawText) {
     };
   }
 
-  // 6. EXTERNAL URLS
-  const urlPattern = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/i;
+  // 9. EXTERNAL URLS & DOMAINS
+  const urlPattern = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|([a-zA-Z0-9-]+\.(com|ir|org|net|me|io|info|app|link|site|xyz|online))/i;
   if (urlPattern.test(normalized)) {
     return {
       isViolating: true,
       matchedType: 'url',
-      message: 'ارسال لینک‌های خارجی در چت مجاز نمی‌باشد.'
+      message: 'ارسال لینک‌های خارجی و آدرس وب‌سایت در چت مجاز نمی‌باشد.'
     };
   }
 
