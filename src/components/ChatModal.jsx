@@ -16,8 +16,7 @@ import {
   LogIn, 
   ArrowRight, 
   ArrowLeft, 
-  Trash2,
-  AlertTriangle
+  Trash2
 } from 'lucide-react';
 
 export default function ChatModal({ 
@@ -37,115 +36,86 @@ export default function ChatModal({
     deleteChatThread, 
     deleteChatMessage, 
     clearAllChats,
-    isUserPro, 
-    refreshApp 
+    isUserPro 
   } = useRentora();
 
   const [messageText, setMessageText] = useState('');
   const [filterWarningMessage, setFilterWarningMessage] = useState('');
-  const [selectedThread, setSelectedThread] = useState(null);
+  const [selectedThreadId, setSelectedThreadId] = useState(null);
+  const [selectedRecipientName, setSelectedRecipientName] = useState(null);
   const [threadToDelete, setThreadToDelete] = useState(null);
   const [messageToDelete, setMessageToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [localChats, setLocalChats] = useState(chats);
   const messagesEndRef = useRef(null);
 
-  useEffect(() => {
-    setLocalChats(chats);
-  }, [chats]);
-
-  // Direct subscription to cloudSyncService for instant 0ms latency in ChatModal
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const unsubscribe = cloudSyncService.subscribe((event, data) => {
-      if ((event === 'CHAT_POLL_SYNC' || event === 'CHAT_SYNC' || event === 'DATA_SYNC') && data?.chats) {
-        setLocalChats([...data.chats]);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [isOpen]);
-
   const activeItem = itemContext || initialItem;
-
-  // Determine current active recipient
-  const targetRecipientUsername = activeItem?.ownerUsername || activeItem?.recipientUsername || null;
+  const itemRecipientUsername = activeItem?.ownerUsername || activeItem?.recipientUsername || null;
   const itemTitle = activeItem?.title || '';
 
+  // Determine current active recipient
+  const activeRecipient = itemRecipientUsername || selectedRecipientName || null;
+
   // Filter threads belonging to current user
-  const myThreads = (localChats || []).filter(th => {
+  const myThreads = (chats || []).filter(th => {
     if (!currentUser?.username) return false;
     const myName = currentUser.username.toLowerCase();
-    return (
-      (th.renterUsername && th.renterUsername.toLowerCase() === myName) ||
-      (th.ownerUsername && th.ownerUsername.toLowerCase() === myName)
-    );
+    const u1 = (th.renterUsername || '').toLowerCase();
+    const u2 = (th.ownerUsername || '').toLowerCase();
+    return u1 === myName || u2 === myName;
   });
 
-  // Find currently open thread
-  let currentThread = null;
-  if (selectedThread) {
-    const sP1 = (selectedThread.ownerUsername || '').toLowerCase();
-    const sP2 = (selectedThread.renterUsername || '').toLowerCase();
-    currentThread = (localChats || []).find(th => {
-      if (th.id === selectedThread.id) return true;
-      const u1 = (th.ownerUsername || '').toLowerCase();
-      const u2 = (th.renterUsername || '').toLowerCase();
-      if (sP1 && sP2 && u1 && u2) {
-        return (u1 === sP1 && u2 === sP2) || (u1 === sP2 && u2 === sP1);
-      }
-      return false;
-    }) || selectedThread;
-  } else if (targetRecipientUsername) {
-    currentThread = (localChats || []).find(th => {
+  // Find currently open thread dynamically from live chats state
+  const myName = (currentUser?.username || '').toLowerCase();
+  const currentThread = (chats || []).find(th => {
+    if (selectedThreadId && th.id === selectedThreadId) return true;
+    if (activeRecipient) {
+      const targetName = activeRecipient.toLowerCase();
       const u1 = (th.renterUsername || '').toLowerCase();
       const u2 = (th.ownerUsername || '').toLowerCase();
-      const myName = (currentUser?.username || '').toLowerCase();
-      const targetName = targetRecipientUsername.toLowerCase();
       return (u1 === myName && u2 === targetName) || (u2 === myName && u1 === targetName);
-    });
-  }
+    }
+    return false;
+  }) || null;
 
-  // Active recipient
-  let activeRecipient = targetRecipientUsername;
-  if (!activeRecipient && currentThread) {
-    const myName = (currentUser?.username || '').toLowerCase();
-    activeRecipient = (currentThread.renterUsername || '').toLowerCase() === myName
-      ? currentThread.ownerUsername
-      : currentThread.renterUsername;
-  }
-
-  const isRecipientPro = activeRecipient ? isUserPro(activeRecipient) : false;
   const messagesList = currentThread?.messages || [];
+  const isRecipientPro = activeRecipient ? isUserPro(activeRecipient) : false;
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (smooth = true) => {
+    try {
+      messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+    } catch (e) {}
   };
 
+  // Setup on modal open / item change
   useEffect(() => {
     if (!isOpen) return;
+
     if (activeItem) {
-      setSelectedThread(null);
+      setSelectedThreadId(null);
+      setSelectedRecipientName(itemRecipientUsername);
     }
-    scrollToBottom();
+
+    scrollToBottom(false);
 
     // Immediate fast sync on modal open
     cloudSyncService.fetchSharedData(true).catch(() => {});
 
-    // Polling every 800ms while chat screen is open
+    // Polling every 600ms while chat screen is actively open
     const interval = setInterval(async () => {
       try {
         await cloudSyncService.fetchSharedData(true);
       } catch (e) {}
-    }, 800);
+    }, 600);
 
     return () => clearInterval(interval);
-  }, [isOpen, activeItem]);
+  }, [isOpen, activeItem, itemRecipientUsername]);
 
+  // Scroll to bottom when new messages arrive
   useEffect(() => {
-    scrollToBottom();
-  }, [messagesList.length]);
+    if (isOpen && messagesList.length > 0) {
+      scrollToBottom(true);
+    }
+  }, [isOpen, messagesList.length]);
 
   if (!isOpen) return null;
 
@@ -167,6 +137,7 @@ export default function ChatModal({
 
     setFilterWarningMessage('');
     setMessageText('');
+
     try {
       await sendChatMessage({
         recipientUsername: activeRecipient || 'pioneer',
@@ -174,8 +145,8 @@ export default function ChatModal({
         itemTitle: itemTitle || currentThread?.itemTitle || 'گفتگوی رنتورا',
         text: text
       });
-      setTimeout(scrollToBottom, 50);
-      setTimeout(scrollToBottom, 200);
+      setTimeout(() => scrollToBottom(true), 40);
+      setTimeout(() => scrollToBottom(true), 200);
     } catch (e) {
       setFilterWarningMessage(e.message || 'خطا در ارسال پیام.');
     }
@@ -192,7 +163,7 @@ export default function ChatModal({
     else if (onBookDirectly && activeItem) onBookDirectly(activeItem);
   };
 
-  const isThreadListView = !activeItem && !selectedThread && myThreads.length > 0;
+  const isThreadListView = !activeItem && !selectedThreadId && !selectedRecipientName && myThreads.length > 0;
 
   return (
     <div 
@@ -225,10 +196,13 @@ export default function ChatModal({
             </div>
           ) : (
             <div className="flex items-center gap-2.5 min-w-0">
-              {!activeItem && selectedThread && (
+              {!activeItem && (selectedThreadId || selectedRecipientName) && (
                 <button
                   type="button"
-                  onClick={() => setSelectedThread(null)}
+                  onClick={() => {
+                    setSelectedThreadId(null);
+                    setSelectedRecipientName(null);
+                  }}
                   className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800 transition cursor-pointer shrink-0"
                   title={t('btnBack')}
                 >
@@ -284,7 +258,7 @@ export default function ChatModal({
                 type="button"
                 onClick={() => {
                   const target = currentThread || {
-                    id: activeItem?.id || targetRecipientUsername || 'current',
+                    id: selectedThreadId || activeItem?.id || activeRecipient || 'current',
                     recipientUsername: activeRecipient,
                     itemTitle: itemTitle || currentThread?.itemTitle
                   };
@@ -345,7 +319,6 @@ export default function ChatModal({
             </div>
 
             {myThreads.map(th => {
-              const myName = (currentUser?.username || '').toLowerCase();
               const otherUser = (th.renterUsername || '').toLowerCase() === myName
                 ? th.ownerUsername 
                 : th.renterUsername;
@@ -354,7 +327,10 @@ export default function ChatModal({
               return (
                 <div
                   key={th.id}
-                  onClick={() => setSelectedThread(th)}
+                  onClick={() => {
+                    setSelectedThreadId(th.id);
+                    setSelectedRecipientName(otherUser);
+                  }}
                   className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#18172E] hover:border-[#534AB7] transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs group"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -424,7 +400,7 @@ export default function ChatModal({
                   type="button"
                   onClick={() => {
                     const target = currentThread || {
-                      id: activeItem?.id || targetRecipientUsername || 'current',
+                      id: selectedThreadId || activeItem?.id || activeRecipient || 'current',
                       recipientUsername: activeRecipient,
                       itemTitle: itemTitle || currentThread?.itemTitle
                     };
@@ -454,7 +430,6 @@ export default function ChatModal({
               </div>
             ) : (
               messagesList.map((msg, idx) => {
-                const myName = (currentUser?.username || '').toLowerCase();
                 const isMe = (msg.senderUsername || '').toLowerCase() === myName;
                 return (
                   <div
@@ -599,12 +574,12 @@ export default function ChatModal({
                     try {
                       if (threadToDelete === 'ALL_CHATS') {
                         await clearAllChats();
-                        setSelectedThread(null);
+                        setSelectedThreadId(null);
+                        setSelectedRecipientName(null);
                       } else {
                         await deleteChatThread(threadToDelete);
-                        if (selectedThread?.id === threadToDelete.id) {
-                          setSelectedThread(null);
-                        }
+                        setSelectedThreadId(null);
+                        setSelectedRecipientName(null);
                       }
                       setThreadToDelete(null);
                     } finally {

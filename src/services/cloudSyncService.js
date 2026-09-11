@@ -2,7 +2,7 @@
  * Universal Cloud Sync Service for Rentora Marketplace
  * Real-time synchronization across devices, tabs, and Pi Browser sessions.
  */
-import { getApiBaseUrl } from './apiConfig';
+import { getApiBaseUrl } from './apiConfig.js';
 
 const STORAGE_ITEMS_KEY = 'rentora_live_v1_items';
 const STORAGE_RENTALS_KEY = 'rentora_live_v1_rentals';
