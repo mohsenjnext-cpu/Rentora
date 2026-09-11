@@ -21,18 +21,23 @@ test('payment intent amount is server-owned', () => {
 
 test('payment approval binds payment to the authenticated Pioneer', () => {
   const approve = section("path === '/api/payments/approve'", "path === '/api/payments/complete'");
-  assert.match(approve, /const payerUid = payment\?\.user\?\.uid/);
+  assert.match(approve, /const payerUid = payment\?\.user\?\.uid \|\| payment\?\.from_address\?\.uid/);
+  assert.match(approve, /if \(!payerUid\)/);
   assert.match(approve, /Pi payer mismatch/);
-  assert.match(approve, /paymentIntentId/);
-  assert.match(approve, /Pi payment metadata mismatch/);
+  assert.match(approve, /metadataIntent/);
+  assert.match(approve, /Pi payment metadata binding is missing or invalid/);
+  assert.match(approve, /\['created','pending','approved'\]/);
 });
 
-test('payment completion cannot silently accept a different payment id', () => {
+test('payment completion requires an approved intent and strict Pi binding', () => {
   const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
   assert.match(complete, /intent\.pi_payment_id && intent\.pi_payment_id !== body\.paymentId/);
+  assert.match(complete, /\['approved','completed'\]\.includes/);
   assert.match(complete, /Pi payment identifier mismatch/);
   assert.match(complete, /Pi payment amount mismatch/);
   assert.match(complete, /Pi payment memo mismatch/);
+  assert.match(complete, /payment metadata binding is missing or invalid/);
+  assert.match(complete, /\['approved','completed','complete'\]/);
 });
 
 test('server logout revokes the KV session', () => {
