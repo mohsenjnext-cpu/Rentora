@@ -40,6 +40,27 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Apply D1 schema
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute RENTORA_DB --remote --file=db/schema.sql
+
+      - name: Apply D1 payment replay guards
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute RENTORA_DB --remote --file=db/migrations/0003_payment_replay_guards.sql
+
+      - name: Apply D1 listing status guards
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute RENTORA_DB --remote --file=db/migrations/0004_listing_status_guards.sql
+
       - name: Deploy Worker and static assets
         uses: cloudflare/wrangler-action@v3
         with:
