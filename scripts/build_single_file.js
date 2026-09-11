@@ -3,7 +3,7 @@ import path from 'path';
 import { execSync } from 'child_process';
 
 console.log('[1/4] Running Vite build...');
-execSync('npx vite build', { stdio: 'inherit' });
+execSync('npm run build', { stdio: 'inherit' });
 
 console.log('[2/4] Reading compiled CSS...');
 const distAssets = fs.readdirSync('dist/assets');

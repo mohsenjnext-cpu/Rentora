@@ -334,14 +334,48 @@ export default {
         if (!chatPayload || !chatPayload.id) return errorResponse('Invalid chat payload', 400);
 
         var chatDb = await getDatabase(env);
-        var existingIdx = (chatDb.chats || []).findIndex(function(c) { return c.id === chatPayload.id; });
-        if (existingIdx !== -1) {
-          chatDb.chats[existingIdx] = chatPayload;
+        var chatList = chatDb.chats || [];
+        
+        var p1 = (chatPayload.ownerUsername || '').toLowerCase();
+        var p2 = (chatPayload.renterUsername || '').toLowerCase();
+
+        var existingChatIdx = chatList.findIndex(function(c) {
+          if (c.id === chatPayload.id) return true;
+          var u1 = (c.ownerUsername || '').toLowerCase();
+          var u2 = (c.renterUsername || '').toLowerCase();
+          if (p1 && p2 && u1 && u2) {
+            return (u1 === p1 && u2 === p2) || (u1 === p2 && u2 === p1);
+          }
+          return false;
+        });
+
+        if (existingChatIdx !== -1) {
+          var existingMsgs = chatList[existingChatIdx].messages || [];
+          var incomingMsgs = chatPayload.messages || [];
+          var msgMap = new Map();
+          existingMsgs.forEach(function(m) { msgMap.set(m.id || (m.text + '_' + m.timestamp), m); });
+          incomingMsgs.forEach(function(m) { msgMap.set(m.id || (m.text + '_' + m.timestamp), m); });
+          var combinedMessages = Array.from(msgMap.values());
+          
+          chatList[existingChatIdx] = Object.assign({}, chatList[existingChatIdx], chatPayload, {
+            messages: combinedMessages,
+            lastMessageAt: chatPayload.lastMessageAt || new Date().toISOString()
+          });
         } else {
-          chatDb.chats = [chatPayload].concat(chatDb.chats || []);
+          chatList.unshift(chatPayload);
         }
+        chatDb.chats = chatList;
         await saveDatabase(env, chatDb);
         return jsonResponse({ success: true, chat: chatPayload });
+      }
+
+      // Fast Chat Polling Endpoint
+      if (method === 'GET' && path === '/api/sync/chats') {
+        var pollDb = await getDatabase(env);
+        return jsonResponse({
+          chats: pollDb.chats || [],
+          timestamp: new Date().toISOString()
+        });
       }
 
       // 12. Delete Chat Thread Endpoint

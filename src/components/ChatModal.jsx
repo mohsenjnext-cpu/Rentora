@@ -102,11 +102,19 @@ export default function ChatModal({
     }
     scrollToBottom();
 
+    // Immediate fast sync on modal open
+    cloudSyncService.pollChatsFast().catch(() => {});
+
+    // Fast polling every 1.5 seconds while chat screen is open
     const interval = setInterval(async () => {
       try {
-        await cloudSyncService.fetchSharedData();
-      } catch (e) {}
-    }, 3500);
+        await cloudSyncService.pollChatsFast();
+      } catch (e) {
+        try {
+          await cloudSyncService.fetchSharedData();
+        } catch (e2) {}
+      }
+    }, 1500);
 
     return () => clearInterval(interval);
   }, [isOpen, activeItem]);

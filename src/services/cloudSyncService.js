@@ -57,7 +57,19 @@ export class CloudSyncService {
       this.notifySubscribers('REVIEW_SYNC', { reviews: updated, review: data });
     } else if (type === 'CHAT_UPDATE' && data) {
       const chats = this.getCachedChats();
-      const existingIdx = chats.findIndex(c => c.id === data.id);
+      const p1 = (data.ownerUsername || '').toLowerCase();
+      const p2 = (data.renterUsername || '').toLowerCase();
+
+      const existingIdx = chats.findIndex(c => {
+        if (c.id === data.id) return true;
+        const u1 = (c.ownerUsername || '').toLowerCase();
+        const u2 = (c.renterUsername || '').toLowerCase();
+        if (p1 && p2 && u1 && u2) {
+          return (u1 === p1 && u2 === p2) || (u1 === p2 && u2 === p1);
+        }
+        return false;
+      });
+
       let updated;
       if (existingIdx !== -1) {
         updated = [...chats];
@@ -212,7 +224,19 @@ export class CloudSyncService {
     if (!chatThread || !chatThread.id) return false;
 
     const cached = this.getCachedChats();
-    const existingIdx = cached.findIndex(c => c.id === chatThread.id);
+    const p1 = (chatThread.ownerUsername || '').toLowerCase();
+    const p2 = (chatThread.renterUsername || '').toLowerCase();
+
+    const existingIdx = cached.findIndex(c => {
+      if (c.id === chatThread.id) return true;
+      const u1 = (c.ownerUsername || '').toLowerCase();
+      const u2 = (c.renterUsername || '').toLowerCase();
+      if (p1 && p2 && u1 && u2) {
+        return (u1 === p1 && u2 === p2) || (u1 === p2 && u2 === p1);
+      }
+      return false;
+    });
+
     let updated;
     if (existingIdx !== -1) {
       updated = [...cached];
@@ -269,7 +293,65 @@ export class CloudSyncService {
     return true;
   }
 
-  async fetchSharedData() {
+  /**
+   * Fast polling specifically for chat messages while chat window is active
+   */
+  async pollChatsFast() {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) return null;
+
+    try {
+      const res = await fetch(`${apiBase}/api/sync/chats`, {
+        method: 'GET',
+        headers: this.getAuthHeaders()
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const remoteChats = Array.isArray(data.chats) ? data.chats : [];
+        const localChats = this.getCachedChats();
+        const mergedChats = [...localChats];
+
+        remoteChats.forEach(rc => {
+          const rP1 = (rc.ownerUsername || '').toLowerCase();
+          const rP2 = (rc.renterUsername || '').toLowerCase();
+
+          const localIdx = mergedChats.findIndex(lc => {
+            if (lc.id === rc.id) return true;
+            const lP1 = (lc.ownerUsername || '').toLowerCase();
+            const lP2 = (lc.renterUsername || '').toLowerCase();
+            if (rP1 && rP2 && lP1 && lP2) {
+              return (lP1 === rP1 && lP2 === rP2) || (lP1 === rP2 && lP2 === rP1);
+            }
+            return false;
+          });
+
+          if (localIdx === -1) {
+            mergedChats.unshift(rc);
+          } else {
+            const local = mergedChats[localIdx];
+            const combinedMap = new Map();
+            (local.messages || []).forEach(m => combinedMap.set(m.id || (m.text + '_' + m.timestamp), m));
+            (rc.messages || []).forEach(m => combinedMap.set(m.id || (m.text + '_' + m.timestamp), m));
+            mergedChats[localIdx] = {
+              ...local,
+              ...rc,
+              messages: Array.from(combinedMap.values()),
+              lastMessageAt: rc.lastMessageAt || local.lastMessageAt
+            };
+          }
+        });
+
+        this.saveCachedChats(mergedChats);
+        this.notifySubscribers('CHAT_POLL_SYNC', { chats: mergedChats });
+        return mergedChats;
+      }
+    } catch (e) {}
+
+    return null;
+  }
+
+  async fetchSharedData(forceNotify = false) {
     const localItems = this.getCachedItems();
     const localRentals = this.getCachedRentals();
     const localUsers = this.getCachedUsers();
@@ -339,31 +421,44 @@ export class CloudSyncService {
 
         // 5. Merge chats (Cross-Phone Real-Time Chat sync)
         const remoteChats = Array.isArray(data.chats) ? data.chats : [];
-        const mergedChatsMap = new Map();
-        localChats.forEach(c => mergedChatsMap.set(c.id, c));
+        const mergedChats = [...localChats];
+
         remoteChats.forEach(rc => {
-          const local = mergedChatsMap.get(rc.id);
-          if (!local) {
-            mergedChatsMap.set(rc.id, rc);
+          const rP1 = (rc.ownerUsername || '').toLowerCase();
+          const rP2 = (rc.renterUsername || '').toLowerCase();
+
+          const localIdx = mergedChats.findIndex(lc => {
+            if (lc.id === rc.id) return true;
+            const lP1 = (lc.ownerUsername || '').toLowerCase();
+            const lP2 = (lc.renterUsername || '').toLowerCase();
+            if (rP1 && rP2 && lP1 && lP2) {
+              return (lP1 === rP1 && lP2 === rP2) || (lP1 === rP2 && lP2 === rP1);
+            }
+            return false;
+          });
+
+          if (localIdx === -1) {
+            mergedChats.unshift(rc);
           } else {
-            // Merge messages if remote has newer or more messages
-            const combinedMsgs = [...(local.messages || [])];
-            (rc.messages || []).forEach(rm => {
-              if (!combinedMsgs.some(m => m.id === rm.id)) {
-                combinedMsgs.push(rm);
-              }
-            });
-            mergedChatsMap.set(rc.id, {
+            const local = mergedChats[localIdx];
+            const combinedMap = new Map();
+            (local.messages || []).forEach(m => combinedMap.set(m.id || (m.text + '_' + m.timestamp), m));
+            (rc.messages || []).forEach(m => combinedMap.set(m.id || (m.text + '_' + m.timestamp), m));
+            mergedChats[localIdx] = {
               ...local,
               ...rc,
-              messages: combinedMsgs
-            });
+              messages: Array.from(combinedMap.values()),
+              lastMessageAt: rc.lastMessageAt || local.lastMessageAt
+            };
           }
         });
-        const mergedChats = Array.from(mergedChatsMap.values());
         this.saveCachedChats(mergedChats);
 
-        return {
+        const totalMsgs = mergedChats.reduce((sum, c) => sum + (c.messages?.length || 0), 0);
+        const latestMsgTs = mergedChats.map(c => c.lastMessageAt || '').sort().reverse()[0] || '';
+        const currentHash = `${mergedItems.length}_${mergedRentals.length}_${mergedUsers.length}_${mergedReviews.length}_${mergedChats.length}_${totalMsgs}_${latestMsgTs}`;
+
+        const result = {
           items: mergedItems,
           rentals: mergedRentals,
           users: mergedUsers,
@@ -371,6 +466,13 @@ export class CloudSyncService {
           chats: mergedChats,
           transactions: data.transactions || []
         };
+
+        if (currentHash !== this.lastSyncedHash || forceNotify) {
+          this.lastSyncedHash = currentHash;
+          this.notifySubscribers('DATA_SYNC', result);
+        }
+
+        return result;
       }
     } catch (e) {
       console.warn('[Sync Error]', e.message);
@@ -393,20 +495,15 @@ export class CloudSyncService {
       clearInterval(this.pollInterval);
     }
 
-    // Polling every 12s for active sync
+    // Polling every 8s for active background sync
     this.pollInterval = setInterval(async () => {
       const apiBase = getApiBaseUrl();
       if (!apiBase) return;
 
       try {
-        const data = await this.fetchSharedData();
-        const currentHash = `${data.items.length}_${data.users.length}_${data.rentals.length}_${data.reviews.length}_${data.chats.length}`;
-        if (currentHash !== this.lastSyncedHash) {
-          this.lastSyncedHash = currentHash;
-          this.notifySubscribers('DATA_SYNC', data);
-        }
+        await this.fetchSharedData();
       } catch (e) {}
-    }, 12000);
+    }, 8000);
   }
 
   getCachedItems() {

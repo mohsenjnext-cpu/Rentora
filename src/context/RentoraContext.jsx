@@ -171,6 +171,10 @@ export function RentoraProvider({ children }) {
     const unsubscribe = cloudSyncService.subscribe((event, data) => {
       if (event === 'CHAT_DELETED' && data?.threadId) {
         setChats(prev => prev.filter(c => c.id !== data.threadId));
+      } else if (event === 'CHAT_POLL_SYNC' && data?.chats) {
+        setChats(data.chats);
+      } else if (event === 'CHAT_SYNC' && data?.chats) {
+        setChats(data.chats);
       } else if (data) {
         if (Array.isArray(data.items)) {
           setItems(prev => JSON.stringify(prev) === JSON.stringify(data.items) ? prev : data.items);
@@ -182,7 +186,7 @@ export function RentoraProvider({ children }) {
           setReviews(prev => JSON.stringify(prev) === JSON.stringify(data.reviews) ? prev : data.reviews);
         }
         if (Array.isArray(data.chats)) {
-          setChats(prev => JSON.stringify(prev) === JSON.stringify(data.chats) ? prev : data.chats);
+          setChats(data.chats);
         }
       }
     });
