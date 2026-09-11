@@ -59,22 +59,34 @@ jobs:
       - name: Show Wrangler version
         run: npx wrangler --version
 
-      - name: Verify direct Cloudflare D1 API access
+      - name: Verify Cloudflare D1 database is visible
         shell: bash
         run: |
           set -euo pipefail
-          api_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/d1/database/${RENTORA_D1_DATABASE_ID}"
-          response_file="/tmp/rentora-d1-response.json"
+          api_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/d1/database?name=rentora"
+          response_file="/tmp/rentora-d1-list.json"
           http_code="$(curl -sS -o "$response_file" -w "%{http_code}" \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             -H "Content-Type: application/json" \
             "$api_url")"
-          echo "Cloudflare D1 GET HTTP status: ${http_code}"
+          echo "Cloudflare D1 list HTTP status: ${http_code}"
           cat "$response_file"
           test "$http_code" = "200" || {
-            echo "Direct D1 API access failed for the configured account/database." >&2
+            echo "Direct D1 list API access failed for the configured account." >&2
             exit 1
           }
+          node -e '
+            const fs = require("fs");
+            const data = JSON.parse(fs.readFileSync("/tmp/rentora-d1-list.json", "utf8"));
+            const databases = Array.isArray(data.result) ? data.result : [];
+            const match = databases.find((db) => db.uuid === process.env.RENTORA_D1_DATABASE_ID);
+            if (!match) {
+              console.error("The configured D1 UUID was not returned for database name rentora.");
+              console.error("Returned database IDs:", databases.map((db) => `${db.name}:${db.uuid}`).join(", ") || "none");
+              process.exit(1);
+            }
+            console.log(`Confirmed D1 database: ${match.name} (${match.uuid})`);
+          '
 
       - name: Inspect Cloudflare identity
         run: npx wrangler whoami
