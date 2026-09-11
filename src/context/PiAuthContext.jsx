@@ -76,13 +76,7 @@ export function PiAuthProvider({ children }) {
     }
   };
 
-  const logout = async () => {
-    const sessionToken = currentUser?.sessionToken;
-    try {
-      await cloudSyncService.logout(sessionToken);
-    } catch (_) {}
-    setCurrentUser(null);
-  };
+  const logout = () => setCurrentUser(null);
 
   const updateUserProfile = (updatedFields) => {
     if (!currentUser) return null;
