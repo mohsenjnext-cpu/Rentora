@@ -16,6 +16,9 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-pi-uid, x-session-token, x-pi-username',
   'Access-Control-Max-Age': '86400',
+  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0'
 };
 
 function jsonResponse(data, status) {
@@ -27,7 +30,10 @@ function jsonResponse(data, status) {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-pi-uid, x-session-token, x-pi-username',
-      'Access-Control-Max-Age': '86400'
+      'Access-Control-Max-Age': '86400',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+      'Pragma': 'no-cache',
+      'Expires': '0'
     }
   });
 }
@@ -339,6 +345,7 @@ export default {
         var p1 = (chatPayload.ownerUsername || '').toLowerCase();
         var p2 = (chatPayload.renterUsername || '').toLowerCase();
 
+        // Find existing thread by ID or by same two users
         var existingChatIdx = chatList.findIndex(function(c) {
           if (c.id === chatPayload.id) return true;
           var u1 = (c.ownerUsername || '').toLowerCase();
@@ -350,14 +357,16 @@ export default {
         });
 
         if (existingChatIdx !== -1) {
-          var existingMsgs = chatList[existingChatIdx].messages || [];
+          var existingChat = chatList[existingChatIdx];
+          var existingMsgs = existingChat.messages || [];
           var incomingMsgs = chatPayload.messages || [];
           var msgMap = new Map();
-          existingMsgs.forEach(function(m) { msgMap.set(m.id || (m.text + '_' + m.timestamp), m); });
-          incomingMsgs.forEach(function(m) { msgMap.set(m.id || (m.text + '_' + m.timestamp), m); });
+          existingMsgs.forEach(function(m) { if (m) msgMap.set(m.id || (m.text + '_' + m.timestamp), m); });
+          incomingMsgs.forEach(function(m) { if (m) msgMap.set(m.id || (m.text + '_' + m.timestamp), m); });
           var combinedMessages = Array.from(msgMap.values());
           
-          chatList[existingChatIdx] = Object.assign({}, chatList[existingChatIdx], chatPayload, {
+          chatList[existingChatIdx] = Object.assign({}, existingChat, chatPayload, {
+            id: existingChat.id, // Retain stable thread ID
             messages: combinedMessages,
             lastMessageAt: chatPayload.lastMessageAt || new Date().toISOString()
           });
@@ -366,7 +375,7 @@ export default {
         }
         chatDb.chats = chatList;
         await saveDatabase(env, chatDb);
-        return jsonResponse({ success: true, chat: chatPayload });
+        return jsonResponse({ success: true, chat: chatList[existingChatIdx !== -1 ? existingChatIdx : 0] });
       }
 
       // Fast Chat Polling Endpoint

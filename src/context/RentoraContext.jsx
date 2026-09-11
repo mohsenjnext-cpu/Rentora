@@ -736,8 +736,8 @@ export function RentoraProvider({ children }) {
     return { success: true };
   };
 
-  // In-App Chat Messaging System with Cloud Sync & Anti-Bypass Filter
-  const sendChatMessage = (arg1, arg2) => {
+  // In-App Chat Messaging System with Synchronous Cloud Sync & Anti-Bypass Filter
+  const sendChatMessage = async (arg1, arg2) => {
     if (!currentUser) return;
 
     let targetChatId = null;
@@ -774,49 +774,60 @@ export function RentoraProvider({ children }) {
       read: true
     };
 
+    // Calculate synchronously from current cached chats to avoid React batching delays
+    const currentChats = cloudSyncService.getCachedChats();
+    const myName = (currentUser.username || '').toLowerCase();
+    const targetName = (recipientUsername || '').toLowerCase();
+
     let targetThreadToBroadcast = null;
+    let matched = false;
 
-    setChats(prev => {
-      let matched = false;
-      const updated = prev.map(c => {
-        if (targetChatId && c.id === targetChatId) {
-          matched = true;
-          const updatedThread = { ...c, lastMessageAt: now, messages: [...(c.messages || []), newMsg] };
-          targetThreadToBroadcast = updatedThread;
-          return updatedThread;
-        }
-        if (recipientUsername && (
-          (c.ownerUsername?.toLowerCase() === recipientUsername.toLowerCase() && c.renterUsername?.toLowerCase() === currentUser.username.toLowerCase()) ||
-          (c.renterUsername?.toLowerCase() === recipientUsername.toLowerCase() && c.ownerUsername?.toLowerCase() === currentUser.username.toLowerCase())
-        )) {
-          matched = true;
-          const updatedThread = { ...c, lastMessageAt: now, messages: [...(c.messages || []), newMsg] };
-          targetThreadToBroadcast = updatedThread;
-          return updatedThread;
-        }
-        return c;
-      });
-
-      if (!matched) {
-        const newChat = {
-          id: "chat_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
-          itemId: itemId || 'general',
-          itemTitle: itemTitle,
-          ownerUsername: recipientUsername || 'pioneer',
-          renterUsername: currentUser.username,
-          messages: [newMsg],
-          lastMessageAt: now,
-          unreadCount: 0
-        };
-        targetThreadToBroadcast = newChat;
-        return [newChat, ...updated];
+    const updated = currentChats.map(c => {
+      if (targetChatId && c.id === targetChatId) {
+        matched = true;
+        const uThread = { ...c, lastMessageAt: now, messages: [...(c.messages || []), newMsg] };
+        targetThreadToBroadcast = uThread;
+        return uThread;
       }
-
-      return updated;
+      if (recipientUsername) {
+        const u1 = (c.ownerUsername || '').toLowerCase();
+        const u2 = (c.renterUsername || '').toLowerCase();
+        if ((u1 === targetName && u2 === myName) || (u2 === targetName && u1 === myName)) {
+          matched = true;
+          const uThread = { ...c, lastMessageAt: now, messages: [...(c.messages || []), newMsg] };
+          targetThreadToBroadcast = uThread;
+          return uThread;
+        }
+      }
+      return c;
     });
 
+    if (!matched) {
+      const newChat = {
+        id: targetChatId || ("chat_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6)),
+        itemId: itemId || 'general',
+        itemTitle: itemTitle,
+        ownerUsername: recipientUsername || 'pioneer',
+        renterUsername: currentUser.username,
+        messages: [newMsg],
+        lastMessageAt: now,
+        unreadCount: 0
+      };
+      targetThreadToBroadcast = newChat;
+      updated.unshift(newChat);
+    }
+
+    // 1. Immediately update React State
+    setChats([...updated]);
+    // 2. Immediately persist to localStorage
+    cloudSyncService.saveCachedChats(updated);
+
+    // 3. Dispatch to all active open UI components (ChatModal)
     if (targetThreadToBroadcast) {
-      cloudSyncService.broadcastChatMessage(targetThreadToBroadcast);
+      cloudSyncService.notifySubscribers('CHAT_SYNC', { chats: updated, chat: targetThreadToBroadcast });
+      cloudSyncService.notifySubscribers('CHAT_POLL_SYNC', { chats: updated });
+      // 4. Send directly to Cloudflare KV / Pages backend
+      await cloudSyncService.broadcastChatMessage(targetThreadToBroadcast);
     }
 
     return newMsg;
@@ -827,20 +838,22 @@ export function RentoraProvider({ children }) {
     const targetId = typeof target === 'object' ? target.id : target;
     const targetRecipient = typeof target === 'object' ? (target.recipientUsername || target.ownerUsername || target.renterUsername) : (typeof target === 'string' ? target : null);
 
-    setChats(prev => {
-      const updated = prev.filter(c => {
-        if (targetId && c.id === targetId) return false;
-        if (targetRecipient) {
-          const u1 = (c.ownerUsername || '').toLowerCase();
-          const u2 = (c.renterUsername || '').toLowerCase();
-          const tr = targetRecipient.toLowerCase();
-          if (u1 === tr || u2 === tr || c.id?.toLowerCase() === tr) return false;
-        }
-        return true;
-      });
-      cloudSyncService.saveCachedChats(updated);
-      return updated;
+    const currentChats = cloudSyncService.getCachedChats();
+    const updated = currentChats.filter(c => {
+      if (targetId && c.id === targetId) return false;
+      if (targetRecipient) {
+        const u1 = (c.ownerUsername || '').toLowerCase();
+        const u2 = (c.renterUsername || '').toLowerCase();
+        const tr = targetRecipient.toLowerCase();
+        if (u1 === tr || u2 === tr || c.id?.toLowerCase() === tr) return false;
+      }
+      return true;
     });
+
+    setChats([...updated]);
+    cloudSyncService.saveCachedChats(updated);
+    cloudSyncService.notifySubscribers('CHAT_DELETED', { chats: updated, threadId: targetId });
+    cloudSyncService.notifySubscribers('CHAT_POLL_SYNC', { chats: updated });
 
     try {
       if (targetId) {
@@ -854,24 +867,27 @@ export function RentoraProvider({ children }) {
 
   const deleteChatMessage = async (messageId) => {
     if (!messageId) return { success: false };
+    const currentChats = cloudSyncService.getCachedChats();
     let targetThreadToBroadcast = null;
-    setChats(prev => {
-      const updated = prev.map(c => {
-        const hasMsg = (c.messages || []).some(m => m.id === messageId);
-        if (hasMsg) {
-          const filtered = (c.messages || []).filter(m => m.id !== messageId);
-          const uThread = { ...c, messages: filtered };
-          targetThreadToBroadcast = uThread;
-          return uThread;
-        }
-        return c;
-      });
-      cloudSyncService.saveCachedChats(updated);
-      return updated;
+
+    const updated = currentChats.map(c => {
+      const hasMsg = (c.messages || []).some(m => m.id === messageId);
+      if (hasMsg) {
+        const filtered = (c.messages || []).filter(m => m.id !== messageId);
+        const uThread = { ...c, messages: filtered };
+        targetThreadToBroadcast = uThread;
+        return uThread;
+      }
+      return c;
     });
 
+    setChats([...updated]);
+    cloudSyncService.saveCachedChats(updated);
+
     if (targetThreadToBroadcast) {
-      cloudSyncService.broadcastChatMessage(targetThreadToBroadcast);
+      cloudSyncService.notifySubscribers('CHAT_SYNC', { chats: updated, chat: targetThreadToBroadcast });
+      cloudSyncService.notifySubscribers('CHAT_POLL_SYNC', { chats: updated });
+      await cloudSyncService.broadcastChatMessage(targetThreadToBroadcast);
     }
     return { success: true };
   };
@@ -880,6 +896,9 @@ export function RentoraProvider({ children }) {
     const prevChats = [...chats];
     setChats([]);
     cloudSyncService.saveCachedChats([]);
+    cloudSyncService.notifySubscribers('CHAT_DELETED', { chats: [], threadId: 'ALL' });
+    cloudSyncService.notifySubscribers('CHAT_POLL_SYNC', { chats: [] });
+
     for (const c of prevChats) {
       if (c.id) {
         try { await cloudSyncService.deleteChatThread(c.id); } catch (e) {}

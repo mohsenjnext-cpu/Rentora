@@ -253,10 +253,15 @@ export class CloudSyncService {
     const apiBase = getApiBaseUrl();
     if (apiBase) {
       try {
-        const res = await fetch(`${apiBase}/api/sync/chat`, {
+        const res = await fetch(`${apiBase}/api/sync/chat?_t=${Date.now()}`, {
           method: 'POST',
-          headers: this.getAuthHeaders(),
-          body: JSON.stringify(chatThread)
+          headers: {
+            ...this.getAuthHeaders(),
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          },
+          body: JSON.stringify(chatThread),
+          cache: 'no-store'
         });
         return res.ok;
       } catch (e) {
@@ -280,10 +285,15 @@ export class CloudSyncService {
     const apiBase = getApiBaseUrl();
     if (apiBase) {
       try {
-        const res = await fetch(`${apiBase}/api/sync/chat/delete`, {
+        const res = await fetch(`${apiBase}/api/sync/chat/delete?_t=${Date.now()}`, {
           method: 'POST',
-          headers: this.getAuthHeaders(),
-          body: JSON.stringify({ id: threadId })
+          headers: {
+            ...this.getAuthHeaders(),
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          },
+          body: JSON.stringify({ id: threadId }),
+          cache: 'no-store'
         });
         return res.ok;
       } catch (e) {
@@ -298,7 +308,7 @@ export class CloudSyncService {
    */
   async pollChatsFast() {
     try {
-      const data = await this.fetchSharedData();
+      const data = await this.fetchSharedData(true);
       return data && Array.isArray(data.chats) ? data.chats : this.getCachedChats();
     } catch (e) {
       return this.getCachedChats();
@@ -325,9 +335,15 @@ export class CloudSyncService {
     }
 
     try {
-      const res = await fetch(`${apiBase}/api/sync/all`, {
+      const url = `${apiBase}/api/sync/all?_t=${Date.now()}`;
+      const res = await fetch(url, {
         method: 'GET',
-        headers: this.getAuthHeaders()
+        headers: {
+          ...this.getAuthHeaders(),
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
+        cache: 'no-store'
       });
 
       const contentType = res.headers.get('content-type') || '';
@@ -424,7 +440,7 @@ export class CloudSyncService {
         if (currentHash !== this.lastSyncedHash || forceNotify) {
           this.lastSyncedHash = currentHash;
           this.notifySubscribers('DATA_SYNC', result);
-          this.notifySubscribers('CHAT_POLL_SYNC', { chats: mergedChats });
+          this.notifySubscribers('CHAT_POLL_SYNC', { chats: [...mergedChats] });
         }
 
         return result;

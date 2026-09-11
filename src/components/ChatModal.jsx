@@ -149,7 +149,7 @@ export default function ChatModal({
 
   if (!isOpen) return null;
 
-  const handleSendMessage = (textToSend) => {
+  const handleSendMessage = async (textToSend) => {
     if (!isAuthenticated || !currentUser) {
       setAuthModalOpen(true);
       return;
@@ -166,18 +166,16 @@ export default function ChatModal({
     }
 
     setFilterWarningMessage('');
+    setMessageText('');
     try {
-      sendChatMessage({
+      await sendChatMessage({
         recipientUsername: activeRecipient || 'pioneer',
         itemId: activeItem?.id || currentThread?.itemId || 'general',
         itemTitle: itemTitle || currentThread?.itemTitle || 'گفتگوی رنتورا',
         text: text
       });
-      setMessageText('');
-      setTimeout(scrollToBottom, 60);
-      setTimeout(() => {
-        cloudSyncService.pollChatsFast().catch(() => {});
-      }, 300);
+      setTimeout(scrollToBottom, 50);
+      setTimeout(scrollToBottom, 200);
     } catch (e) {
       setFilterWarningMessage(e.message || 'خطا در ارسال پیام.');
     }
