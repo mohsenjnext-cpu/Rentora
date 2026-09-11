@@ -18,7 +18,6 @@ import {
   Sparkles,
   PhoneCall,
   CheckCircle2,
-  Crown,
   FileText,
   Info
 } from 'lucide-react';

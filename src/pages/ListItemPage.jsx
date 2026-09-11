@@ -9,7 +9,6 @@ import {
   Trash2, 
   AlertCircle, 
   Check, 
-  Crown, 
   ArrowRight,
   Wrench,
   Camera,

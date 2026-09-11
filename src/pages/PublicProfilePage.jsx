@@ -8,7 +8,6 @@ import {
   ArrowRight, 
   ShieldCheck, 
   Star, 
-  Crown, 
   Package, 
   Clock, 
   MessageSquare,

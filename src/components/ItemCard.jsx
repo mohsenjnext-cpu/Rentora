@@ -9,7 +9,6 @@ import {
   ShieldCheck, 
   Heart, 
   Coins, 
-  Crown,
   CheckCircle2,
   Settings
 } from 'lucide-react';

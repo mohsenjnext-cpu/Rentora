@@ -27,8 +27,8 @@ import {
 const AVATAR_PRESETS = [
   'https://api.dicebear.com/7.x/bottts/svg?seed=PioneerAlpha',
   'https://api.dicebear.com/7.x/bottts/svg?seed=PiExplorer',
-  'https://api.dicebear.com/7.x/bottts/svg?seed=RentoraVIP',
-  'https://api.dicebear.com/7.x/bottts/svg?seed=GoldenOwner',
+  'https://api.dicebear.com/7.x/bottts/svg?seed=PiBuilder',
+  'https://api.dicebear.com/7.x/bottts/svg?seed=PiCrafter',
   'https://api.dicebear.com/7.x/bottts/svg?seed=CyberPioneer',
   'https://api.dicebear.com/7.x/bottts/svg?seed=FutureMaker'
 ];

@@ -14,7 +14,6 @@ import {
   Coins, 
   Flag, 
   Check, 
-  Crown,
   MessageSquare,
   Edit3
 } from 'lucide-react';

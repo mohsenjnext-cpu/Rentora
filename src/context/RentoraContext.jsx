@@ -256,9 +256,6 @@ export function RentoraProvider({ children }) {
     }
   };
 
-  // Safe helper returning false for backwards compatibility
-  const isUserPro = () => false;
-
   // Unified Dynamic Pricing Calculation using integer micro-units FinancialEngine
   const calculatePricing = (arg1, arg2 = 1) => {
     let dailyRate = 0;
@@ -849,7 +846,6 @@ export function RentoraProvider({ children }) {
         refreshApp,
         purgeDatabase,
         toggleFavorite,
-        isUserPro,
         calculatePricing,
         addItem,
         createItemListing: addItem,
