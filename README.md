@@ -1,87 +1,137 @@
-# 🟣 Rentora | Peer-to-Peer Rental Marketplace on Pi Network
+# 🟣 Rentora | Pi Testnet P2P Rental Marketplace
 
-> **The Decentralized Peer-to-Peer Equipment & Goods Rental Marketplace powered by Pi Network SDK v2.0.**
+Rentora is a peer-to-peer rental marketplace built for the Pi Network ecosystem. This repository is currently hardened for **Pi Testnet** and a **Pi Browser / Pi App Studio External App** deployment.
 
-Rentora allows Pioneers worldwide to list, discover, and rent tools, electronics, camping gear, party supplies, and equipment using Pi cryptocurrency with a direct P2P settlement model.
+> **Important:** Testnet deployment is the target. Mainnet/production readiness is not claimed until the real Cloudflare bindings, Pi credentials, migrations, and end-to-end payment flow have been verified.
 
----
-
-## 🌟 Key Features
-
-- **⚡ Pi SDK v2.0 Integration:** Native Pi authentication (`username` scope) and Pi payment lifecycle (`Pi.createPayment` -> `/api/payments/approve` -> user signature -> `/api/payments/complete`).
-- **🤝 Hybrid P2P Settlement:** Renters pay the platform booking fee via Pi SDK; remaining daily rent and deposit are settled directly between owner and renter upon equipment handover.
-- **🔐 Strict Zero-Mock Security:** Real Mainnet-ready authentication and payment validation against official Pi Core Team servers (`api.minepi.com/v2`).
-- **📱 PWA & Mobile First:** Seamless mobile experience inside Pi Browser with client-side canvas photo compression.
-- **🌐 Multilingual & RTL/LTR:** Complete i18n support for Persian (فارسی), English, and Arabic (العربية).
-- **🛡️ Trust & Safety:** Verified Pioneer KYC badges, 4-digit security handover codes, return verification, ratings, and reviews.
-- **👑 Pioneer Admin Command Center:** Dynamic platform fee management, user status moderation, transaction ledger, and ecosystem analytics.
-
----
-
-## 📂 Repository Structure
+## Architecture
 
 ```text
-├── src/                         # Frontend React 19 source code
-│   ├── components/              # UI components (Header, Footer, BookingModal, ItemCard, etc.)
-│   ├── context/                 # State management (RentoraContext, PiAuthContext, ThemeContext, LanguageContext)
-│   ├── pages/                   # Views (HomePage, DiscoverPage, ListItemPage, OwnerHubPage, etc.)
-│   └── services/                # Pi SDK v2.0 Client & Internal Cloud Sync Services
-├── public/                      # Static assets, manifest.json, icons
-├── backend/                     # Dedicated standalone Node.js Express backend
-│   ├── server.js                # Mainnet-ready Pi Platform API integration & DB persistence
-│   ├── package.json             # Backend dependencies and scripts
-│   ├── .env.example             # Environment template for Server API Key
-│   └── rentora_database.json    # Local persistent JSON storage
-├── dist/                        # Optimized production frontend build
-├── server.js                    # Root server file for full-stack deployments
-├── index.html                   # HTML entry point with Pi Network SDK script
-├── vite.config.js               # Vite build configuration
-├── tailwind.config.js           # Tailwind CSS configuration
-└── package.json                 # Project dependencies & npm scripts
+Pi Browser
+    ↓ HTTPS
+Rentora React frontend
+    ↓ /api
+Cloudflare Worker
+    ├── Pi authentication + session authority
+    ├── Payment intent / approve / complete authority
+    ├── Marketplace API
+    ├── D1 (authoritative marketplace state)
+    │   ├── users
+    │   ├── listings
+    │   ├── rentals
+    │   ├── payment_intents
+    │   ├── transactions
+    │   ├── reviews
+    │   ├── reports
+    │   └── chats
+    └── KV (short-lived sessions / idempotency / coordination)
+             ↓
+          Pi API
 ```
 
----
+The browser is the UI, not the source of truth. Listing prices, rental calculations, payment intent amounts, payment identity, and completed payment records are validated or created server-side.
 
-## 🚀 Quick Deployment Guide
+## Cloudflare setup
 
-### 1. Update GitHub Repository (Main Branch)
-Unzip `rentora-github-update.zip` into your repository root, commit, and push:
+Required bindings:
+
+- `RENTORA_DB`: Cloudflare D1 database.
+- `RENTORA_KV`: Cloudflare KV namespace for sessions and short-lived coordination.
+
+Required Worker variables/secrets:
+
+- `PI_API_URL=https://api.minepi.com/v2`
+- `PI_API_KEY`: Pi Server API key for the selected Pi Testnet application.
+- `CORS_ORIGIN`: the exact public HTTPS origin allowed to call the Worker.
+- `ADMIN_PI_UIDS`: comma-separated Pi UIDs that are allowed to receive the admin role.
+
+Do **not** put Pi API keys or other secrets in `VITE_*` variables or commit them to Git.
+
+`wrangler.toml` contains the Worker name and non-secret configuration. Database IDs, KV IDs, and secrets are intentionally not committed.
+
+## D1 schema and migrations
+
+For a new database, apply:
+
 ```bash
-git add .
-git commit -m "feat: Production-ready Pi Mainnet integration with zero-mock backend and P2P settlement"
-git push origin main
+wrangler d1 execute rentora --remote --file=db/schema.sql
 ```
 
-### 2. Frontend on GitHub Pages
-Deploy the compiled files from `dist/` or `rentora-github-pages-ready.zip` to your `gh-pages` branch:
+For an existing database, apply migrations in order:
+
+```text
+1. db/schema.sql (for a fresh database only)
+2. db/migrations/0002_marketplace_metadata.sql
+3. db/migrations/0003_payment_replay_guards.sql
+```
+
+The replay-guard migration adds database-level uniqueness for bound Pi payment IDs and transaction IDs where present.
+
+Use the actual D1 database name configured for your Cloudflare account. Do not copy the example command blindly into a production shell and then blame civilization.
+
+## Local validation
+
 ```bash
+npm ci
+npm test
+node --check _worker.js
 npm run build
-# Deploy 'dist' directory to GitHub Pages
 ```
 
-### 3. Backend on Server (Render / Railway / VPS)
-Deploy the `backend/` directory on your Node.js hosting:
-```bash
-cd backend
-npm install --production
-cp .env.example .env
-# Edit .env with your official PI_API_KEY from develop.pi
-npm start
+The test suite currently contains security regression tests for server-owned payment amounts, Pi payment identity/metadata binding, approved-payment completion, session revocation, and the absence of a marketplace memory fallback.
+
+GitHub Actions runs the same test, Worker syntax, and frontend build checks for the hardened branch and pull requests targeting `main`.
+
+## Pi payment security model
+
+The payment lifecycle is server-authoritative:
+
+1. The authenticated user creates a rental from a D1 listing.
+2. The Worker calculates the rental values and persists the rental.
+3. The Worker creates a payment intent from server-owned rental data.
+4. The browser starts the Pi SDK payment using the server-provided intent.
+5. Approve/complete requests are authenticated and validate the Pi payment ID, Pioneer UID, amount, memo, and payment-intent metadata binding.
+6. Completion is persisted to D1 with transaction uniqueness constraints to resist replay.
+
+A client-supplied payment amount is never accepted as the authority for a payment intent.
+
+## Deployment target
+
+This project intentionally uses the existing **Cloudflare Worker backend**. Render, Railway, a separate Express server, and an external PostgreSQL database are not required by the target architecture.
+
+The frontend can be served through the selected Cloudflare/Pi App Studio deployment path, while `/api/*` is handled by the Worker.
+
+## Repository structure
+
+```text
+├── src/                         # React frontend
+│   ├── components/
+│   ├── context/
+│   ├── pages/
+│   └── services/
+├── public/                      # PWA/static assets
+├── db/
+│   ├── schema.sql               # Authoritative D1 schema
+│   └── migrations/              # Existing-database migrations
+├── tests/                       # Security regression tests
+├── _worker.js                   # Cloudflare Worker API
+├── wrangler.toml                # Worker configuration
+├── package.json
+├── package-lock.json
+└── vite.config.js
 ```
 
----
+## Current status
 
-## 🔒 Environment Variables (`.env`)
+This branch is a **Pi Testnet hardening branch**, not a declaration of production readiness.
 
-| Variable | Description | Default / Example |
-| :--- | :--- | :--- |
-| `PORT` | Web server listening port | `3000` |
-| `NODE_ENV` | Runtime environment | `production` |
-| `PI_API_URL` | Pi Network Core Team API endpoint | `https://api.minepi.com/v2` |
-| `PI_API_KEY` | Server API Key from `develop.pi` | `your_pi_server_api_key` |
-| `APP_URL` | Deployed frontend URL | `https://your-username.github.io/rentora/` |
+Remaining real-environment work:
 
----
+- Create/connect the Cloudflare D1 and KV bindings.
+- Apply the schema/migrations to the intended Testnet database.
+- Configure the Pi Testnet server API key and admin UID allow-list as Cloudflare secrets/variables.
+- Deploy the Worker and verify `/api/health`.
+- Run an actual Pi Testnet login → rental → payment → approve → complete flow.
+- Add/finish integration coverage for payment recovery/reconciliation and any remaining client-side marketplace workflows.
 
-## 📄 License
-MIT License © 2026 Rentora Team. Built for the Pi Network Ecosystem.
+<!-- CI trigger: authoritative rental transition patch -->
