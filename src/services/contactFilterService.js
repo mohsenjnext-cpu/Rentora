@@ -1,9 +1,12 @@
 /**
- * Rentora Anti-Bypass & Security Filter Service (Strict Mode)
+ * Rentora Anti-Bypass & Security Filter Service (Strict Ultra Mode)
  * 
- * Unconditionally blocks off-platform contact leaks:
- * Phone numbers, Telegram, WhatsApp, Instagram, Rubika, Eitaa, Bale,
- * ID / Handles, Usernames with @, Emails, External Links, and Direct Contact Requests.
+ * Unconditionally blocks ANY off-platform contact information:
+ * - Phone numbers (English, Persian, Arabic, spaced, dotted, spelled out)
+ * - Messengers (Telegram, WhatsApp, Instagram, Rubika, Eitaa, Bale, Soroush, Gap, Twitter/X)
+ * - Handles, IDs, Usernames with or without @
+ * - Contact intent (شماره, تماس, زنگ, تلفن, موبایل, پیامک, دایرکت, اکانت, پیج)
+ * - Emails and External URLs
  */
 
 const PERSIAN_ARABIC_DIGITS = {
@@ -17,9 +20,12 @@ export function normalizeText(text) {
   if (!text || typeof text !== 'string') return '';
 
   let normalized = text;
+  // Convert Persian & Arabic numbers to English
   normalized = normalized.replace(/[۰-۹٠-٩]/g, (digit) => PERSIAN_ARABIC_DIGITS[digit] || digit);
-  // Remove zero-width spaces, joiners, and control characters
-  normalized = normalized.replace(/[\u200B-\u200D\uFEFF\u00A0]/g, ' ');
+  // Remove zero-width spaces and non-standard whitespace
+  normalized = normalized.replace(/[\u200B-\u200D\uFEFF\u00A0\u180E\u2000-\u200A]/g, ' ');
+  // Replace multiple whitespace with single space
+  normalized = normalized.replace(/\s+/g, ' ');
   return normalized;
 }
 
@@ -37,14 +43,16 @@ export function inspectMessageSafety(rawText) {
   const normalized = normalizeText(rawText);
   const lowerCase = normalized.toLowerCase();
   
-  // Clean text without separator characters for hidden pattern inspection
-  const strippedSeparators = lowerCase.replace(/[\s\-_.,،;:\\/()[\]{}|+*#~`!?"'<>]/g, '');
+  // Stripped version without any separators for concatenated checks
+  const strippedSeparators = lowerCase.replace(/[\s\-_.,،;:\\/()[\]{}|+*#~`!?"'<>@$^&=]/g, '');
 
-  // 1. BLOCKED MESSENGERS & SOCIAL NETWORKS (Unconditional strict block)
+  // 1. MESSENGERS & SOCIAL NETWORKS (Strict list)
   const messengerKeywords = [
-    'تلگرام', 'تلگ', 'واتساپ', 'واتس‌اپ', 'واتس اپ', 'واتساپم', 'واتس',
-    'اینستاگرام', 'اینستا', 'اینستام', 'اینستامو', 'توییتر', 'تویتر',
-    'روبیکا', 'ایتا', 'ایتاء', 'بله', 'سروش', 'شاد', 'گپ', 'آی‌گپ', 'ایگپ',
+    'تلگرام', 'تلگ', 'تگرام', 'تله‌گرام', 'تله گرام',
+    'واتساپ', 'واتس‌اپ', 'واتس اپ', 'واتسپ', 'واتس‌آپ', 'واتس آپ', 'واتس',
+    'اینستاگرام', 'اینستا', 'اینستام', 'اینستات', 'اینستامو', 'اینستاتو',
+    'توییتر', 'تویتر', 'روبیکا', 'روبیکام', 'روبیکات',
+    'ایتا', 'ایتاء', 'ایتام', 'ایتات', 'بله', 'سروش', 'شاد', 'گپ', 'آی‌گپ', 'ایگپ',
     'telegram', 'tg', 't.me', 'whatsapp', 'wa.me', 'instagram', 'insta',
     'twitter', 'rubika', 'eitaa', 'bale', 'soroush', 'gap'
   ];
@@ -54,91 +62,87 @@ export function inspectMessageSafety(rawText) {
       return {
         isViolating: true,
         matchedType: 'messenger',
-        message: `ارسال پیام‌رسان یا شبکه اجتماعی (${keyword}) در گفتگوی قبل از رزرو مسدود است. لطفاً تمام هماهنگی‌ها را از طریق چت امن رنتورا انجام دهید.`
+        message: `ارسال پیام‌رسان یا شبکه اجتماعی (${keyword}) قبل از ثبت رزرو مسدود است. لطفاً گفتگو را درون رنتورا ادامه دهید.`
       };
     }
   }
 
-  // 2. BLOCKED ID / USERNAME / HANDLE KEYWORDS
+  // 2. ID / USERNAME / HANDLE / ACCOUNT KEYWORDS
   const handleKeywords = [
-    'آیدی', 'ایدی', 'ای دی', 'آی دی', 'ایدیم', 'آیدیم', 'آیدیمو', 'ایدیمو',
-    'اکانت', 'اکانتم', 'پیج', 'پیجم', 'کانال', 'چنل', 'دایرکت', 'دایرکتم',
+    'آیدی', 'ایدی', 'ای دی', 'آی دی', 'ایدیم', 'آیدیم', 'آیدیت', 'ایدیت', 'آیدیمو', 'ایدیمو',
+    'اکانت', 'اکانتم', 'اکانتت', 'پیج', 'پیجم', 'پیجت', 'پیجمو', 'پیجتو',
+    'کانال', 'چنل', 'چنلم', 'دایرکت', 'دایرکتم', 'دایرکتت',
     'username', 'user id', 'userid', 'handle', 'dm me', 'direct me'
   ];
 
   for (const keyword of handleKeywords) {
-    if (lowerCase.includes(keyword)) {
+    if (lowerCase.includes(keyword) || strippedSeparators.includes(keyword.replace(/\s+/g, ''))) {
       return {
         isViolating: true,
         matchedType: 'handle',
-        message: 'ارسال آیدی، پیج یا اکانت در گفتگوی قبل از رزرو مجاز نیست. گفتگو فقط در پلتفرم رنتورا مجاز است.'
+        message: `ارسال (${keyword}) قبل از نهایی‌شدن رزرو مجاز نمی‌باشد.`
       };
     }
   }
 
-  // 3. ANY '@' USERNAME OR HANDLE MENTION
-  if (/@[\w\u0600-\u06FF]{2,}/.test(normalized) || lowerCase.includes('@')) {
+  // 3. ANY '@' CHARACTER (Handle / Mentions)
+  if (lowerCase.includes('@')) {
     return {
       isViolating: true,
       matchedType: 'at_handle',
-      message: 'ارسال آیدی با علامت @ قبل از ثبت رزرو کالا مسدود است.'
+      message: 'ارسال آیدی یا کاراکتر @ قبل از تایید رزرو کالا مسدود است.'
     };
   }
 
-  // 4. CALL / CONTACT INTENT KEYWORDS
+  // 4. PHONE & CALL INTENT KEYWORDS
   const contactIntentKeywords = [
-    'شماره', 'شمارم', 'شمارمو', 'شمارمو بدم', 'شماره تماس', 'شماره بده',
-    'تلفن', 'تلفنم', 'موبایل', 'موبایلم', 'تماس بگیرید', 'تماس بگیر', 'تماس بگیرین',
-    'زنگ بزن', 'زنگ بزنید', 'پیامک بده', 'اس ام اس بده', 'اس‌ام‌اس',
+    'شماره', 'شمارم', 'شمارمو', 'شمارت', 'شمارتو', 'شماره تماس', 'شماره تلفن', 'شماره بدم', 'شماره بده',
+    'تلفن', 'تلفنم', 'تلفنت', 'موبایل', 'موبایلم', 'موبایلت',
+    'تماس بگیرید', 'تماس بگیر', 'تماس بگیرین', 'تماس بگیریم',
+    'زنگ بزن', 'زنگ بزنید', 'زنگ بزنین', 'پیامک بده', 'اس ام اس بده', 'اس‌ام‌اس', 'اس ام اس',
     'call me', 'phone number', 'contact me', 'text me'
   ];
 
   for (const keyword of contactIntentKeywords) {
-    if (lowerCase.includes(keyword)) {
+    if (lowerCase.includes(keyword) || strippedSeparators.includes(keyword.replace(/\s+/g, ''))) {
       return {
         isViolating: true,
         matchedType: 'contact_intent',
-        message: 'تبادل اطلاعات تماس در چت مسدود است. شماره تلفن طرفین پس از رزرو به‌صورت خودکار در اختیارتان قرار می‌گیرد.'
+        message: 'تبادل اطلاعات تماس در چت مسدود است. شماره تلفن موجر پس از پرداخت کارمزد به‌صورت خودکار نمایش می‌یابد.'
       };
     }
   }
 
-  // 5. DIGIT SEQUENCES (Any sequence of 6 or more digits anywhere in message)
-  if (/\d{6,}/.test(strippedSeparators)) {
+  // 5. DIGIT SEQUENCES (Any sequence of 5 or more digits)
+  if (/\d{5,}/.test(strippedSeparators)) {
     return {
       isViolating: true,
       matchedType: 'phone_digits',
-      message: 'ارسال شماره تماس و ارقام طولانی در چت مجاز نیست. شماره هماهنگی پس از تایید رزرو فعال خواهد شد.'
+      message: 'ارسال شماره تماس و ارقام در چت مجاز نیست.'
     };
   }
 
-  // 6. IRANIAN PHONE PATTERNS (09..., +989..., 989...)
-  const phonePatterns = [
-    /(?:(?:\+98|0098|98|0)?9\d{9})/,
-    /(?:(?:\+98|0098|98|0)?[1-8]\d{8,9})/,
-    /(?:09[0-9]{2}[ -.]?[0-9]{3}[ -.]?[0-9]{4})/,
-    /09\d{2}\s*\d{3}\s*\d{4}/,
-    /9\d{2}\s*\d{3}\s*\d{4}/
-  ];
-
-  for (const regex of phonePatterns) {
-    if (regex.test(strippedSeparators) || regex.test(normalized)) {
-      return {
-        isViolating: true,
-        matchedType: 'phone',
-        message: 'ارسال شماره همراه در چت مسدود است.'
-      };
-    }
-  }
-
-  // 7. SPELLED-OUT PERSIAN DIGITS (نهصد و دوازده، صفر نه...)
-  const persianNumberWordsRegex = /(صفر|نه|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نهصد|دویست|سیصد|چهارصد|پانصد|شصت|هفتاد|هشتاد|نود)[\s‌]+(نه|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نود|دوازده|سیزده|چهارده|پانزده|شانزده|هفده|هجده|نوزده)/i;
-  if (persianNumberWordsRegex.test(normalized)) {
+  // 6. IRANIAN PHONE NUMBER PREFIXES (09..., 9...)
+  if (/09\d{2}/.test(strippedSeparators) || /989\d{2}/.test(strippedSeparators)) {
     return {
       isViolating: true,
-      matchedType: 'phone_words',
-      message: 'نوشتن شماره تماس به صورت حروفی در چت مجاز نمی‌باشد.'
+      matchedType: 'phone_prefix',
+      message: 'ارسال شماره موبایل در چت مسدود است.'
     };
+  }
+
+  // 7. SPELLED-OUT PERSIAN DIGITS
+  const persianNumberWordsRegex = /(صفر|نه|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نهصد|دویست|سیصد|چهارصد|پانصد|شصت|هفتاد|هشتاد|نود)/i;
+  if (persianNumberWordsRegex.test(normalized) && (normalized.includes('نه') || normalized.includes('یک') || normalized.includes('دو') || normalized.includes('سه') || normalized.includes('چهار') || normalized.includes('پنج') || normalized.includes('شش') || normalized.includes('هفت') || normalized.includes('هشت') || normalized.includes('صفر'))) {
+    // Check if at least 2 number words appear
+    const matches = normalized.match(/(صفر|نه|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نهصد|دویست|سیصد|چهارصد|پانصد|شصت|هفتاد|هشتاد|نود)/g);
+    if (matches && matches.length >= 2) {
+      return {
+        isViolating: true,
+        matchedType: 'phone_words',
+        message: 'نوشتن شماره تماس به صورت حروفی در چت مجاز نیست.'
+      };
+    }
   }
 
   // 8. EMAIL ADDRESSES
@@ -147,7 +151,7 @@ export function inspectMessageSafety(rawText) {
     return {
       isViolating: true,
       matchedType: 'email',
-      message: 'ارسال آدرس ایمیل در گفتگوی قبل از رزرو مجاز نیست.'
+      message: 'ارسال آدرس ایمیل مجاز نمی‌باشد.'
     };
   }
 
