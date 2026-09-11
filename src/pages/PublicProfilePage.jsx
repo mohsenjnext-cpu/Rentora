@@ -24,10 +24,9 @@ export default function PublicProfilePage({
 }) {
   const { lang, dir, t, l } = useLanguage();
   const { users = [] } = usePiAuth();
-  const { items = [], rentals = [], reviews = [], isUserPro } = useRentora();
+  const { items = [], rentals = [], reviews = [] } = useRentora();
 
   const targetUsername = username || 'pioneer';
-  const isPro = isUserPro(targetUsername);
 
   const targetUser = users.find(u => u.username?.toLowerCase() === targetUsername.toLowerCase());
 
@@ -68,12 +67,6 @@ export default function PublicProfilePage({
               <h1 className="text-base font-bold text-slate-900 dark:text-white" dir="ltr">
                 {targetUser?.displayName || `@${targetUsername}`}
               </h1>
-              {isPro && (
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-400 text-[#26215C] flex items-center gap-0.5">
-                  <Crown className="w-2.5 h-2.5" />
-                  <span>PRO VIP</span>
-                </span>
-              )}
             </div>
 
             <div className="flex items-center gap-1 text-xs font-bold">

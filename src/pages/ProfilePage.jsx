@@ -3,12 +3,10 @@ import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import { getUserReputationSummary } from '../services/reputationService';
-import SubscriptionModal from '../components/SubscriptionModal';
 import { 
   User, 
   ShieldCheck, 
   Star, 
-  Crown, 
   Settings, 
   Share2, 
   Check, 
@@ -35,17 +33,16 @@ const AVATAR_PRESETS = [
   'https://api.dicebear.com/7.x/bottts/svg?seed=FutureMaker'
 ];
 
-export default function ProfilePage({ onNavigate, onSelectItem, onOpenSubscription, onOpenPublicProfile }) {
+export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProfile }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen, logout, updateProfile, updateUserProfile } = usePiAuth();
-  const { items = [], rentals = [], reviews = [], isUserPro } = useRentora();
+  const { items = [], rentals = [], reviews = [] } = useRentora();
 
   const [isEditing, setIsEditing] = useState(false);
   const [displayName, setDisplayName] = useState(currentUser?.displayName || currentUser?.username || '');
   const [bio, setBio] = useState(currentUser?.bio || '');
   const [avatar, setAvatar] = useState(currentUser?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser?.username || 'pioneer'}`);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [subModalOpen, setSubModalOpen] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -73,7 +70,6 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenSubscripti
     );
   }
 
-  const isPro = isUserPro(currentUser?.username);
   const myItems = (items || []).filter(i => 
     i.ownerUid === currentUser?.uid || i.ownerUsername?.toLowerCase() === currentUser?.username?.toLowerCase()
   );
@@ -95,7 +91,6 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenSubscripti
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        // Compress and resize image to 400x400 canvas for fast storage
         const canvas = document.createElement('canvas');
         const MAX_SIZE = 400;
         let width = img.width;
@@ -121,7 +116,6 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenSubscripti
         const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
         setAvatar(compressedDataUrl);
 
-        // If not in editing mode, immediately save to profile
         if (!isEditing) {
           const updater = updateProfile || updateUserProfile;
           if (updater) {
@@ -335,12 +329,6 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenSubscripti
                 <h2 className="text-base font-bold text-slate-900 dark:text-white">
                   {currentUser?.displayName || currentUser?.username}
                 </h2>
-                {isPro && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-400 text-[#26215C] flex items-center gap-0.5">
-                    <Crown className="w-2.5 h-2.5" />
-                    <span>PRO VIP</span>
-                  </span>
-                )}
               </div>
 
               <div className="flex items-center gap-1.5 text-xs font-mono" dir="ltr">
@@ -386,31 +374,6 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenSubscripti
 
       </div>
 
-      {/* Subscription banner */}
-      <div className={`p-4 rounded-2xl border flex items-center justify-between gap-3 ${
-        isPro ? 'bg-amber-500/10 border-amber-300 dark:border-amber-500/30' : 'banner-purple'
-      }`}>
-        <div className="flex items-center gap-2.5">
-          <Crown className={`w-6 h-6 ${isPro ? 'text-amber-500' : 'text-[#534AB7]'}`} />
-          <div>
-            <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-              {isPro ? t('ownerProBannerTitle') : l('پلن موجر طلایی (Rentora Pro VIP)', 'Rentora Pro VIP Owner', 'عضوية المؤجر الذهبي Pro', '黄金 Pro VIP 房东计划')}
-            </h4>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400">
-              {isPro ? l('شما از تمام مزایای پلن طلایی بهره‌مندید.', 'Active Pro membership.', 'أنت تتمتع بكافة ميزات العضوية الذهبية.', '您当前已享有全部 Pro 黄金特权。') : l('ثبت نامحدود آگهی و کارمزد ۰٪', 'Unlimited listings & 0% fee', 'إعلانات غير محدودة و 0% عمولة', '无限发布与 0% 佣金优惠')}
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setSubModalOpen(true)}
-          className="btn-primary px-3 py-1.5 text-xs font-bold cursor-pointer shrink-0 shadow-xs"
-        >
-          {isPro ? l('مشاهده پلن', 'View Plan', 'عرض الخطة', '查看权益') : t('ownerProUpgradeBtn')}
-        </button>
-      </div>
-
       {/* Action buttons */}
       <div className="space-y-2">
         <button
@@ -434,12 +397,6 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenSubscripti
           <span>{t('navLogout')}</span>
         </button>
       </div>
-
-      {/* Subscription Modal */}
-      <SubscriptionModal
-        isOpen={subModalOpen}
-        onClose={() => setSubModalOpen(false)}
-      />
 
     </div>
   );

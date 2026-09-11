@@ -14,53 +14,6 @@ import {
 const RentoraContext = createContext();
 const STORAGE_PREFIX = 'rentora_db_';
 
-export const SUBSCRIPTION_PLANS = [
-  {
-    id: 'plan_weekly',
-    nameFa: 'اشتراک هفتگی Pro',
-    nameEn: 'Weekly Pro',
-    durationDays: 7,
-    pricePi: 1.0,
-    badge: 'هفتگی',
-    features: [
-      'ثبت نامحدود آگهی',
-      'صفر درصد کارمزد معاملات',
-      'بج طلایی فروشگاه معتبر Pro',
-      'نمایش در بالای نتایج جستجو'
-    ]
-  },
-  {
-    id: 'plan_monthly',
-    nameFa: 'اشتراک ماهانه Pro (ویژه)',
-    nameEn: 'Monthly Pro (Popular)',
-    durationDays: 30,
-    pricePi: 3.5,
-    popular: true,
-    badge: 'محبوب‌ترین',
-    features: [
-      'ثبت نامحدود آگهی در تمام دسته‌ها',
-      'صفر درصد کارمزد پلتفرم',
-      'بج طلایی اختصاصی Pro Verified',
-      'نردبان خودکار و نمایش در صدر دسته‌بندی‌ها',
-      'پشتیبانی اختصاصی و ممیزی سریع'
-    ]
-  },
-  {
-    id: 'plan_annual',
-    nameFa: 'اشتراک سالانه طلایی',
-    nameEn: 'Annual VIP Pro',
-    durationDays: 365,
-    pricePi: 30.0,
-    badge: 'به‌صرفه‌ترین',
-    features: [
-      'تمامی امکانات پلن ماهانه',
-      '۳۰٪ تخفیف نسبت به پرداخت ماهانه',
-      'نشان فروشگاه ویژه طلایی اکوسیستم پای',
-      'بنر اختصاصی در صفحه اصلی'
-    ]
-  }
-];
-
 export function RentoraProvider({ children }) {
   const { currentUser, isAdmin } = usePiAuth();
 
@@ -68,9 +21,9 @@ export function RentoraProvider({ children }) {
   const [platformConfig, setPlatformConfig] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_PREFIX + 'config_v9');
-      return saved ? JSON.parse(saved) : { platformFeePercentage: 5, proFeePercentage: 0, minFeePi: 0.0001 };
+      return saved ? JSON.parse(saved) : { platformFeePercentage: 5, minFeePi: 0.0001 };
     } catch (e) {
-      return { platformFeePercentage: 5, proFeePercentage: 0, minFeePi: 0.0001 };
+      return { platformFeePercentage: 5, minFeePi: 0.0001 };
     }
   });
 
@@ -119,22 +72,12 @@ export function RentoraProvider({ children }) {
     }
   });
 
-  // 8. Active Pro Subscriptions Directory
-  const [proSubscriptions, setProSubscriptions] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_PREFIX + 'pro_subs_v10');
-      return saved ? JSON.parse(saved) : {};
-    } catch (e) {
-      return {};
-    }
-  });
-
-  // 9. In-App User Messages / Chats State (Synced with Cloud)
+  // 8. In-App User Messages / Chats State (Synced with Cloud)
   const [chats, setChats] = useState(() => {
     return cloudSyncService.getCachedChats();
   });
 
-  // 10. Real-Time New Message Notification State
+  // 9. Real-Time New Message Notification State
   const [latestNotification, setLatestNotification] = useState(null);
   const knownMsgIdsRef = useRef(new Set());
   const isInitialLoadDoneRef = useRef(false);
@@ -206,10 +149,6 @@ export function RentoraProvider({ children }) {
   useEffect(() => {
     try { localStorage.setItem(STORAGE_PREFIX + 'reports_v8', JSON.stringify(reports)); } catch (e) {}
   }, [reports]);
-
-  useEffect(() => {
-    try { localStorage.setItem(STORAGE_PREFIX + 'pro_subs_v10', JSON.stringify(proSubscriptions)); } catch (e) {}
-  }, [proSubscriptions]);
 
   useEffect(() => {
     try { 
@@ -305,7 +244,6 @@ export function RentoraProvider({ children }) {
       setReviews([]);
       setReports([]);
       setChats([]);
-      setProSubscriptions({});
 
       cloudSyncService.saveCachedItems([]);
       cloudSyncService.saveCachedRentals([]);
@@ -318,101 +256,8 @@ export function RentoraProvider({ children }) {
     }
   };
 
-  // Check if username has active Pro subscription
-  const isUserPro = (username) => {
-    if (!username) return false;
-    const clean = String(username).toLowerCase().replace('@', '').trim();
-    const sub = proSubscriptions[clean];
-    if (!sub) return false;
-    if (sub.isPro && new Date(sub.activeUntil) > new Date()) return true;
-    return false;
-  };
-
-  // Activate Pro directly for admin / testing
-  const activateProImmediately = (planId = 'plan_monthly') => {
-    if (!currentUser) throw new Error("ابتدا وارد حساب کاربری شوید.");
-    const plan = SUBSCRIPTION_PLANS.find(p => p.id === planId) || SUBSCRIPTION_PLANS[1];
-    const now = new Date();
-    const expiryDate = new Date(now.getTime() + (plan.durationDays * 24 * 60 * 60 * 1000));
-
-    const updatedSubs = {
-      ...proSubscriptions,
-      [currentUser.username.toLowerCase()]: {
-        planId: plan.id,
-        planName: plan.nameFa,
-        activeUntil: expiryDate.toISOString(),
-        isPro: true,
-        purchasedAt: now.toISOString(),
-        paymentId: 'dev_instant_' + Date.now(),
-        txid: '0x' + Math.random().toString(16).substring(2, 10)
-      }
-    };
-
-    setProSubscriptions(updatedSubs);
-    return { success: true, plan };
-  };
-
-  // Subscribe to Pro Plan with Pi SDK Payment
-  const purchaseProSubscription = async (planId) => {
-    if (!currentUser) throw new Error("برای فعال‌سازی اشتراک، ابتدا با حساب پای وارد شوید.");
-
-    const plan = SUBSCRIPTION_PLANS.find(p => p.id === planId) || SUBSCRIPTION_PLANS[1];
-
-    // Execute Pi Payment
-    const paymentResult = await piService.createPayment({
-      paymentData: {
-        amount: plan.pricePi,
-        memo: `Rentora Pro Subscription (${plan.nameEn})`,
-        metadata: {
-          type: 'pro_subscription',
-          planId: plan.id,
-          username: currentUser.username,
-          uid: currentUser.uid,
-          amount: plan.pricePi
-        }
-      }
-    });
-
-    if (!paymentResult || paymentResult.status !== 'completed') {
-      throw new Error("تراکنش پرداخت توسط کاربر تایید نشد.");
-    }
-
-    const now = new Date();
-    const expiryDate = new Date(now.getTime() + (plan.durationDays * 24 * 60 * 60 * 1000));
-
-    const updatedSubs = {
-      ...proSubscriptions,
-      [currentUser.username.toLowerCase()]: {
-        planId: plan.id,
-        planName: plan.nameFa,
-        activeUntil: expiryDate.toISOString(),
-        isPro: true,
-        purchasedAt: now.toISOString(),
-        paymentId: paymentResult.paymentId,
-        txid: paymentResult.txid
-      }
-    };
-
-    setProSubscriptions(updatedSubs);
-
-    const subTx = {
-      id: "tx_sub_" + Date.now(),
-      itemTitle: `خرید ${plan.nameFa}`,
-      renterUsername: currentUser.username,
-      ownerUsername: 'rentora_foundation',
-      grossAmount: plan.pricePi,
-      platformFee: plan.pricePi,
-      payerRole: 'owner_pro',
-      totalCharged: plan.pricePi,
-      status: "completed",
-      piTxRef: paymentResult.txid || ('0x' + Math.random().toString(16).substring(2, 10)),
-      blockchainVerified: true,
-      timestamp: now.toISOString()
-    };
-
-    setTransactions(prev => [subTx, ...prev]);
-    return { success: true, plan };
-  };
+  // Safe helper returning false for backwards compatibility
+  const isUserPro = () => false;
 
   // Unified Dynamic Pricing Calculation using integer micro-units FinancialEngine
   const calculatePricing = (arg1, arg2 = 1) => {
@@ -421,7 +266,6 @@ export function RentoraProvider({ children }) {
     let startDate = null;
     let endDate = null;
     let daysCount = 1;
-    let ownerName = null;
 
     if (arg1 && typeof arg1 === 'object') {
       dailyRate = arg1.dailyRate !== undefined ? arg1.dailyRate : (arg1.pricePerDay !== undefined ? arg1.pricePerDay : 0);
@@ -429,16 +273,12 @@ export function RentoraProvider({ children }) {
       startDate = arg1.startDate;
       endDate = arg1.endDate;
       daysCount = arg1.daysCount;
-      ownerName = arg1.ownerUsername;
     } else {
       dailyRate = parseFloat(arg1) || 0;
       daysCount = parseInt(arg2, 10) || 1;
     }
 
-    const ownerIsProPlan = isUserPro(ownerName);
-    const configuredFeePercentage = ownerIsProPlan
-      ? (platformConfig?.proFeePercentage || 0)
-      : (platformConfig?.platformFeePercentage !== undefined ? platformConfig.platformFeePercentage : 5);
+    const configuredFeePercentage = platformConfig?.platformFeePercentage !== undefined ? platformConfig.platformFeePercentage : 5;
 
     return FinancialEngine.calculateBookingFinancials({
       dailyRate,
@@ -446,21 +286,13 @@ export function RentoraProvider({ children }) {
       endDate,
       daysCount,
       securityDeposit,
-      platformFeePercentage: configuredFeePercentage,
-      ownerIsPro: ownerIsProPlan
+      platformFeePercentage: configuredFeePercentage
     });
   };
 
-  // Robust Item Listing Creation
+  // Robust Item Listing Creation (Unlimited for all Pioneers)
   const addItem = async (itemData) => {
     if (!currentUser) throw new Error("برای ثبت آگهی ابتدا وارد حساب پای خود شوید.");
-
-    const userIsPro = isUserPro(currentUser.username);
-    const userActiveListingsCount = items.filter(i => i.ownerUsername?.toLowerCase() === currentUser.username?.toLowerCase()).length;
-
-    if (!userIsPro && userActiveListingsCount >= 3) {
-      throw new Error("سقف ثبت آگهی رایگان (۳ عدد) پر شده است. برای ثبت آگهی نامحدود، اشتراک Pro را فعال کنید.");
-    }
 
     const defaultImages = {
       tools: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80",
@@ -491,7 +323,6 @@ export function RentoraProvider({ children }) {
       ownerAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}`,
       ownerBio: currentUser.bio || 'کاربر شبکه پای در رنتورا',
       ownerKYC: currentUser?.kycStatus === 'verified' && !!currentUser?.isOfficialSdk,
-      ownerIsPro: userIsPro,
       ownerReputation: null,
       rating: null,
       ratingCount: 0,
@@ -599,8 +430,7 @@ export function RentoraProvider({ children }) {
       startDate,
       endDate,
       daysCount,
-      securityDeposit: item.deposit || 0,
-      ownerUsername: item.ownerUsername
+      securityDeposit: item.deposit || 0
     });
 
     const agreementId = `RNT-${Math.floor(10000 + Math.random() * 90000)}`;
@@ -637,11 +467,11 @@ export function RentoraProvider({ children }) {
       renterCommissionShare: financials.rentoraFee,
       paymentDueToRentora: financials.rentoraFee,
       ownerCommissionShare: 0,
-      renterCommissionPaid: financials.rentoraFee === 0,
+      renterCommissionPaid: false,
 
       // State Machine & Agreement
-      status: financials.rentoraFee === 0 ? RENTAL_STATES.CONFIRMED : RENTAL_STATES.PAYMENT_PENDING,
-      paymentStatus: financials.rentoraFee === 0 ? "pro_free_confirmed" : "pending",
+      status: RENTAL_STATES.PAYMENT_PENDING,
+      paymentStatus: "pending",
       settlementType: "direct_p2p_with_pi_platform_fee",
       isEscrowApplied: false,
 
@@ -657,7 +487,7 @@ export function RentoraProvider({ children }) {
         rentalTotal: financials.rentalTotal,
         deposit: financials.deposit,
         rentoraFee: financials.rentoraFee,
-        piFeePaymentStatus: financials.rentoraFee === 0 ? "✓ Pro Verified (0 π)" : "Pending Pi Payment",
+        piFeePaymentStatus: "Pending Pi Payment",
         rentalPaymentMethod: "Direct P2P",
         depositPaymentMethod: "Direct P2P",
         terms: "Direct P2P settlement — rental fee and deposit are not processed or held by Rentora."
@@ -677,7 +507,7 @@ export function RentoraProvider({ children }) {
     if (!draftRental) throw new Error("اطلاعات رزرو نامعتبر است.");
 
     const feeAmount = Math.max(0, draftRental.rentoraFee !== undefined ? draftRental.rentoraFee : (draftRental.totalPlatformFee || 0));
-    let paymentResult = { paymentId: 'pro_free', txid: '0x00000000', status: 'completed' };
+    let paymentResult = { paymentId: 'pi_pay_direct', txid: '0x00000000', status: 'completed' };
 
     if (feeAmount > 0) {
       paymentResult = await piService.createPayment({
@@ -705,7 +535,7 @@ export function RentoraProvider({ children }) {
       ...draftRental,
       status: RENTAL_STATES.CONFIRMED,
       renterCommissionPaid: true,
-      paymentStatus: feeAmount > 0 ? "paid_confirmed" : "pro_free_confirmed",
+      paymentStatus: "paid_confirmed",
       piPaymentId: paymentId,
       piTxRef: txid,
       paidAt: new Date().toISOString(),
@@ -1010,7 +840,6 @@ export function RentoraProvider({ children }) {
         favorites,
         reviews,
         reports,
-        proSubscriptions,
         chats,
         chatThreads: chats,
         latestNotification,
@@ -1021,8 +850,6 @@ export function RentoraProvider({ children }) {
         purgeDatabase,
         toggleFavorite,
         isUserPro,
-        purchaseProSubscription,
-        activateProImmediately,
         calculatePricing,
         addItem,
         createItemListing: addItem,

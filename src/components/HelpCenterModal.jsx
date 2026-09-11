@@ -103,18 +103,18 @@ export default function HelpCenterModal({ isOpen, onClose }) {
             </p>
           </div>
 
-          {/* 4. Pro VIP Membership */}
+          {/* 4. Unlimited Listings & Direct Safety */}
           <div className="space-y-1.5">
             <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-amber-500" />
-              <span>{l('اشتراک موجر طلایی (Rentora Pro VIP)', 'Rentora Pro VIP Subscription', 'اشتراك المؤجر الذهبي Pro', '黄金 Pro VIP 房东会员权益')}</span>
+              <CheckCircle2 className="w-4 h-4 text-[#534AB7]" />
+              <span>{l('ثبت نامحدود آگهی برای تمام پیشگامان', 'Unlimited Listings for all Pioneers', 'نشر إعلانات غير محدود لكافة الرواد', '所有先锋用户无限发布')}</span>
             </h4>
             <p className="text-slate-500 dark:text-slate-400 leading-relaxed text-[11px]">
               {l(
-                'موجران می‌توانند تا ۳ آگهی را بصورت کاملاً رایگان ثبت کنند. برای ثبت نامحدود وسایل و بهره‌مندی از کارمزد صفر درصد، اشتراک ویژه ۳۰ روزه Pro VIP با پرداخت پای قابل فعال‌سازی است.',
-                'Owners can list up to 3 items completely free. For unlimited listings and 0% commission, the 30-day Pro VIP plan can be activated with Pi.',
-                'يمكن للمؤجرين نشر حتى 3 إعلانات مجاناً. ولنشر غير محدود والاستفادة من 0% عمولة، يمكن تفعيل باقة Pro VIP لمدة 30 يوماً بعملة باي.',
-                '房东可免费发布最多 3 件闲置物品；升级 30 天黄金 Pro VIP 即可解锁无限发布特权与 0% 平台服务费。'
+                'تمام کاربران تاییدشده شبکه پای می‌توانند بدون محدودیت وسایل و تجهیزات خود را برای اجاره ثبت نمایند و درآمد پای کسب کنند.',
+                'All verified Pi Network pioneers can list unlimited equipment and items for rent to earn Pi cryptocurrency.',
+                'يمكن لجميع رواد شبكة باي الموثقين نشر عدد غير محدود من الأغراض والمعدات للإيجار وكسب عملة باي.',
+                '所有通过认证的 Pi 先锋用户均可无限制发布闲置设备与物品出租，赚取 Pi 收益。'
               )}
             </p>
           </div>

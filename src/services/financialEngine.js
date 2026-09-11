@@ -66,7 +66,6 @@ export class FinancialEngine {
    * @param {number} [params.daysCount] - Explicit days count if dates omitted
    * @param {number|string} [params.securityDeposit=0] - Refundable security deposit in Pi
    * @param {number} [params.platformFeePercentage=5] - Default 5%
-   * @param {boolean} [params.ownerIsPro=false] - If true, 0% fee applied
    * @returns {Object} Structured Financial Quote
    */
   static calculateBookingFinancials({
@@ -75,8 +74,7 @@ export class FinancialEngine {
     endDate,
     daysCount = null,
     securityDeposit = 0,
-    platformFeePercentage = 5,
-    ownerIsPro = false
+    platformFeePercentage = 5
   }) {
     // 1. Calculate duration in days
     const days = daysCount ? Math.max(1, parseInt(daysCount, 10)) : this.calculateDays(startDate, endDate);
@@ -84,14 +82,14 @@ export class FinancialEngine {
     // 2. Integer micro-units for inputs
     const dailyRateUnits = this.toMicroUnits(dailyRate);
     const depositUnits = this.toMicroUnits(securityDeposit);
-    const feePercentage = ownerIsPro ? 0 : Math.max(0, Math.min(50, Number(platformFeePercentage) || 5));
+    const feePercentage = Math.max(0, Math.min(50, Number(platformFeePercentage) || 5));
 
     // 3. Rental Total = dailyRate * days (in micro-units)
     const rentalTotalUnits = dailyRateUnits * days;
 
     // 4. Rentora Platform Fee = 5% of rental total (floor of 1 micro-unit = 0.0001 Pi)
     let rentoraFeeUnits = 0;
-    if (!ownerIsPro && feePercentage > 0 && rentalTotalUnits > 0) {
+    if (feePercentage > 0 && rentalTotalUnits > 0) {
       const rawFeeUnits = Math.round((rentalTotalUnits * feePercentage) / 100);
       rentoraFeeUnits = Math.max(1, rawFeeUnits); // Floor 0.0001 Pi for official Pi SDK
     }
@@ -137,7 +135,6 @@ export class FinancialEngine {
       totalRenterChargedNow: rentoraFeePi,
 
       // Status info
-      ownerIsPro: Boolean(ownerIsPro),
       isEscrowApplied: false, // Explicitly false: Rentora does not hold escrow
       settlementType: 'direct_p2p_with_pi_platform_fee',
       calculatedAt: new Date().toISOString()

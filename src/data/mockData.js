@@ -4,8 +4,7 @@
  */
 
 export const INITIAL_PLATFORM_CONFIG = {
-  platformFeePercentage: 5, // 5% Booking Platform Fee for standard users
-  proFeePercentage: 0, // 0% Booking Fee for Pro VIP Golden Owners (Configurable)
+  platformFeePercentage: 5, // 5% Booking Platform Fee
   minFeePi: 0.0001, // GCV & Micro-transaction ready floor (0.0001 π)
   maxFeePi: 50.0,
   commissionSplitModel: 'renter_pays_fee',

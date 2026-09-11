@@ -17,7 +17,7 @@ import {
 export default function WalletModal({ isOpen, onClose }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isWalletModalOpen, setIsWalletModalOpen } = usePiAuth();
-  const { transactions = [], rentals = [], isUserPro } = useRentora();
+  const { transactions = [], rentals = [] } = useRentora();
 
   const show = isOpen !== undefined ? isOpen : isWalletModalOpen;
   const handleClose = onClose || (() => setIsWalletModalOpen(false));

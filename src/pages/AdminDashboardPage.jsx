@@ -42,7 +42,6 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     rentals = [], 
     transactions = [], 
     reports = [], 
-    proSubscriptions = {}, 
     platformConfig, 
     updatePlatformConfig, 
     toggleItemStatus, 
@@ -50,13 +49,11 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     resolveReport, 
     purgeDatabase, 
     refreshApp, 
-    isRefreshing, 
-    isUserPro 
+    isRefreshing 
   } = useRentora();
 
   const [activeTab, setActiveTab] = useState('overview');
   const [commissionPercent, setCommissionPercent] = useState(platformConfig?.platformFeePercentage !== undefined ? platformConfig.platformFeePercentage : 5);
-  const [proCommissionPercent, setProCommissionPercent] = useState(platformConfig?.proFeePercentage !== undefined ? platformConfig.proFeePercentage : 0);
   const [minFeeFloor, setMinFeeFloor] = useState(platformConfig?.minFeePi !== undefined ? platformConfig.minFeePi : 0.0001);
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
   const [purgeSuccessNotice, setPurgeSuccessNotice] = useState(false);
@@ -125,14 +122,12 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
   }
 
   const totalCommissionRevenue = (transactions || []).reduce((sum, tx) => sum + (tx.platformFee || 0), 0);
-  const proSubscribersCount = Object.keys(proSubscriptions || {}).filter(u => proSubscriptions[u]?.isPro).length;
 
   const handleSaveCommission = (e) => {
     e.preventDefault();
     if (updatePlatformConfig) {
       updatePlatformConfig({
         platformFeePercentage: parseFloat(commissionPercent) || 0,
-        proFeePercentage: parseFloat(proCommissionPercent) || 0,
         minFeePi: parseFloat(minFeeFloor) || 0.0001
       });
     }
@@ -270,7 +265,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
       {/* 1. Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         <div className="p-3.5 rounded-xl rentora-card space-y-1">
-          <span className="text-[11px] font-medium text-slate-400 block">{l('درآمد کل پلتفرم', 'Total Platform Revenue', 'إجمالي دخل المنصة', '平台总收益')}</span>
+          <span className="text-[11px] font-medium text-slate-400 block">{l('درآمد کل کارمزد پلتفرم', 'Total Platform Revenue', 'إجمالي دخل المنصة', '平台总收益')}</span>
           <div className="text-xl sm:text-2xl font-black text-[#0F6E56] dark:text-[#48D2A8] font-mono">
             {totalCommissionRevenue.toFixed(3)} π
           </div>
@@ -278,11 +273,11 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
 
         <div className="p-3.5 rounded-xl banner-purple space-y-1">
           <span className="text-[11px] font-semibold text-[#534AB7] dark:text-[#AFA9EC] block flex items-center gap-1">
-            <Crown className="w-3.5 h-3.5 text-amber-500" />
-            <span>{l('موجران طلایی (Pro)', 'Pro VIP Subscribers', 'مشتركو Pro الذهبيون', '黄金 Pro VIP 房东')}</span>
+            <Layers className="w-3.5 h-3.5 text-[#534AB7]" />
+            <span>{l('رزروهای ثبت‌شده', 'Total Bookings', 'إجمالي الحجوزات', '预订总数')}</span>
           </span>
           <div className="text-xl sm:text-2xl font-black text-[#26215C] dark:text-[#EEEDFE] font-mono">
-            {proSubscribersCount}
+            {rentals.length}
           </div>
         </div>
 
@@ -335,10 +330,10 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
         <div className="p-4 sm:p-5 rounded-xl rentora-card space-y-5">
           <form onSubmit={handleSaveCommission} className="space-y-5 max-w-xl">
             
-            {/* Regular Users */}
+            {/* Platform Booking Commission */}
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#1E1D33] border border-slate-200 dark:border-slate-700 space-y-2">
               <div className="flex justify-between items-center text-xs font-bold text-slate-800 dark:text-slate-200">
-                <span>{t('adminRegularFeeLabel')}</span>
+                <span>{l('درصد کارمزد پلتفرم رنتورا (از مستأجر)', 'Rentora Platform Commission (from Renter)', 'نسبة عمولة المنصة (من المستأجر)', 'Rentora 平台费率（由租客支付）')}</span>
                 <span className="text-base font-black text-[#26215C] dark:text-[#EEEDFE] font-mono">{commissionPercent} ٪</span>
               </div>
 
@@ -351,24 +346,9 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                 onChange={(e) => setCommissionPercent(parseFloat(e.target.value) || 0)}
                 className="w-full accent-[#26215C] dark:accent-[#534AB7] cursor-pointer"
               />
-            </div>
-
-            {/* Pro VIP Users */}
-            <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500/10 via-[#26215C]/5 to-amber-500/10 border border-amber-300 dark:border-amber-500/40 space-y-2">
-              <div className="flex justify-between items-center text-xs font-bold text-amber-900 dark:text-amber-300">
-                <span>{t('adminProFeeLabel')}</span>
-                <span className="text-base font-black text-amber-600 dark:text-amber-400 font-mono">{proCommissionPercent} ٪</span>
-              </div>
-
-              <input
-                type="range"
-                min="0"
-                max="10"
-                step="0.5"
-                value={proCommissionPercent}
-                onChange={(e) => setProCommissionPercent(parseFloat(e.target.value) || 0)}
-                className="w-full accent-amber-500 cursor-pointer"
-              />
+              <p className="text-[10px] text-slate-400">
+                {l('کارمزد پلتفرم تنها وجهی است که از طریق Pi Payment رسمی دریافت می‌شود.', 'Platform commission is the only fee collected via official Pi Payment.', 'عمولة المنصة هي المبلغ الوحيد الذي يُدفع رسمياً عبر باي.', '平台服务费是唯一通过官方 Pi 钱包支付的费用。')}
+              </p>
             </div>
 
             {/* Minimum Fee Floor */}
@@ -518,7 +498,6 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {allRealUsers.map((u, idx) => {
-                  const userPro = isUserPro(u.username);
                   const isBlocked = u.status === 'banned';
 
                   return (
@@ -534,11 +513,6 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                             <span className="font-bold text-slate-900 dark:text-white font-mono" dir="ltr">
                               @{u.username}
                             </span>
-                            {userPro && (
-                              <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-400 text-[#26215C]">
-                                PRO VIP
-                              </span>
-                            )}
                             {u.kycStatus === 'verified' ? (
                               <span className="text-[9px] badge-trust px-1.5 py-0.2 rounded font-bold">
                                 KYC ✓

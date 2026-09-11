@@ -29,8 +29,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
   const { 
     calculatePricing, 
     createRentalBooking, 
-    executePiPaymentForRental,
-    isUserPro
+    executePiPaymentForRental
   } = useRentora();
 
   // Initial dates helper (tomorrow to +3 days)
@@ -64,8 +63,6 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
   }, [isOpen]);
 
   if (!isOpen || !item) return null;
-
-  const isOwnerPro = item.ownerIsPro || isUserPro(item.ownerUsername);
 
   // Calculate live financial quote using integer-based engine
   const pricing = calculatePricing({
@@ -427,9 +424,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
                   <div>
                     <span>{t('platformFee')} ({pricing.platformFeePercentage}٪):</span>
                     <span className="text-[10px] text-slate-400 block">
-                      {isOwnerPro 
-                        ? l('موجر طلایی Pro (۰٪ کارمزد)', 'Pro VIP Owner (0% fee)', 'مؤجر برو الذهبي (0% عمولة)', '黄金 Pro VIP 房东 (0% 手续费)') 
-                        : l('➔ پرداخت آنلاین با کیف پول پای (تنها پرداخت آنلاین)', '➔ Paid online via Pi Wallet (Only online fee)', '➔ دفع أونلاين عبر محفظة باي', '➔ 通过 Pi 钱包在线支付（唯一在线费用）')}
+                      {l('➔ پرداخت آنلاین با کیف پول پای (تنها پرداخت آنلاین)', '➔ Paid online via Pi Wallet (Only online fee)', '➔ دفع أونلاين عبر محفظة باي', '➔ 通过 Pi 钱包在线支付（唯一在线费用）')}
                     </span>
                   </div>
                   <span className="font-mono font-black text-[#0F6E56] dark:text-[#48D2A8] text-xs">

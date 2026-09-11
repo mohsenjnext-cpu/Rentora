@@ -3,10 +3,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import ItemCard from '../components/ItemCard';
-import SubscriptionModal from '../components/SubscriptionModal';
 import { 
   Briefcase, 
-  Crown, 
   Plus, 
   Clock, 
   CheckCircle2, 
@@ -29,12 +27,10 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
     items = [], 
     rentals = [], 
     toggleItemStatus, 
-    confirmReturnOneTap, 
-    isUserPro 
+    confirmReturnOneTap 
   } = useRentora();
 
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'active' | 'inactive'
-  const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
   const [processingRentalId, setProcessingRentalId] = useState(null);
   const [successToast, setSuccessToast] = useState('');
 
@@ -60,8 +56,6 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
       </div>
     );
   }
-
-  const isPro = isUserPro(currentUser?.username);
 
   // My items
   const myItems = (items || []).filter(
@@ -91,7 +85,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
   );
 
   // Total Earnings
-  const totalEarnings = completedRentals.reduce((sum, r) => sum + (r.baseAmount || 0), 0);
+  const totalEarnings = completedRentals.reduce((sum, r) => sum + (r.rentalTotal || r.baseAmount || 0), 0);
 
   const handleConfirmReturn = async (rentalId) => {
     setProcessingRentalId(rentalId);
@@ -123,16 +117,9 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
             <Briefcase className="w-5 h-5 stroke-[2]" />
           </div>
           <div>
-            <div className="flex items-center gap-1.5">
-              <h1 className="text-base font-bold text-slate-900 dark:text-white">
-                {t('ownerHubTitle')}
-              </h1>
-              {isPro && (
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-400 text-[#26215C]">
-                  PRO VIP
-                </span>
-              )}
-            </div>
+            <h1 className="text-base font-bold text-slate-900 dark:text-white">
+              {t('ownerHubTitle')}
+            </h1>
             <p className="text-[11px] text-slate-400">
               {t('ownerHubSubtitle')}
             </p>
@@ -157,45 +144,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
         </div>
       )}
 
-      {/* 2. Pro VIP Subscription Banner */}
-      <div className={`p-4 rounded-2xl border transition-all ${
-        isPro 
-          ? 'bg-gradient-to-r from-amber-500/15 via-[#26215C]/10 to-amber-500/15 border-amber-300 dark:border-amber-500/30' 
-          : 'banner-purple'
-      }`}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-[#26215C] flex items-center justify-center shrink-0 shadow-md">
-              <Crown className="w-5 h-5 stroke-[2.5]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
-                  {isPro ? t('ownerProBannerTitle') : l('ارتقا به موجر طلایی (Rentora Pro VIP)', 'Upgrade to Rentora Pro VIP', 'الترقية للمؤجر الذهبي (Rentora Pro)', '升级至黄金 Pro VIP 房东')}
-                </h3>
-                {isPro && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-400 text-[#26215C]">
-                    ACTIVE
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-300 mt-0.5">
-                {t('ownerProBannerDesc')}
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setIsSubscriptionOpen(true)}
-            className="btn-primary px-4 py-2 text-xs font-bold cursor-pointer shrink-0 self-start sm:self-auto shadow-xs"
-          >
-            {isPro ? l('مدیریت پلن Pro', 'Manage Pro Plan', 'إدارة خطة Pro', '管理 Pro 会员') : t('ownerProUpgradeBtn')}
-          </button>
-        </div>
-      </div>
-
-      {/* 3. Stats Row */}
+      {/* 2. Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
         <div className="p-3.5 rounded-xl rentora-card text-center space-y-1">
           <span className="text-[10px] text-slate-400 font-bold uppercase block">{t('ownerStatsListings')}</span>
@@ -218,7 +167,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
         </div>
       </div>
 
-      {/* 4. Pending Handover Requests (Amber Card) */}
+      {/* 3. Pending Handover Requests (Amber Card) */}
       {pendingRequests.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -265,7 +214,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
         </div>
       )}
 
-      {/* 5. My Listings Management Grid */}
+      {/* 4. My Listings Management Grid */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -357,12 +306,6 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
           </div>
         )}
       </div>
-
-      {/* Subscription Modal */}
-      <SubscriptionModal
-        isOpen={isSubscriptionOpen}
-        onClose={() => setIsSubscriptionOpen(false)}
-      />
 
     </div>
   );

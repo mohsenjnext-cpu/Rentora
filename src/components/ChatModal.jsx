@@ -35,8 +35,7 @@ export default function ChatModal({
     sendChatMessage, 
     deleteChatThread, 
     deleteChatMessage, 
-    clearAllChats,
-    isUserPro 
+    clearAllChats
   } = useRentora();
 
   const [messageText, setMessageText] = useState('');
@@ -78,7 +77,6 @@ export default function ChatModal({
   }) || null;
 
   const messagesList = currentThread?.messages || [];
-  const isRecipientPro = activeRecipient ? isUserPro(activeRecipient) : false;
 
   const scrollToBottom = (smooth = true) => {
     try {
@@ -220,11 +218,6 @@ export default function ChatModal({
                   <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white font-mono truncate" dir="ltr">
                     @{activeRecipient || 'pioneer'}
                   </span>
-                  {isRecipientPro && (
-                    <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-400 text-[#26215C] shrink-0">
-                      PRO
-                    </span>
-                  )}
                   {activeItem?.ownerKYC && (
                     <span className="text-[9px] badge-trust px-1.5 py-0.2 rounded font-bold flex items-center gap-0.5 shrink-0">
                       <CheckCheck className="w-2.5 h-2.5" />
@@ -352,11 +345,6 @@ export default function ChatModal({
                         <span className="font-bold text-xs text-slate-900 dark:text-white font-mono" dir="ltr">
                           @{otherUser}
                         </span>
-                        {isUserPro(otherUser) && (
-                          <span className="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400 text-[#26215C]">
-                            PRO
-                          </span>
-                        )}
                       </div>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[180px] sm:max-w-[240px]">
                         {lastMsg?.text || th.itemTitle || 'پیام جدید'}

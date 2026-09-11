@@ -30,12 +30,11 @@ export default function ListItemPage({
   onCancelEdit,
   onItemUpdated,
   onItemCreated,
-  onNavigate, 
-  onOpenSubscription 
+  onNavigate
 }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
-  const { createItemListing, updateItem, items = [], isUserPro } = useRentora();
+  const { createItemListing, updateItem, items = [] } = useRentora();
 
   const isEditMode = Boolean(itemToEdit && itemToEdit.id);
 
@@ -145,7 +144,6 @@ export default function ListItemPage({
     );
   }
 
-  const userIsPro = isUserPro(currentUser?.username);
   const userListingsCount = (items || []).filter(
     i => i.ownerUsername?.toLowerCase() === currentUser?.username?.toLowerCase()
   ).length;
@@ -308,43 +306,7 @@ export default function ListItemPage({
             </p>
           </div>
         </div>
-
-        {/* Pro status badge / counter */}
-        {userIsPro ? (
-          <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-400 text-[#26215C] flex items-center gap-1 shadow-2xs shrink-0">
-            <Crown className="w-3 h-3" />
-            <span>PRO VIP</span>
-          </span>
-        ) : (
-          !isEditMode && (
-            <span className="text-[10px] text-slate-400 font-medium shrink-0">
-              {userListingsCount}/3 {l('آگهی رایگان', 'free listings', 'إعلانات مجانية', '件免费额度')}
-            </span>
-          )
-        )}
       </div>
-
-      {/* Free limit banner if user reached 3 items and is not Pro */}
-      {!userIsPro && userListingsCount >= 3 && !isEditMode && (
-        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-400 dark:border-amber-500/30 text-amber-900 dark:text-amber-300 text-xs flex items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <span className="font-bold flex items-center gap-1">
-              <Crown className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>{l('سقف ۳ آگهی رایگان تکمیل شده است', 'Free 3-item limit reached', 'وصلت للحد الأقصى (3 إعلانات)', '已达3件免费发布上限')}</span>
-            </span>
-            <p className="text-[10px] text-amber-800 dark:text-amber-400">
-              {l('برای ثبت نامحدود و ۰٪ کارمزد، به موجر طلایی ارتقا دهید.', 'Upgrade to Pro VIP for unlimited listings and 0% commission.', 'قم بالترقية لحساب Pro لنشر غیر محدود وبدون عمولة.', '升级为黄金 Pro VIP 即可享受无限发布与 0% 手续费。')}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onOpenSubscription}
-            className="btn-primary px-3 py-1.5 text-[11px] font-bold shrink-0 cursor-pointer"
-          >
-            {t('ownerProUpgradeBtn')}
-          </button>
-        </div>
-      )}
 
       {/* Success Notice */}
       {successNotice && (

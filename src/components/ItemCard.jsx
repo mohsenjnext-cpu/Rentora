@@ -17,12 +17,11 @@ import {
 export default function ItemCard({ item, onSelect, onRentClick }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser } = usePiAuth();
-  const { favorites = [], toggleFavorite, isUserPro, reviews = [] } = useRentora();
+  const { favorites = [], toggleFavorite, reviews = [] } = useRentora();
 
   if (!item) return null;
 
   const isFav = favorites.includes(item.id);
-  const isOwnerPro = item.ownerIsPro || isUserPro(item.ownerUsername);
 
   const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
   const ownerName = (item.ownerUsername || '').toLowerCase().replace('@', '').trim();
@@ -52,12 +51,6 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
 
           {/* Badges in Top Corners */}
           <div className="absolute top-2 left-2 rtl:left-auto rtl:right-2 flex items-center gap-1 z-10">
-            {isOwnerPro && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-400 text-[#26215C] flex items-center gap-0.5 shadow-xs">
-                <Crown className="w-2.5 h-2.5" />
-                <span>PRO</span>
-              </span>
-            )}
             {item.ownerKYC && (
               <span className="px-1.5 py-0.5 rounded text-[9px] font-bold badge-trust flex items-center gap-0.5 shadow-xs">
                 <ShieldCheck className="w-2.5 h-2.5 stroke-[2.2]" />

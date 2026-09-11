@@ -30,7 +30,7 @@ export default function ItemDetailPage({
 }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, setAuthModalOpen } = usePiAuth();
-  const { favorites, toggleFavorite, isUserPro, reviews = [] } = useRentora();
+  const { favorites, toggleFavorite, reviews = [] } = useRentora();
 
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -48,7 +48,6 @@ export default function ItemDetailPage({
       (item.ownerUid && currentUser.uid && item.ownerUid === currentUser.uid)
     )
   );
-  const isOwnerPro = item.ownerIsPro || isUserPro(item.ownerUsername);
 
   // Real Reviews for this item
   const itemReviews = (reviews || []).filter(rev => rev.itemId === item.id);
@@ -141,12 +140,6 @@ export default function ItemDetailPage({
 
           {/* Badges in top corners */}
           <div className="absolute top-3 left-3 rtl:left-auto rtl:right-3 flex items-center gap-1.5">
-            {isOwnerPro && (
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-400 text-[#26215C] flex items-center gap-1 shadow-sm">
-                <Crown className="w-3 h-3" />
-                <span>{t('badgePro')}</span>
-              </span>
-            )}
             <span className="px-2 py-0.5 rounded-md text-[10px] font-bold badge-trust flex items-center gap-1 shadow-sm">
               <ShieldCheck className="w-3 h-3 stroke-[2.2]" />
               <span>{t('badgeKycVerified')}</span>
@@ -211,12 +204,6 @@ export default function ItemDetailPage({
               <span className="font-bold text-xs text-slate-900 dark:text-white font-mono group-hover:text-[#534AB7] transition" dir="ltr">
                 @{item.ownerUsername || 'pioneer'}
               </span>
-              {isOwnerPro && (
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-400 text-[#26215C] flex items-center gap-0.5">
-                  <Crown className="w-2.5 h-2.5" />
-                  <span>PRO</span>
-                </span>
-              )}
             </div>
             <div className="text-[10px] text-slate-400 mt-0.5">
               {t('itemOwnerInfo')} {item.ownerKYC ? <>• <span className="text-[#0F6E56] font-semibold">KYC ✓</span></> : <>• <span className="text-slate-400">({l('احراز نشده', 'Unverified', 'غير موثق', '未认证')})</span></>}
