@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+const piAuthContext = fs.readFileSync(new URL('../src/context/PiAuthContext.jsx', import.meta.url), 'utf8');
 
 function section(start, end) {
   const from = worker.indexOf(start);
@@ -66,4 +67,12 @@ test('worker has no marketplace memory fallback', () => {
   assert.doesNotMatch(worker, /globalThis\.__RENTORA_STATE/);
   assert.doesNotMatch(worker, /let\s+marketplaceState/);
   assert.match(worker, /requireBindings\(env\)/);
+});
+
+test('frontend sync bridge upgrades legacy identity headers to a signed Bearer session', () => {
+  assert.match(piAuthContext, /localStorage\.getItem\(STORAGE_KEY_USER\)/);
+  assert.match(piAuthContext, /headers\.delete\('x-pi-uid'\)/);
+  assert.match(piAuthContext, /headers\.delete\('x-pi-username'\)/);
+  assert.match(piAuthContext, /headers\.set\('Authorization', `Bearer \$\{session\.sessionToken\}`\)/);
+  assert.match(piAuthContext, /!isPiLogin/);
 });
