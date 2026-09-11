@@ -1,296 +1,190 @@
-/**
- * Official Pi Network Client & Payment Integration Service (v6.0 Production & Sandbox)
- * Native Pi Browser SDK with strict server-side approval and completion.
- * 
- * Rules:
- * - Only the Rentora Platform Fee is paid via Pi.createPayment.
- * - Server strictly approves and completes payments with official Pi Platform API.
- * - PI_API_KEY is never exposed to the frontend.
- * - No mock payments or fake transactions.
- */
 import { getApiBaseUrl } from './apiConfig';
 
 class PiNetworkService {
   constructor() {
     this.isInitialized = false;
-    this.isSandbox = false;
+    this.isSandbox = true;
   }
 
-  /**
-   * Check if official Pi SDK is available in the window
-   */
   hasPiSdk() {
     return typeof window !== 'undefined' && !!window.Pi && typeof window.Pi.authenticate === 'function';
   }
 
-  /**
-   * Set Sandbox or Mainnet mode
-   */
-  setSandboxMode(enabled = false) {
+  setSandboxMode(enabled = true) {
     this.isSandbox = Boolean(enabled);
     this.isInitialized = false;
-    if (typeof window !== 'undefined' && window.Pi && typeof window.Pi.init === 'function') {
-      try {
-        window.Pi.init({ version: "2.0", sandbox: this.isSandbox });
-        this.isInitialized = true;
-      } catch (e) {}
-    }
+    return this.init();
   }
 
-  /**
-   * Initialize Pi Network SDK
-   */
   async init(sandbox = null) {
-    if (sandbox !== null) {
-      this.isSandbox = Boolean(sandbox);
+    if (sandbox !== null) this.isSandbox = Boolean(sandbox);
+    if (!this.hasPiSdk() || typeof window.Pi.init !== 'function') return false;
+    try {
+      window.Pi.init({ version: '2.0', sandbox: this.isSandbox });
+      this.isInitialized = true;
+      return true;
+    } catch (error) {
+      this.isInitialized = false;
+      throw new Error('راه‌اندازی Pi SDK ناموفق بود.');
     }
-    if (typeof window !== 'undefined' && window.Pi && typeof window.Pi.init === 'function') {
-      try {
-        window.Pi.init({ version: "2.0", sandbox: this.isSandbox });
-        this.isInitialized = true;
-      } catch (err) {
-        console.warn('[Pi SDK] Pi.init notice:', err);
-      }
-    }
-    return this.isInitialized;
   }
 
-  /**
-   * Authenticate user strictly with official Pi Network SDK
-   */
-  async authenticate(customIncompleteHandler = null, forceSandbox = null) {
-    if (!this.hasPiSdk()) {
-      throw new Error("NOT_IN_PI_BROWSER");
-    }
+  async authenticate(customIncompleteHandler = null) {
+    if (!this.hasPiSdk()) throw new Error('NOT_IN_PI_BROWSER');
+    await this.init();
 
-    if (forceSandbox !== null) {
-      this.isSandbox = Boolean(forceSandbox);
-    }
-
-    await this.init(this.isSandbox);
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
 
     const onIncompletePayment = customIncompleteHandler || (async (payment) => {
+      if (!payment?.identifier) return;
       try {
-        const apiBase = getApiBaseUrl();
-        if (apiBase && payment?.identifier) {
-          await fetch(`${apiBase}/api/payments/incomplete`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ payment })
-          });
-        }
-      } catch (err) {}
+        await fetch(`${apiBase}/api/payments/incomplete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ payment })
+        });
+      } catch (_) {
+        // Recovery is best-effort here. The server remains authoritative.
+      }
     });
 
-    try {
-      console.log(`[Pi SDK] Initiating Pi.authenticate (sandbox: ${this.isSandbox})...`);
+    const authResult = await Promise.race([
+      window.Pi.authenticate(['payments', 'username'], onIncompletePayment),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('پاسخی از Pi Browser دریافت نشد.')), 35000))
+    ]);
 
-      const authPromise = window.Pi.authenticate(["payments", "username"], onIncompletePayment);
-      
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          reject(new Error("پاسخی از Pi Browser دریافت نشد. لطفاً اتصال اینترنت خود را بررسی کنید."));
-        }, 35000);
-      });
-
-      const authResult = await Promise.race([authPromise, timeoutPromise]);
-
-      if (!authResult || !authResult.user || !authResult.user.username) {
-        throw new Error("اطلاعات کاربری معتبر از Pi Browser دریافت نشد.");
-      }
-
-      // Verify token with backend
-      const backendVerification = await this.verifyAccessTokenWithBackend({
-        accessToken: authResult.accessToken,
-        username: authResult.user.username,
-        uid: authResult.user.uid
-      });
-
-      return {
-        accessToken: authResult.accessToken,
-        uid: authResult.user.uid,
-        username: authResult.user.username,
-        sessionToken: backendVerification?.sessionToken || ('sess_' + authResult.user.uid + '_' + Date.now()),
-        isOfficialSdk: true,
-        kycStatus: 'verified',
-        user: {
-          uid: authResult.user.uid,
-          username: authResult.user.username
-        }
-      };
-    } catch (sdkError) {
-      console.warn('[Pi SDK] Authentication error:', sdkError);
-      if (sdkError?.message?.includes('cancelled') || sdkError?.message?.includes('denied')) {
-        throw new Error("درخواست دسترسی توسط شما در Pi Browser رد شد.");
-      }
-      throw new Error(sdkError?.message || "احراز هویت در Pi Browser با خطا مواجه شد.");
-    }
-  }
-
-  /**
-   * Verify token with backend
-   */
-  async verifyAccessTokenWithBackend({ accessToken, username, uid }) {
-    try {
-      const apiBase = getApiBaseUrl();
-      if (!apiBase) return null;
-
-      const response = await fetch(`${apiBase}/api/auth/pi-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken, username, uid })
-      });
-
-      if (response.ok) {
-        return await response.json();
-      }
-    } catch (err) {}
-    return null;
-  }
-
-  /**
-   * Request Payment Approval on Backend (Server calls Pi Platform API)
-   */
-  async approvePaymentOnServer(paymentId) {
-    const apiBase = getApiBaseUrl();
-    if (!apiBase) {
-      return { approved: true, paymentId, verifiedWithPiApi: false };
+    const accessToken = authResult?.accessToken;
+    const sdkUser = authResult?.user;
+    if (!accessToken || !sdkUser?.uid || !sdkUser?.username) {
+      throw new Error('اطلاعات معتبر از Pi Browser دریافت نشد.');
     }
 
-    const res = await fetch(`${apiBase}/api/payments/approve`, {
+    const response = await fetch(`${apiBase}/api/auth/pi-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentId })
+      body: JSON.stringify({ accessToken })
     });
 
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || "خطا در تایید تراکنش در سرور رنتورا.");
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.sessionToken || !data?.user?.uid) {
+      throw new Error(data?.error || 'احراز هویت Pi در سرور رد شد.');
     }
 
-    return await res.json();
+    return {
+      accessToken,
+      uid: data.user.uid,
+      username: data.user.username,
+      sessionToken: data.sessionToken,
+      isOfficialSdk: true,
+      kycStatus: data.user.kycStatus || 'unknown',
+      user: data.user
+    };
   }
 
-  /**
-   * Request Payment Completion on Backend (Server calls Pi Platform API with txid)
-   */
-  async completePaymentOnServer(paymentId, txid, rentalData) {
+  async approvePaymentOnServer(paymentId, paymentIntentId) {
     const apiBase = getApiBaseUrl();
-    if (!apiBase) {
-      return { completed: true, paymentId, txid, verifiedWithPiApi: false };
-    }
+    if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
+    if (!paymentId || !paymentIntentId) throw new Error('شناسه پرداخت معتبر نیست.');
 
-    const res = await fetch(`${apiBase}/api/payments/complete`, {
+    const response = await fetch(`${apiBase}/api/payments/approve`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentId, txid, rentalData })
+      headers: this.getSessionHeaders(),
+      body: JSON.stringify({ paymentId, paymentIntentId })
     });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || "خطا در ثبت و تکمیل نهایی تراکنش در سرور.");
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.approved !== true) {
+      throw new Error(data?.error || 'تایید پرداخت در سرور ناموفق بود.');
     }
-
-    return await res.json();
+    return data;
   }
 
-  /**
-   * Create Real Pi Payment for Rentora Platform Commission Fee
-   */
-  async createPayment({ paymentData, callbacks, rentalData = null }) {
-    await this.init(this.isSandbox);
+  async completePaymentOnServer(paymentId, txid, paymentIntentId) {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
+    if (!paymentId || !txid || !paymentIntentId) throw new Error('اطلاعات تکمیل پرداخت ناقص است.');
 
-    const { amount, memo, metadata } = paymentData || {};
+    const response = await fetch(`${apiBase}/api/payments/complete`, {
+      method: 'POST',
+      headers: this.getSessionHeaders(),
+      body: JSON.stringify({ paymentId, txid, paymentIntentId })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.completed !== true) {
+      throw new Error(data?.error || 'تکمیل پرداخت در سرور ناموفق بود.');
+    }
+    return data;
+  }
+
+  getSessionHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+      const raw = localStorage.getItem('rentora_live_v1_session');
+      const session = raw ? JSON.parse(raw) : null;
+      if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
+    } catch (_) {}
+    return headers;
+  }
+
+  async createPayment({ paymentData, callbacks, paymentIntentId }) {
+    await this.init();
+    if (!this.hasPiSdk() || typeof window.Pi.createPayment !== 'function') {
+      throw new Error('پرداخت Pi فقط در Pi Browser رسمی امکان‌پذیر است.');
+    }
+    if (!paymentIntentId) throw new Error('شناسه Payment Intent لازم است.');
+
+    const amount = Number(paymentData?.amount);
+    const memo = String(paymentData?.memo || 'Rentora Platform Booking Fee');
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error('مبلغ پرداخت معتبر نیست.');
+
     const { onReadyForServerApproval, onReadyForServerCompletion, onCancel, onError } = callbacks || {};
 
-    const cleanAmount = Math.max(0.0001, parseFloat(amount) || 0.0001);
-    const cleanMemo = String(memo || 'Rentora Platform Booking Fee');
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error instanceof Error ? error : new Error(String(error || 'پرداخت ناموفق بود.')));
+      };
 
-    // Check if official Pi SDK is present in Pi Browser
-    if (this.hasPiSdk() && typeof window.Pi.createPayment === 'function') {
-      return new Promise((resolve, reject) => {
-        let hasSettled = false;
-
-        try {
-          console.log('[Pi SDK] Opening Native Pi Wallet payment sheet for Rentora Fee:', { amount: cleanAmount, memo: cleanMemo });
-
-          window.Pi.createPayment(
-            {
-              amount: cleanAmount,
-              memo: cleanMemo,
-              metadata: metadata || {}
-            },
-            {
-              onReadyForServerApproval: async (paymentId) => {
-                try {
-                  console.log('[Pi SDK] Payment ready for server approval:', paymentId);
-                  const approveResult = await this.approvePaymentOnServer(paymentId);
-                  if (onReadyForServerApproval) await onReadyForServerApproval(paymentId);
-                } catch (approveErr) {
-                  console.warn('[Pi SDK] Server approval error:', approveErr);
-                }
-              },
-
-              onReadyForServerCompletion: async (paymentId, txid) => {
-                try {
-                  console.log('[Pi SDK] Payment ready for server completion. TxID:', txid);
-                  const completeResult = await this.completePaymentOnServer(paymentId, txid, rentalData);
-                  if (onReadyForServerCompletion) await onReadyForServerCompletion(paymentId, txid);
-
-                  if (!hasSettled) {
-                    hasSettled = true;
-                    resolve({
-                      paymentId,
-                      txid,
-                      status: 'completed',
-                      isNativePiSdk: true,
-                      serverResult: completeResult
-                    });
-                  }
-                } catch (completeErr) {
-                  console.warn('[Pi SDK] Server completion error:', completeErr);
-                  if (!hasSettled) {
-                    hasSettled = true;
-                    resolve({
-                      paymentId,
-                      txid: txid || ('0x' + Date.now().toString(16)),
-                      status: 'completed',
-                      isNativePiSdk: true
-                    });
-                  }
-                }
-              },
-
-              onCancel: (paymentId) => {
-                console.log('[Pi SDK] Payment cancelled by user:', paymentId);
-                if (onCancel) onCancel(paymentId);
-                if (!hasSettled) {
-                  hasSettled = true;
-                  reject(new Error("پرداخت توسط شما در کیف پول پای لغو شد."));
-                }
-              },
-
-              onError: (error, payment) => {
-                console.warn('[Pi SDK] Payment error:', error);
-                if (onError) onError(error, payment);
-                if (!hasSettled) {
-                  hasSettled = true;
-                  reject(new Error(error?.message || "تراکنش کیف پول پای با خطا متوقف شد."));
-                }
+      try {
+        window.Pi.createPayment(
+          { amount, memo, metadata: { ...(paymentData?.metadata || {}), paymentIntentId } },
+          {
+            onReadyForServerApproval: async (paymentId) => {
+              try {
+                await this.approvePaymentOnServer(paymentId, paymentIntentId);
+                await onReadyForServerApproval?.(paymentId);
+              } catch (error) {
+                fail(error);
               }
+            },
+            onReadyForServerCompletion: async (paymentId, txid) => {
+              try {
+                const result = await this.completePaymentOnServer(paymentId, txid, paymentIntentId);
+                await onReadyForServerCompletion?.(paymentId, txid, result);
+                if (!settled) {
+                  settled = true;
+                  resolve({ paymentId, txid, status: 'completed', isNativePiSdk: true, serverResult: result });
+                }
+              } catch (error) {
+                fail(error);
+              }
+            },
+            onCancel: (paymentId) => {
+              onCancel?.(paymentId);
+              fail(new Error('پرداخت توسط شما لغو شد.'));
+            },
+            onError: (error, payment) => {
+              onError?.(error, payment);
+              fail(new Error(error?.message || 'تراکنش Pi با خطا متوقف شد.'));
             }
-          );
-        } catch (createErr) {
-          console.warn('[Pi SDK] Failed to invoke Pi.createPayment:', createErr);
-          if (!hasSettled) {
-            hasSettled = true;
-            reject(new Error(createErr?.message || "امکان باز کردن پنجره پرداخت کیف پول پای وجود ندارد."));
           }
-        }
-      });
-    }
-
-    throw new Error("پرداخت مستقیم با ارز پای تنها درون مرورگر رسمی Pi Browser امکان‌پذیر است. لطفاً برنامه را در Pi Browser باز کنید.");
+        );
+      } catch (error) {
+        fail(error);
+      }
+    });
   }
 }
 
