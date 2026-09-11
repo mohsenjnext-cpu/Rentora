@@ -6,8 +6,13 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 PI_API_URL = "https://api.minepi.com/v2"
 NODE_ENV = "production"
+PLATFORM_FEE_RATE = "0.05"
+CORS_ORIGIN = "https://your-rentora-app.example"
+ADMIN_PI_UIDS = ""
 
-# Bindings are configured in Cloudflare. Do not commit database IDs or secrets.
-# Required for the hardened architecture:
+# Configure these bindings in Cloudflare. Do not commit database IDs or secrets.
+# Required:
 # - D1 binding: RENTORA_DB
 # - KV binding: RENTORA_KV
+# Required secret (Cloudflare secret, never [vars]):
+# - PI_API_KEY
