@@ -1,8 +1,27 @@
 name = "rentora"
-main = "_worker.js"
+main = "worker-gateway.js"
 compatibility_date = "2024-09-01"
 compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "RENTORA_DB"
+database_name = "rentora"
+database_id = "d8dcbee6-e958-461a-b746-b460f1adb8d5"
+
+[[kv_namespaces]]
+binding = "RENTORA_KV"
+id = "11f55c0a333b45cb81ce9a1692d2207a"
 
 [vars]
 PI_API_URL = "https://api.minepi.com/v2"
 NODE_ENV = "production"
+PLATFORM_FEE_RATE = "0.05"
+CORS_ORIGIN = "https://your-rentora-app.example"
+ADMIN_PI_UIDS = ""
+
+# Required secret (Cloudflare secret, never [vars]):
+# - PI_API_KEY
