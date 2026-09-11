@@ -7,10 +7,11 @@
     "start": "node server.js",
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test tests/*.test.js",
     "preview": "vite preview"
   },
   "dependencies": {
-    "canvas-confetti": "^1.9.4",
+    "canvas-confetti": "^1.9.0",
     "clsx": "^2.1.1",
     "cors": "^2.8.6",
     "date-fns": "^4.4.0",
@@ -25,9 +26,8 @@
     "@types/canvas-confetti": "^1.9.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.5.5",
-    "esbuild": "^0.28.2",
+    "esbuild": "^0.28.0",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
