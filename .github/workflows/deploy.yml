@@ -26,13 +26,16 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci || npm install
+        run: npm ci
 
       - name: Run tests
         run: npm test
 
-      - name: Validate Worker syntax
-        run: node --check _worker.js
+      - name: Validate Worker entrypoints
+        run: |
+          node --check _worker.js
+          node --check worker-entry.js
+          node --check worker-gateway.js
 
       - name: Build frontend
         run: npm run build
