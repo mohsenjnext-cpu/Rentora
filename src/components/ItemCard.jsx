@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import { getItemRatingSummary } from '../services/reputationService';
 import { 
@@ -9,17 +10,23 @@ import {
   Heart, 
   Coins, 
   Crown,
-  CheckCircle2
+  CheckCircle2,
+  Settings
 } from 'lucide-react';
 
 export default function ItemCard({ item, onSelect, onRentClick }) {
   const { lang, dir, t, l } = useLanguage();
+  const { currentUser } = usePiAuth();
   const { favorites = [], toggleFavorite, isUserPro, reviews = [] } = useRentora();
 
   if (!item) return null;
 
   const isFav = favorites.includes(item.id);
   const isOwnerPro = item.ownerIsPro || isUserPro(item.ownerUsername);
+
+  const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
+  const ownerName = (item.ownerUsername || '').toLowerCase().replace('@', '').trim();
+  const isOwner = myName && ownerName && (myName === ownerName || (item.ownerUid && currentUser?.uid && item.ownerUid === currentUser.uid));
 
   // Dynamic Item Rating from verified reviews
   const ratingSummary = getItemRatingSummary(item, reviews);
@@ -55,6 +62,11 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
               <span className="px-1.5 py-0.5 rounded text-[9px] font-bold badge-trust flex items-center gap-0.5 shadow-xs">
                 <ShieldCheck className="w-2.5 h-2.5 stroke-[2.2]" />
                 <span>KYC</span>
+              </span>
+            )}
+            {isOwner && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#EEEDFE] dark:bg-[#26215C] text-[#26215C] dark:text-[#EEEDFE] flex items-center gap-0.5 shadow-xs">
+                {l('آگهی من', 'Mine', 'إعلاني', '我的发布')}
               </span>
             )}
           </div>
@@ -103,21 +115,35 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (onRentClick) {
-              onRentClick(item);
-            } else if (onSelect) {
-              onSelect(item);
-            }
-          }}
-          className="btn-primary px-2.5 py-1.5 text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
-        >
-          <Coins className="w-3 h-3 text-amber-400" />
-          <span>{t('itemBookBtn')}</span>
-        </button>
+        {isOwner ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onSelect) onSelect(item);
+            }}
+            className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-[#1E1D33] text-slate-700 dark:text-slate-300 hover:border-[#534AB7] text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
+          >
+            <Settings className="w-3 h-3 text-[#534AB7]" />
+            <span>{l('مدیریت آگهی', 'Manage', 'إدارة', '管理')}</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onRentClick) {
+                onRentClick(item);
+              } else if (onSelect) {
+                onSelect(item);
+              }
+            }}
+            className="btn-primary px-2.5 py-1.5 text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
+          >
+            <Coins className="w-3 h-3 text-amber-400" />
+            <span>{t('itemBookBtn')}</span>
+          </button>
+        )}
       </div>
 
     </div>

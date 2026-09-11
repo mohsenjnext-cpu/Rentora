@@ -77,6 +77,13 @@ function MainApp() {
   };
 
   const handleRentItem = (item) => {
+    if (!item) return;
+    const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
+    const ownerName = (item.ownerUsername || '').toLowerCase().replace('@', '').trim();
+    if ((myName && ownerName && myName === ownerName) || (item.ownerUid && currentUser?.uid && item.ownerUid === currentUser.uid)) {
+      handleSelectItem(item);
+      return;
+    }
     setDirectBookingItem(item);
     setIsDirectBookingOpen(true);
   };

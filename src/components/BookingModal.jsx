@@ -84,6 +84,18 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
       return;
     }
 
+    const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
+    const ownerName = (item?.ownerUsername || '').toLowerCase().replace('@', '').trim();
+    if ((myName && ownerName && myName === ownerName) || (item?.ownerUid && currentUser?.uid && item.ownerUid === currentUser.uid)) {
+      setErrorMessage(l(
+        'شما نمی‌توانید کالای متعلق به خودتان را اجاره کنید.',
+        'You cannot rent your own listing.',
+        'لا يمكنك استئجار غرضك الخاص.',
+        '您无法租赁自己发布的物品。'
+      ));
+      return;
+    }
+
     if (!agreeTerms) {
       setErrorMessage(l(
         'لطفاً قوانین تحویل حضوری و شرایط اجاره را تأیید کنید.',

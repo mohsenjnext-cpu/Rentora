@@ -534,45 +534,65 @@ export function RentoraProvider({ children }) {
     };
 
     setItems(prev => {
-      const updated = [newItem, ...prev];
+      const updated = [newItem, ...prev.filter(i => i.id !== newItem.id)];
       cloudSyncService.saveCachedItems(updated);
       return updated;
     });
 
-    // Broadcast item to other devices & backend
-    cloudSyncService.broadcastNewItem(newItem);
+    // Synchronously Broadcast item to remote Cloudflare Backend & other devices
+    await cloudSyncService.broadcastNewItem(newItem);
+    cloudSyncService.notifySubscribers('ITEM_ADDED', { items: [newItem, ...items], item: newItem });
     return newItem;
   };
 
-  const updateItem = (itemId, fields) => {
+  const updateItem = async (itemId, fields) => {
+    let updatedItem = null;
     setItems(prev => {
-      const updated = prev.map(i => i.id === itemId ? { ...i, ...fields } : i);
+      const updated = prev.map(i => {
+        if (i.id === itemId) {
+          updatedItem = { ...i, ...fields };
+          return updatedItem;
+        }
+        return i;
+      });
       cloudSyncService.saveCachedItems(updated);
       return updated;
     });
+    if (updatedItem) {
+      await cloudSyncService.broadcastNewItem(updatedItem);
+    }
   };
 
-  const toggleItemStatus = (itemId) => {
+  const toggleItemStatus = async (itemId) => {
+    let targetItem = null;
     setItems(prev => {
       const updated = prev.map(item => {
         if (item.id === itemId) {
           const currentStatus = item.status || 'active';
           const nextStatus = currentStatus === 'active' ? 'paused' : 'active';
-          return { ...item, status: nextStatus };
+          targetItem = { ...item, status: nextStatus };
+          return targetItem;
         }
         return item;
       });
       cloudSyncService.saveCachedItems(updated);
       return updated;
     });
+    if (targetItem) {
+      await cloudSyncService.broadcastNewItem(targetItem);
+    }
   };
 
-  const deleteItem = (itemId) => {
+  const deleteItem = async (itemId) => {
     setItems(prev => {
       const updated = prev.filter(i => i.id !== itemId);
       cloudSyncService.saveCachedItems(updated);
       return updated;
     });
+    const itemToDelete = items.find(i => i.id === itemId);
+    if (itemToDelete) {
+      await cloudSyncService.broadcastNewItem({ ...itemToDelete, status: 'deleted' });
+    }
   };
 
   // Create Rental Booking Draft (Supports item object or itemId)
@@ -581,6 +601,12 @@ export function RentoraProvider({ children }) {
 
     const item = bookingData.item || items.find(i => i.id === bookingData.itemId);
     if (!item) throw new Error("کالای مورد نظر یافت نشد.");
+
+    const myName = (currentUser.username || '').toLowerCase().replace('@', '').trim();
+    const ownerName = (item.ownerUsername || '').toLowerCase().replace('@', '').trim();
+    if ((myName && ownerName && myName === ownerName) || (item.ownerUid && currentUser.uid && item.ownerUid === currentUser.uid)) {
+      throw new Error("شما مالک این کالا هستید و نمی‌توانید آگهی خود را اجاره کنید.");
+    }
 
     const startDate = bookingData.startDate;
     const endDate = bookingData.endDate;

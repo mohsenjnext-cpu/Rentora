@@ -23,7 +23,8 @@ export default function ItemDetailPage({
   onBack, 
   onBookingSuccess, 
   onOpenChat,
-  onOpenPublicProfile 
+  onOpenPublicProfile,
+  onNavigateToOwnerHub 
 }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, setAuthModalOpen } = usePiAuth();
@@ -37,9 +38,13 @@ export default function ItemDetailPage({
   if (!item) return null;
 
   const isFav = (favorites || []).includes(item.id);
-  const isOwner = currentUser && (
-    item.ownerUid === currentUser.uid || 
-    item.ownerUsername?.toLowerCase() === currentUser.username?.toLowerCase()
+  const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
+  const ownerName = (item.ownerUsername || '').toLowerCase().replace('@', '').trim();
+  const isOwner = Boolean(
+    currentUser && (
+      (myName && ownerName && myName === ownerName) || 
+      (item.ownerUid && currentUser.uid && item.ownerUid === currentUser.uid)
+    )
   );
   const isOwnerPro = item.ownerIsPro || isUserPro(item.ownerUsername);
 
@@ -278,8 +283,17 @@ export default function ItemDetailPage({
             )}
 
             {isOwner ? (
-              <div className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold text-xs">
-                {l('این کالای شماست', 'Your Item', 'هذا غرضك الخاص', '这是您发布的物品')}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+                  {l('شما مالک این کالا هستید', 'You own this item', 'أنت مالك هذا الغرض', '您是此物品的物主')}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToOwnerHub && onNavigateToOwnerHub()}
+                  className="px-4 py-2 rounded-xl bg-[#26215C] dark:bg-[#534AB7] text-white font-bold text-xs cursor-pointer shadow-sm hover:opacity-90 transition"
+                >
+                  {l('مدیریت در پنل مالک', 'Manage in Owner Hub', 'إدارة في لوحة المؤجر', '前往物主中心管理')}
+                </button>
               </div>
             ) : (
               <button
