@@ -133,3 +133,5 @@ Remaining real-environment work:
 - Deploy the Worker and verify `/api/health`.
 - Run an actual Pi Testnet login → rental → payment → approve → complete flow.
 - Add/finish integration coverage for payment recovery/reconciliation and any remaining client-side marketplace workflows.
+
+<!-- CI trigger: authoritative rental transition patch -->
