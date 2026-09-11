@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import { getUserReputationSummary } from '../services/reputationService';
 import ItemCard from '../components/ItemCard';
@@ -22,10 +23,13 @@ export default function PublicProfilePage({
   onOpenChat 
 }) {
   const { lang, dir, t, l } = useLanguage();
+  const { users = [] } = usePiAuth();
   const { items = [], rentals = [], reviews = [], isUserPro } = useRentora();
 
   const targetUsername = username || 'pioneer';
   const isPro = isUserPro(targetUsername);
+
+  const targetUser = users.find(u => u.username?.toLowerCase() === targetUsername.toLowerCase());
 
   // Items listed by this user
   const userItems = (items || []).filter(
@@ -55,14 +59,14 @@ export default function PublicProfilePage({
       <div className="p-4 sm:p-5 rounded-2xl rentora-card space-y-4">
         <div className="flex items-start gap-3.5">
           <img
-            src={`https://api.dicebear.com/7.x/bottts/svg?seed=${targetUsername}`}
+            src={targetUser?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${targetUsername}`}
             alt=""
             className="w-16 h-16 rounded-2xl object-cover bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0"
           />
           <div className="flex-1 space-y-1">
             <div className="flex items-center gap-2">
               <h1 className="text-base font-bold text-slate-900 dark:text-white" dir="ltr">
-                @{targetUsername}
+                {targetUser?.displayName || `@${targetUsername}`}
               </h1>
               {isPro && (
                 <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-amber-400 text-[#26215C] flex items-center gap-0.5">
@@ -84,7 +88,7 @@ export default function PublicProfilePage({
             </div>
 
             <p className="text-xs text-slate-500 dark:text-slate-400 pt-1">
-              {l('عضو تاییدشده جامعه پیشگامان شبکه پای در پلتفرم رنتورا.', 'Verified Pi Pioneer member on Rentora P2P marketplace.', 'عضو موثق في مجتمع رواد باي على منصة رنتورا.', 'Rentora 平台经过 Pi Network 认证的先锋成员。')}
+              {targetUser?.bio || l('عضو تاییدشده جامعه پیشگامان شبکه پای در پلتفرم رنتورا.', 'Verified Pi Pioneer member on Rentora P2P marketplace.', 'عضو موثق في مجتمع رواد باي على منصة رنتورا.', 'Rentora 平台经过 Pi Network 认证的先锋成员。')}
             </p>
           </div>
         </div>

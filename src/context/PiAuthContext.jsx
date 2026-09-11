@@ -163,6 +163,10 @@ export function PiAuthProvider({ children }) {
     const updated = { ...currentUser, ...updatedFields };
     
     setCurrentUser(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updated));
+    } catch (e) {}
+
     setUsers(prev => {
       const filtered = prev.filter(u => u.username?.toLowerCase() !== updated.username?.toLowerCase());
       const newUsers = [updated, ...filtered];
@@ -171,6 +175,7 @@ export function PiAuthProvider({ children }) {
     });
 
     cloudSyncService.broadcastUserProfile(updated);
+    return updated;
   };
 
   const toggleUserStatus = (uid) => {
@@ -199,6 +204,7 @@ export function PiAuthProvider({ children }) {
         loginWithPi,
         logout,
         updateUserProfile,
+        updateProfile: updateUserProfile,
         toggleUserStatus
       }}
     >
