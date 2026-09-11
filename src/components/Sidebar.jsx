@@ -13,13 +13,10 @@ import {
   LogOut, 
   ShieldCheck, 
   ReceiptText, 
-  HelpCircle,
   Moon,
   Sun,
   Globe,
   ChevronDown,
-  Shield,
-  Headphones,
   Check
 } from 'lucide-react';
 
@@ -27,10 +24,7 @@ export default function Sidebar({
   currentTab = 'home', 
   onNavigate, 
   mobileOpen = false, 
-  setMobileOpen, 
-  onOpenHelp,
-  onOpenSecurity,
-  onOpenSupport
+  setMobileOpen
 }) {
   const { lang, dir, t, l, changeLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
@@ -198,7 +192,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={() => handleNavClick('list-item')}
-            className="btn-primary w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all cursor-pointer mb-2 font-bold"
+            className="btn-primary w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all cursor-pointer mb-2 font-bold shadow-xs"
           >
             <PlusCircle className="w-4 h-4 stroke-[2]" />
             <span>{t('navListItem')}</span>
@@ -262,63 +256,24 @@ export default function Sidebar({
             </button>
           )}
 
-          {/* Support Section Divider */}
+          {/* Divider */}
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 my-2"></div>
 
-          {/* 1. تنظیمات */}
+          {/* 6. تنظیمات (Central Settings Hub) */}
           <button
             type="button"
             onClick={() => handleNavClick('settings')}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors cursor-pointer ${
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors cursor-pointer ${
               currentTab === 'settings'
                 ? 'bg-[#EEEDFE] text-[#26215C] dark:bg-[#1E1B3D] dark:text-[#EEEDFE] font-bold'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1C1B30]'
+                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#1C1B30]'
             }`}
           >
             <Settings className="w-4 h-4 stroke-[1.8]" />
             <span>{t('navSettings')}</span>
           </button>
 
-          {/* 2. امنیت (Security Center Modal) */}
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof onOpenSecurity === 'function') onOpenSecurity();
-              setMobileOpen(false);
-            }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1C1B30] transition cursor-pointer"
-          >
-            <Shield className="w-4 h-4 stroke-[1.8] text-[#0F6E56]" />
-            <span>{t('securityModalTitle')}</span>
-          </button>
-
-          {/* 3. پشتیبانی (Dedicated Support Modal) */}
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof onOpenSupport === 'function') onOpenSupport();
-              setMobileOpen(false);
-            }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1C1B30] transition cursor-pointer"
-          >
-            <Headphones className="w-4 h-4 stroke-[1.8] text-[#534AB7]" />
-            <span>{t('supportModalTitle')}</span>
-          </button>
-
-          {/* 4. راهنما و قوانین (Sole entry point in app) */}
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof onOpenHelp === 'function') onOpenHelp('guide');
-              setMobileOpen(false);
-            }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-[#1C1B30] transition cursor-pointer"
-          >
-            <HelpCircle className="w-4 h-4 stroke-[1.8]" />
-            <span>{t('helpModalTitle')}</span>
-          </button>
-
-          {/* 5. خروج از حساب (Explicit prominent logout button) */}
+          {/* 7. خروج از حساب (Logout) */}
           {isAuthenticated && (
             <button
               type="button"
