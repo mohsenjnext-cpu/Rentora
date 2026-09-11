@@ -84,7 +84,7 @@ async function safeSync(request, env) {
     env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).all(),
     env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.renter_user_id=?1 OR r.owner_user_id=?1 ORDER BY r.created_at DESC`).bind(user.id).all(),
     env.RENTORA_DB.prepare(`SELECT t.*, u.pi_uid user_pi_uid FROM transactions t JOIN users u ON u.id=t.user_id WHERE t.user_id=?1 ORDER BY t.created_at DESC`).bind(user.id).all(),
-    env.RENTORA_DB.prepare(`SELECT r.*, au.pi_uid author_pi_uid, au.username author_username, tu.pi_uid target_pi_uid, tu.username target_username FROM reviews r JOIN users au ON au.id=r.author_user_id JOIN users tu ON tu.id=r.target_user_id ORDER BY r.created_at DESC`).all(),
+    env.RENTORA_DB.prepare(`SELECT r.*, au.pi_uid author_pi_uid, au.username author_username, tu.pi_uid target_pi_uid, tu.username target_username FROM reviews r JOIN users au ON au.id=r.author_user_id JOIN users tu ON tu.id=r.target_user_id WHERE r.author_user_id=?1 OR r.target_user_id=?1 ORDER BY r.created_at DESC`).bind(user.id).all(),
     env.RENTORA_DB.prepare(`SELECT c.*, ou.username owner_username, ru.username renter_username FROM chats c JOIN users ou ON ou.id=c.owner_user_id JOIN users ru ON ru.id=c.renter_user_id WHERE c.owner_user_id=?1 OR c.renter_user_id=?1 ORDER BY c.updated_at DESC`).bind(user.id).all(),
   ]);
 
