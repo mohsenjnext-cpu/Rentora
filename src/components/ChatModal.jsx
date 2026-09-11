@@ -105,7 +105,7 @@ export default function ChatModal({
     // Immediate fast sync on modal open
     cloudSyncService.pollChatsFast().catch(() => {});
 
-    // Fast polling every 1.5 seconds while chat screen is open
+    // Fast polling every 1.2 seconds while chat screen is open
     const interval = setInterval(async () => {
       try {
         await cloudSyncService.pollChatsFast();
@@ -114,7 +114,7 @@ export default function ChatModal({
           await cloudSyncService.fetchSharedData();
         } catch (e2) {}
       }
-    }, 1500);
+    }, 1200);
 
     return () => clearInterval(interval);
   }, [isOpen, activeItem]);
@@ -151,6 +151,9 @@ export default function ChatModal({
       });
       setMessageText('');
       setTimeout(scrollToBottom, 60);
+      setTimeout(() => {
+        cloudSyncService.pollChatsFast().catch(() => {});
+      }, 300);
     } catch (e) {
       setFilterWarningMessage(e.message || 'خطا در ارسال پیام.');
     }

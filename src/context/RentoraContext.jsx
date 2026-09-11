@@ -1,8 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { usePiAuth } from './PiAuthContext';
 import { piService } from '../services/piService';
 import { cloudSyncService } from '../services/cloudSyncService';
 import { inspectMessageSafety } from '../services/contactFilterService';
+import { 
+  playNotificationChime, 
+  triggerVibration, 
+  showNativeNotification 
+} from '../services/notificationService';
 
 const RentoraContext = createContext();
 const STORAGE_PREFIX = 'rentora_db_';
@@ -137,7 +142,57 @@ export function RentoraProvider({ children }) {
     return cloudSyncService.getCachedChats();
   });
 
+  // 10. Real-Time New Message Notification State
+  const [latestNotification, setLatestNotification] = useState(null);
+  const knownMsgIdsRef = useRef(new Set());
+  const isInitialLoadDoneRef = useRef(false);
+
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Initialize known message IDs from cache so we only notify for truly new incoming messages
+  useEffect(() => {
+    const cached = cloudSyncService.getCachedChats();
+    cached.forEach(c => {
+      (c.messages || []).forEach(m => {
+        if (m.id) knownMsgIdsRef.current.add(m.id);
+      });
+    });
+    isInitialLoadDoneRef.current = true;
+  }, []);
+
+  const handleIncomingChats = useCallback((newChatsList) => {
+    if (!Array.isArray(newChatsList)) return;
+    setChats(newChatsList);
+
+    if (!isInitialLoadDoneRef.current || !currentUser?.username) return;
+    const myName = currentUser.username.toLowerCase();
+
+    newChatsList.forEach(c => {
+      (c.messages || []).forEach(m => {
+        if (m.id && !knownMsgIdsRef.current.has(m.id)) {
+          knownMsgIdsRef.current.add(m.id);
+
+          const sender = (m.senderUsername || '').toLowerCase();
+          // Trigger notification only if sender is the OTHER Pioneer
+          if (sender && sender !== myName) {
+            const notif = {
+              id: m.id,
+              senderUsername: m.senderUsername,
+              text: m.text,
+              itemTitle: c.itemTitle || 'گفتگوی رنتورا',
+              itemId: c.itemId,
+              threadId: c.id,
+              recipientUsername: m.senderUsername
+            };
+            setLatestNotification(notif);
+            playNotificationChime();
+            triggerVibration();
+            showNativeNotification(`Rentora - @${m.senderUsername}`, m.text);
+          }
+        }
+      });
+    });
+  }, [currentUser]);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_PREFIX + 'config_v9', JSON.stringify(platformConfig)); } catch (e) {}
@@ -172,9 +227,9 @@ export function RentoraProvider({ children }) {
       if (event === 'CHAT_DELETED' && data?.threadId) {
         setChats(prev => prev.filter(c => c.id !== data.threadId));
       } else if (event === 'CHAT_POLL_SYNC' && data?.chats) {
-        setChats(data.chats);
+        handleIncomingChats(data.chats);
       } else if (event === 'CHAT_SYNC' && data?.chats) {
-        setChats(data.chats);
+        handleIncomingChats(data.chats);
       } else if (data) {
         if (Array.isArray(data.items)) {
           setItems(prev => JSON.stringify(prev) === JSON.stringify(data.items) ? prev : data.items);
@@ -186,13 +241,29 @@ export function RentoraProvider({ children }) {
           setReviews(prev => JSON.stringify(prev) === JSON.stringify(data.reviews) ? prev : data.reviews);
         }
         if (Array.isArray(data.chats)) {
-          setChats(data.chats);
+          handleIncomingChats(data.chats);
         }
       }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [handleIncomingChats]);
+
+  // Global background sync every 2.5 seconds for instant chat notification
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const freshChats = await cloudSyncService.pollChatsFast();
+        if (freshChats) {
+          handleIncomingChats(freshChats);
+        }
+      } catch (e) {}
+    }, 2500);
+
+    return () => clearInterval(pollInterval);
+  }, [handleIncomingChats]);
 
   const toggleFavorite = (itemId) => {
     setFavorites(prev => {
@@ -860,6 +931,8 @@ export function RentoraProvider({ children }) {
         proSubscriptions,
         chats,
         chatThreads: chats,
+        latestNotification,
+        clearLatestNotification: () => setLatestNotification(null),
         platformConfig,
         isRefreshing,
         refreshApp,

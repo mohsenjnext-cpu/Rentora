@@ -16,6 +16,8 @@ import HelpCenterModal from './components/HelpCenterModal';
 import SecurityModal from './components/SecurityModal';
 import SupportModal from './components/SupportModal';
 import ChatModal from './components/ChatModal';
+import NotificationToast from './components/NotificationToast';
+import { requestNotificationPermission } from './services/notificationService';
 
 // Pages
 import HomePage from './pages/HomePage';
@@ -32,6 +34,7 @@ import SettingsPage from './pages/SettingsPage';
 function MainApp() {
   const { dir } = useLanguage();
   const { isAdmin, currentUser } = usePiAuth();
+  const { latestNotification, clearLatestNotification } = useRentora();
   const [currentTab, setCurrentTab] = useState('home');
   const [previousTab, setPreviousTab] = useState('discover');
   const [selectedItem, setSelectedItem] = useState(null);
@@ -275,6 +278,19 @@ function MainApp() {
 
       {/* Mobile Floating Bottom Bar */}
       <BottomNav currentTab={currentTab} onNavigate={handleNavigate} />
+
+      {/* Real-time In-App Notification Toast */}
+      <NotificationToast
+        notification={latestNotification}
+        onClose={clearLatestNotification}
+        onOpenChat={(notif) => {
+          handleOpenChat({
+            id: notif.itemId || notif.threadId,
+            recipientUsername: notif.senderUsername,
+            title: notif.itemTitle
+          });
+        }}
+      />
 
     </div>
   );
