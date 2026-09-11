@@ -1,213 +1,122 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { piService } from '../services/piService';
 import { cloudSyncService } from '../services/cloudSyncService';
 
-// Official Master Admin Pi Usernames list
-export const ADMIN_USERNAMES = [
-  'avina60',
-  'mohsenjnext',
-  'mohsenjnext-cpu',
-  'admin_rentora',
-  'admin'
-];
-
-export const isUsernameAdmin = (username) => {
-  if (!username) return false;
-  const clean = String(username).toLowerCase().replace('@', '').trim();
-  return ADMIN_USERNAMES.some(adm => clean === adm.toLowerCase());
-};
-
 const PiAuthContext = createContext();
-
 const STORAGE_KEY_USER = 'rentora_live_v1_session';
-const STORAGE_KEY_USERS = 'rentora_live_v1_users_dir';
 
 export function PiAuthProvider({ children }) {
-  // Real Users Directory State
-  const [users, setUsers] = useState(() => {
-    return cloudSyncService.getCachedUsers();
-  });
-
-  // Current Logged-in User Session
+  const [users, setUsers] = useState(() => cloudSyncService.getCachedUsers());
   const [currentUser, setCurrentUser] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_USER);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.username) {
-          parsed.role = isUsernameAdmin(parsed.username) ? 'admin' : 'user';
-          return parsed;
-        }
-      }
-      return null;
-    } catch (e) {
+      const raw = localStorage.getItem(STORAGE_KEY_USER);
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed?.sessionToken && parsed?.uid ? parsed : null;
+    } catch (_) {
       return null;
     }
   });
-
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
-  // Save currentUser to localStorage
   useEffect(() => {
     try {
-      if (currentUser) {
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(currentUser));
-      } else {
-        localStorage.removeItem(STORAGE_KEY_USER);
-      }
-    } catch (e) {}
+      if (currentUser) localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(currentUser));
+      else localStorage.removeItem(STORAGE_KEY_USER);
+    } catch (_) {}
   }, [currentUser]);
 
-  // Subscribe to Multi-Device Cloud Sync
   useEffect(() => {
     const unsubscribe = cloudSyncService.subscribe((event, data) => {
-      if (data && Array.isArray(data.users)) {
-        setUsers(prev => {
-          if (JSON.stringify(prev) === JSON.stringify(data.users)) return prev;
-          return data.users;
-        });
-      }
+      if (data && Array.isArray(data.users)) setUsers(data.users);
     });
-
     return () => unsubscribe();
   }, []);
 
-  const createNewUserObject = (cleanUser, customUid = null, isOfficialSdk = false) => {
-    const isAdminRole = isUsernameAdmin(cleanUser);
-    return {
-      uid: customUid || ("pi_usr_" + cleanUser.replace('@', '')),
-      username: cleanUser.replace('@', ''),
-      displayName: cleanUser.replace('@', ''),
-      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUser}`,
-      bio: isAdminRole ? "مدیر کل پلتفرم رنتورا در شبکه پای" : (isOfficialSdk ? "پیشگام تاییدشده شبکه پای در رنتورا" : "کاربر آزمایشی رنتورا"),
-      location: "ایران",
-      role: isAdminRole ? 'admin' : 'user',
-      kycStatus: isOfficialSdk ? 'verified' : 'unverified',
-      isOfficialSdk: !!isOfficialSdk,
-      reputation: null,
-      totalRentals: 0,
-      piWalletConnected: !!isOfficialSdk,
-      joinedDate: new Date().toISOString().split('T')[0],
-      phoneMasked: "+98 9•• ••• ••••",
-      status: "active"
-    };
-  };
-
-  const loginWithPi = async (customUsername = null) => {
+  const loginWithPi = async () => {
     setIsLoading(true);
     setAuthError(null);
-
     try {
-      let cleanUser = '';
-      let uid = null;
-      let isOfficialSdk = false;
-
-      if (customUsername) {
-        cleanUser = customUsername.toLowerCase().replace('@', '').trim();
-        isOfficialSdk = false; // Custom manual entry is unverified demo
-      } else {
-        const authData = await piService.authenticate();
-        cleanUser = authData.username?.toLowerCase() || 'pioneer';
-        uid = authData.uid;
-        isOfficialSdk = !!authData.isOfficialSdk;
+      const authData = await piService.authenticate();
+      if (!authData?.sessionToken || !authData?.uid) {
+        throw new Error('سرور رنتورا یک نشست معتبر صادر نکرد.');
       }
 
-      const existingUser = users.find(u => u.username?.toLowerCase() === cleanUser);
-      let userObj;
-
-      if (existingUser) {
-        userObj = {
-          ...existingUser,
-          role: isUsernameAdmin(cleanUser) ? 'admin' : (existingUser.role || 'user'),
-          kycStatus: isOfficialSdk ? 'verified' : (existingUser.kycStatus || 'unverified'),
-          isOfficialSdk: isOfficialSdk || existingUser.isOfficialSdk || false,
-          status: existingUser.status || 'active'
-        };
-      } else {
-        userObj = createNewUserObject(cleanUser, uid, isOfficialSdk);
-      }
+      const userObj = {
+        ...authData.user,
+        uid: authData.uid,
+        username: authData.username,
+        displayName: authData.user?.displayName || authData.username,
+        sessionToken: authData.sessionToken,
+        role: authData.user?.role || 'user',
+        kycStatus: authData.user?.kycStatus || 'unknown',
+        isOfficialSdk: true,
+        piWalletConnected: true,
+        status: authData.user?.status || 'active'
+      };
 
       setCurrentUser(userObj);
       setUsers(prev => {
-        const filtered = prev.filter(u => u.username?.toLowerCase() !== userObj.username?.toLowerCase());
-        const updated = [userObj, ...filtered];
+        const updated = [userObj, ...prev.filter(u => u.uid !== userObj.uid)];
         cloudSyncService.saveCachedUsers(updated);
         return updated;
       });
-
-      cloudSyncService.broadcastUserProfile(userObj);
       setAuthModalOpen(false);
       return userObj;
     } catch (err) {
-      console.warn('[PiAuth] Login note:', err.message);
-      if (err.message === 'NOT_IN_PI_BROWSER') {
-        setAuthError('ورود رسمی فقط درون برنامه Pi Browser امکان‌پذیر است.');
-      } else {
-        setAuthError(err.message || 'اتصال به شبکه پای با خطا مواجه شد.');
-      }
+      const message = err?.message || 'احراز هویت در Pi Browser با خطا مواجه شد.';
+      setAuthError(message === 'NOT_IN_PI_BROWSER'
+        ? 'ورود رسمی فقط در Pi Browser امکان‌پذیر است.'
+        : message);
+      throw err;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const sessionToken = currentUser?.sessionToken;
+    try {
+      await cloudSyncService.logout(sessionToken);
+    } catch (_) {}
     setCurrentUser(null);
-    try { localStorage.removeItem(STORAGE_KEY_USER); } catch (e) {}
   };
 
   const updateUserProfile = (updatedFields) => {
-    if (!currentUser) return;
-    const updated = { ...currentUser, ...updatedFields };
-    
+    if (!currentUser) return null;
+    const allowed = {};
+    for (const key of ['displayName', 'bio', 'location']) {
+      if (Object.prototype.hasOwnProperty.call(updatedFields || {}, key)) allowed[key] = updatedFields[key];
+    }
+    const updated = { ...currentUser, ...allowed };
     setCurrentUser(updated);
-    try {
-      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updated));
-    } catch (e) {}
-
-    setUsers(prev => {
-      const filtered = prev.filter(u => u.username?.toLowerCase() !== updated.username?.toLowerCase());
-      const newUsers = [updated, ...filtered];
-      cloudSyncService.saveCachedUsers(newUsers);
-      return newUsers;
-    });
-
-    cloudSyncService.broadcastUserProfile(updated);
     return updated;
   };
 
-  const toggleUserStatus = (uid) => {
-    setUsers(prev => {
-      const updated = prev.map(u => u.uid === uid ? { ...u, status: u.status === 'active' ? 'banned' : 'active' } : u);
-      cloudSyncService.saveCachedUsers(updated);
-      return updated;
-    });
+  const toggleUserStatus = () => {
+    throw new Error('تغییر وضعیت کاربران فقط از طریق API مدیریتی سرور مجاز است.');
   };
 
-  const isAdmin = !!currentUser && (currentUser.role === 'admin' || isUsernameAdmin(currentUser.username));
-
   return (
-    <PiAuthContext.Provider
-      value={{
-        users,
-        currentUser,
-        isAuthenticated: !!currentUser,
-        isAdmin,
-        isLoading,
-        authError,
-        authModalOpen,
-        setAuthModalOpen,
-        isWalletModalOpen,
-        setIsWalletModalOpen,
-        loginWithPi,
-        logout,
-        updateUserProfile,
-        updateProfile: updateUserProfile,
-        toggleUserStatus
-      }}
-    >
+    <PiAuthContext.Provider value={{
+      users,
+      currentUser,
+      isAuthenticated: !!currentUser?.sessionToken,
+      isAdmin: currentUser?.role === 'admin',
+      isLoading,
+      authError,
+      authModalOpen,
+      setAuthModalOpen,
+      isWalletModalOpen,
+      setIsWalletModalOpen,
+      loginWithPi,
+      logout,
+      updateUserProfile,
+      updateProfile: updateUserProfile,
+      toggleUserStatus
+    }}>
       {children}
     </PiAuthContext.Provider>
   );
@@ -215,8 +124,6 @@ export function PiAuthProvider({ children }) {
 
 export function usePiAuth() {
   const context = useContext(PiAuthContext);
-  if (!context) {
-    throw new Error('usePiAuth must be used within a PiAuthProvider');
-  }
+  if (!context) throw new Error('usePiAuth must be used within a PiAuthProvider');
   return context;
 }
