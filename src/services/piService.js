@@ -17,7 +17,16 @@ class PiNetworkService {
     if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
     const onIncompletePayment = customIncompleteHandler || (async (payment) => {
       if (!payment?.identifier) return;
-      try { await fetch(`${apiBase}/api/payments/incomplete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment }) }); } catch (_) {}
+      try {
+        const raw = localStorage.getItem('rentora_live_v1_session');
+        const session = raw ? JSON.parse(raw) : null;
+        if (!session?.sessionToken) return;
+        await fetch(`${apiBase}/api/payments/incomplete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.sessionToken}` },
+          body: JSON.stringify({ payment })
+        });
+      } catch (_) {}
     });
     const authResult = await Promise.race([
       window.Pi.authenticate(['payments', 'username'], onIncompletePayment),
@@ -37,13 +46,13 @@ class PiNetworkService {
     return headers;
   }
   async ensurePaymentIntent(paymentIntentId, rentalId) {
-    if (paymentIntentId) throw new Error('Payment Intent قدیمی بدون مقدار سروری قابل استفاده نیست.');
     if (!rentalId) throw new Error('شناسه رزرو برای ساخت Payment Intent لازم است.');
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
-    const response = await fetch(`${apiBase}/api/payments/intent`, { method: 'POST', headers: this.getSessionHeaders(), body: JSON.stringify({ rentalId }) });
+    const response = await fetch(`${apiBase}/api/payments/intent`, { method: 'POST', headers: this.getSessionHeaders(), body: JSON.stringify({ rentalId, paymentIntentId: paymentIntentId || undefined }) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data?.paymentIntentId || !Number.isFinite(Number(data?.amount)) || !data?.memo) throw new Error(data?.error || 'ساخت Payment Intent ناموفق بود.');
+    if (paymentIntentId && data.paymentIntentId !== paymentIntentId) throw new Error('Payment Intent با رزرو جاری منطبق نیست.');
     return { id: data.paymentIntentId, amount: Number(data.amount), memo: String(data.memo) };
   }
   async approvePaymentOnServer(paymentId, paymentIntentId) {
