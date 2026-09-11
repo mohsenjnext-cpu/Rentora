@@ -68,7 +68,17 @@ export default function ChatModal({
   // Find currently open thread
   let currentThread = null;
   if (selectedThread) {
-    currentThread = (chats || []).find(th => th.id === selectedThread.id) || selectedThread;
+    const sP1 = (selectedThread.ownerUsername || '').toLowerCase();
+    const sP2 = (selectedThread.renterUsername || '').toLowerCase();
+    currentThread = (chats || []).find(th => {
+      if (th.id === selectedThread.id) return true;
+      const u1 = (th.ownerUsername || '').toLowerCase();
+      const u2 = (th.renterUsername || '').toLowerCase();
+      if (sP1 && sP2 && u1 && u2) {
+        return (u1 === sP1 && u2 === sP2) || (u1 === sP2 && u2 === sP1);
+      }
+      return false;
+    }) || selectedThread;
   } else if (targetRecipientUsername) {
     currentThread = (chats || []).find(th => {
       const u1 = (th.renterUsername || '').toLowerCase();
@@ -103,18 +113,14 @@ export default function ChatModal({
     scrollToBottom();
 
     // Immediate fast sync on modal open
-    cloudSyncService.pollChatsFast().catch(() => {});
+    cloudSyncService.fetchSharedData().catch(() => {});
 
-    // Fast polling every 1.2 seconds while chat screen is open
+    // Fast polling every 1.0 second while chat screen is open
     const interval = setInterval(async () => {
       try {
-        await cloudSyncService.pollChatsFast();
-      } catch (e) {
-        try {
-          await cloudSyncService.fetchSharedData();
-        } catch (e2) {}
-      }
-    }, 1200);
+        await cloudSyncService.fetchSharedData();
+      } catch (e) {}
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [isOpen, activeItem]);

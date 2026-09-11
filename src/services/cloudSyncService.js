@@ -297,58 +297,12 @@ export class CloudSyncService {
    * Fast polling specifically for chat messages while chat window is active
    */
   async pollChatsFast() {
-    const apiBase = getApiBaseUrl();
-    if (!apiBase) return null;
-
     try {
-      const res = await fetch(`${apiBase}/api/sync/chats`, {
-        method: 'GET',
-        headers: this.getAuthHeaders()
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const remoteChats = Array.isArray(data.chats) ? data.chats : [];
-        const localChats = this.getCachedChats();
-        const mergedChats = [...localChats];
-
-        remoteChats.forEach(rc => {
-          const rP1 = (rc.ownerUsername || '').toLowerCase();
-          const rP2 = (rc.renterUsername || '').toLowerCase();
-
-          const localIdx = mergedChats.findIndex(lc => {
-            if (lc.id === rc.id) return true;
-            const lP1 = (lc.ownerUsername || '').toLowerCase();
-            const lP2 = (lc.renterUsername || '').toLowerCase();
-            if (rP1 && rP2 && lP1 && lP2) {
-              return (lP1 === rP1 && lP2 === rP2) || (lP1 === rP2 && lP2 === rP1);
-            }
-            return false;
-          });
-
-          if (localIdx === -1) {
-            mergedChats.unshift(rc);
-          } else {
-            const local = mergedChats[localIdx];
-            const combinedMap = new Map();
-            (local.messages || []).forEach(m => combinedMap.set(m.id || (m.text + '_' + m.timestamp), m));
-            (rc.messages || []).forEach(m => combinedMap.set(m.id || (m.text + '_' + m.timestamp), m));
-            mergedChats[localIdx] = {
-              ...local,
-              ...rc,
-              messages: Array.from(combinedMap.values()),
-              lastMessageAt: rc.lastMessageAt || local.lastMessageAt
-            };
-          }
-        });
-
-        this.saveCachedChats(mergedChats);
-        this.notifySubscribers('CHAT_POLL_SYNC', { chats: mergedChats });
-        return mergedChats;
-      }
-    } catch (e) {}
-
-    return null;
+      const data = await this.fetchSharedData();
+      return data && Array.isArray(data.chats) ? data.chats : this.getCachedChats();
+    } catch (e) {
+      return this.getCachedChats();
+    }
   }
 
   async fetchSharedData(forceNotify = false) {
@@ -470,6 +424,7 @@ export class CloudSyncService {
         if (currentHash !== this.lastSyncedHash || forceNotify) {
           this.lastSyncedHash = currentHash;
           this.notifySubscribers('DATA_SYNC', result);
+          this.notifySubscribers('CHAT_POLL_SYNC', { chats: mergedChats });
         }
 
         return result;
