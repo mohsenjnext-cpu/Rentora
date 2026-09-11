@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.npm/
 .pnp
 .pnp.js
 
@@ -14,9 +15,15 @@ build/
 
 # Environment Variables & Secrets (CRITICAL)
 .env
-.env.local
-.env.production
-.env.development
+.env.*
+!.env.example
+
+# Runtime/local data
+rentora_database.json
+*.sqlite
+*.sqlite3
+*.db
+uploads/
 
 # Log files
 npm-debug.log*
@@ -29,5 +36,3 @@ yarn-error.log*
 .idea/
 .DS_Store
 Thumbs.db
-
-uploads/
