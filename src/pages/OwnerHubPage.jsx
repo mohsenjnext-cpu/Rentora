@@ -18,10 +18,11 @@ import {
   Package,
   Layers,
   ArrowRight,
-  Check
+  Check,
+  Edit3
 } from 'lucide-react';
 
-export default function OwnerHubPage({ onNavigate, onSelectItem, onRentItem }) {
+export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onRentItem }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
   const { 
@@ -314,24 +315,42 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onRentItem }) {
                     />
                     <div className="min-w-0">
                       <h4 className="font-bold text-xs text-slate-900 dark:text-white truncate">{item.title}</h4>
-                      <span className="text-[11px] font-black text-[#0F6E56] font-mono block">
-                        {item.pricePerDay} π / {l('روز', 'day', 'يوم', '天')}
-                      </span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[11px] font-black text-[#0F6E56] font-mono">
+                          {item.pricePerDay} π / {l('روز', 'day', 'يوم', '天')}
+                        </span>
+                        {item.images?.length > 1 && (
+                          <span className="text-[9px] text-slate-400">({item.images.length} {l('عکس', 'photos', 'صور', '图')})</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => toggleItemStatus(item.id)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
-                      isItemActive 
-                        ? 'bg-[#E1F5EE] text-[#0F6E56]' 
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    {isItemActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-                    <span>{isItemActive ? t('ownerToggleActive') : t('ownerToggleInactive')}</span>
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => onEditItem && onEditItem(item)}
+                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-[#534AB7] hover:border-[#534AB7] dark:hover:border-[#534AB7] text-xs font-bold flex items-center gap-1 cursor-pointer transition"
+                      title={l('ویرایش آگهی', 'Edit Listing', 'تعديل الإعلان', '编辑')}
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-[#534AB7]" />
+                      <span className="text-[11px]">{l('ویرایش', 'Edit', 'تعديل', '编辑')}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleItemStatus(item.id)}
+                      className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                        isItemActive 
+                          ? 'bg-[#E1F5EE] text-[#0F6E56]' 
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                      }`}
+                      title={isItemActive ? l('توقف موقت نمایش آگهی', 'Pause listing', 'إيقاف مؤقت', '暂停展示') : l('فعال‌سازی نمایش آگهی', 'Activate listing', 'تفعيل', '激活展示')}
+                    >
+                      {isItemActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                      <span className="text-[10px] hidden sm:inline">{isItemActive ? t('ownerToggleActive') : t('ownerToggleInactive')}</span>
+                    </button>
+                  </div>
                 </div>
               );
             })}

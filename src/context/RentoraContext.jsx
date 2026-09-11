@@ -550,7 +550,11 @@ export function RentoraProvider({ children }) {
     setItems(prev => {
       const updated = prev.map(i => {
         if (i.id === itemId) {
-          updatedItem = { ...i, ...fields };
+          updatedItem = { 
+            ...i, 
+            ...fields, 
+            updatedAt: new Date().toISOString() 
+          };
           return updatedItem;
         }
         return i;
@@ -558,9 +562,12 @@ export function RentoraProvider({ children }) {
       cloudSyncService.saveCachedItems(updated);
       return updated;
     });
+
     if (updatedItem) {
       await cloudSyncService.broadcastNewItem(updatedItem);
+      cloudSyncService.notifySubscribers('ITEM_UPDATED', { items: [updatedItem, ...items], item: updatedItem });
     }
+    return updatedItem;
   };
 
   const toggleItemStatus = async (itemId) => {

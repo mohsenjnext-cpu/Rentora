@@ -38,6 +38,7 @@ function MainApp() {
   const [currentTab, setCurrentTab] = useState('home');
   const [previousTab, setPreviousTab] = useState('discover');
   const [selectedItem, setSelectedItem] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
   const [publicProfileUsername, setPublicProfileUsername] = useState(null);
   const [discoverInitialCategory, setDiscoverInitialCategory] = useState('all');
   const [discoverInitialQuery, setDiscoverInitialQuery] = useState('');
@@ -67,6 +68,7 @@ function MainApp() {
   const handleNavigate = (tab, params = {}) => {
     if (params.category) setDiscoverInitialCategory(params.category);
     if (params.query !== undefined) setDiscoverInitialQuery(params.query);
+    if (tab !== 'list-item') setEditingItem(null);
     setCurrentTab(tab);
   };
 
@@ -74,6 +76,13 @@ function MainApp() {
     setSelectedItem(item);
     setPreviousTab(currentTab);
     setCurrentTab('item-detail');
+  };
+
+  const handleEditItem = (item) => {
+    if (!item) return;
+    setEditingItem(item);
+    setPreviousTab(currentTab);
+    setCurrentTab('list-item');
   };
 
   const handleRentItem = (item) => {
@@ -152,6 +161,7 @@ function MainApp() {
             onBack={() => setCurrentTab(previousTab || 'discover')}
             onNavigateToActivity={() => setCurrentTab('activity')}
             onNavigateToOwnerHub={() => setCurrentTab('owner-hub')}
+            onEditItem={handleEditItem}
             onOpenChat={(item) => handleOpenChat(item)}
             onOpenPublicProfile={handleOpenPublicProfile}
           />
@@ -169,11 +179,25 @@ function MainApp() {
 
         {currentTab === 'list-item' && (
           <ListItemPage
-            onCreated={(newItem) => {
+            itemToEdit={editingItem}
+            onCancelEdit={() => {
+              setEditingItem(null);
+              setCurrentTab(previousTab || 'owner-hub');
+            }}
+            onItemCreated={(newItem) => {
               setSelectedItem(newItem);
+              setEditingItem(null);
               setCurrentTab('item-detail');
             }}
-            onNavigate={handleNavigate}
+            onItemUpdated={(updatedItem) => {
+              setSelectedItem(updatedItem);
+              setEditingItem(null);
+              setCurrentTab('item-detail');
+            }}
+            onNavigate={(page) => {
+              setEditingItem(null);
+              setCurrentTab(page);
+            }}
           />
         )}
 
@@ -181,6 +205,7 @@ function MainApp() {
           <OwnerHubPage
             onNavigate={handleNavigate}
             onSelectItem={handleSelectItem}
+            onEditItem={handleEditItem}
           />
         )}
 
@@ -204,6 +229,7 @@ function MainApp() {
           <AdminDashboardPage
             onNavigate={handleNavigate}
             onOpenPublicProfile={handleOpenPublicProfile}
+            onEditItem={handleEditItem}
           />
         )}
 

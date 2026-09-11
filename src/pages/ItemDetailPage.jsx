@@ -15,7 +15,8 @@ import {
   Flag, 
   Check, 
   Crown,
-  MessageSquare
+  MessageSquare,
+  Edit3
 } from 'lucide-react';
 
 export default function ItemDetailPage({ 
@@ -24,7 +25,8 @@ export default function ItemDetailPage({
   onBookingSuccess, 
   onOpenChat,
   onOpenPublicProfile,
-  onNavigateToOwnerHub 
+  onNavigateToOwnerHub,
+  onEditItem
 }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, setAuthModalOpen } = usePiAuth();
@@ -78,6 +80,18 @@ export default function ItemDetailPage({
         </button>
 
         <div className="flex items-center gap-1.5">
+          {isOwner && (
+            <button
+              type="button"
+              onClick={() => onEditItem && onEditItem(item)}
+              className="px-2.5 py-1.5 rounded-lg border border-[#534AB7]/40 bg-[#EEEDFE] dark:bg-[#26215C] text-[#26215C] dark:text-[#EEEDFE] hover:opacity-90 transition cursor-pointer text-xs font-bold flex items-center gap-1 shadow-2xs"
+              title={l('ویرایش آگهی', 'Edit Listing', 'تعديل الإعلان', '编辑')}
+            >
+              <Edit3 className="w-3.5 h-3.5 text-[#534AB7] dark:text-[#AFA9EC]" />
+              <span>{l('ویرایش', 'Edit', 'تعديل', '编辑')}</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleShare}
@@ -284,15 +298,20 @@ export default function ItemDetailPage({
 
             {isOwner ? (
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
-                  {l('شما مالک این کالا هستید', 'You own this item', 'أنت مالك هذا الغرض', '您是此物品的物主')}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => onEditItem && onEditItem(item)}
+                  className="px-3.5 py-2 rounded-xl bg-[#EEEDFE] dark:bg-[#26215C] text-[#26215C] dark:text-[#EEEDFE] border border-[#534AB7]/40 font-bold text-xs cursor-pointer shadow-xs hover:opacity-90 transition flex items-center gap-1.5"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-[#534AB7] dark:text-[#AFA9EC]" />
+                  <span>{l('ویرایش آگهی', 'Edit Listing', 'تعديل الإعلان', '编辑')}</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => onNavigateToOwnerHub && onNavigateToOwnerHub()}
-                  className="px-4 py-2 rounded-xl bg-[#26215C] dark:bg-[#534AB7] text-white font-bold text-xs cursor-pointer shadow-sm hover:opacity-90 transition"
+                  className="px-3.5 py-2 rounded-xl bg-[#26215C] dark:bg-[#534AB7] text-white font-bold text-xs cursor-pointer shadow-sm hover:opacity-90 transition"
                 >
-                  {l('مدیریت در پنل مالک', 'Manage in Owner Hub', 'إدارة في لوحة المؤجر', '前往物主中心管理')}
+                  {l('پنل مالک', 'Owner Hub', 'لوحة المؤجر', '物主中心')}
                 </button>
               </div>
             ) : (

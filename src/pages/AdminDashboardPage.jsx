@@ -30,10 +30,11 @@ import {
   UserCheck, 
   Globe, 
   Wifi,
-  UploadCloud
+  UploadCloud,
+  Edit3
 } from 'lucide-react';
 
-export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile }) {
+export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, onEditItem }) {
   const { lang, dir, t, l } = useLanguage();
   const { isAdmin, currentUser, users = [], toggleUserStatus } = usePiAuth();
   const { 
@@ -627,6 +628,16 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile }) 
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => onEditItem && onEditItem(it)}
+                          className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-[#534AB7] text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition"
+                          title={l('ویرایش آگهی', 'Edit Listing', 'تعديل', '编辑')}
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-[#534AB7]" />
+                          <span>{l('ویرایش', 'Edit', 'تعديل', '编辑')}</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => toggleItemStatus(it.id)}
