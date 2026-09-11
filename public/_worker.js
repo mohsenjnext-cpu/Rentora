@@ -1,6 +1,11 @@
 /**
  * Rentora Pi Network Marketplace - Cloudflare Pages Unified Worker Backend
- * Universal multi-device synchronization engine for Users, Items, Bookings, Reviews, Chats & Pi Payments
+ * 
+ * Rules:
+ * - PI_API_KEY is server secret only.
+ * - Confirms real Pi Platform payment via official API.
+ * - Rentora Fee is the only amount received by platform; Rental & Deposit are P2P.
+ * - Data ownership control by Pi UID.
  */
 
 const ADMIN_USERNAMES = ['avina60', 'mohsenjnext', 'mohsenjnext-cpu', 'admin_rentora', 'admin'];
@@ -120,8 +125,8 @@ export default {
       if (method === 'GET' && (path === '/api/health' || path === '/health')) {
         return jsonResponse({
           status: 'ok',
-          service: 'Rentora Cloudflare Worker API',
-          version: '2.7.0',
+          service: 'Rentora Cloudflare Worker API (P2P Rental Marketplace)',
+          version: '3.0.0',
           piApiKeyConfigured: Boolean(PI_API_KEY),
           storage: (env && env.RENTORA_KV) ? 'Cloudflare KV (Persistent)' : 'Memory',
           timestamp: new Date().toISOString()
@@ -138,6 +143,7 @@ export default {
         var cleanUsername = String(reqUsername || 'pioneer').toLowerCase().replace('@', '').trim();
         var uid = reqUid || ('pi_usr_' + cleanUsername);
 
+        // Verify with official Pi Platform API if accessToken is provided
         if (accessToken && PI_API_KEY) {
           try {
             var piRes = await fetch(PI_API_URL + '/me', {
@@ -148,11 +154,13 @@ export default {
               cleanUsername = String(piUser.username).toLowerCase().replace('@', '').trim();
               uid = piUser.uid;
             }
-          } catch (e) {}
+          } catch (e) {
+            console.warn('Pi /me auth note:', e);
+          }
         }
 
         var db = await getDatabase(env);
-        var existingUser = (db.users || []).find(function(u) { return u.username === cleanUsername; });
+        var existingUser = (db.users || []).find(function(u) { return u.username === cleanUsername || (u.uid && u.uid === uid); });
         var userObj = existingUser || {
           uid: uid,
           username: cleanUsername,
@@ -177,7 +185,7 @@ export default {
         });
       }
 
-      // 3. Approve Pi Payment
+      // 3. Approve Pi Payment (Platform Fee)
       if (method === 'POST' && path === '/api/payments/approve') {
         var approveBody = await request.json().catch(function() { return {}; });
         var paymentId = approveBody.paymentId;
@@ -197,16 +205,16 @@ export default {
             if (approveRes.ok) {
               return jsonResponse({ approved: true, paymentId: paymentId, verifiedWithPiApi: true, data: approveData });
             } else {
-              console.error('Approve failed:', approveRes.status, approveData);
+              console.error('Approve failed with Pi API:', approveRes.status, approveData);
             }
           } catch (apiErr) {
             console.error('Approve exception:', apiErr);
           }
         }
-        return jsonResponse({ approved: true, paymentId: paymentId, fallbackMode: true });
+        return jsonResponse({ approved: true, paymentId: paymentId, verifiedWithPiApi: false });
       }
 
-      // 4. Complete Pi Payment
+      // 4. Complete Pi Payment (Platform Fee & Booking Confirmation)
       if (method === 'POST' && path === '/api/payments/complete') {
         var completeBody = await request.json().catch(function() { return {}; });
         var cPaymentId = completeBody.paymentId;
@@ -230,26 +238,31 @@ export default {
         }
 
         var cDb = await getDatabase(env);
+        var feeAmount = (rentalData && (rentalData.rentoraFee !== undefined ? rentalData.rentoraFee : rentalData.totalPlatformFee)) || 0.0001;
+        
         var newTx = {
           id: 'tx_' + Date.now(),
           paymentId: cPaymentId,
           txid: txid,
-          amount: (rentalData && rentalData.totalPlatformFee) ? rentalData.totalPlatformFee : 0.0001,
-          itemTitle: (rentalData && rentalData.itemTitle) ? rentalData.itemTitle : 'Platform Fee',
-          renterUsername: (rentalData && rentalData.renterUsername) ? rentalData.renterUsername : 'pioneer',
-          ownerUsername: (rentalData && rentalData.ownerUsername) ? rentalData.ownerUsername : 'pioneer',
+          rentalId: rentalData ? rentalData.id : null,
+          itemTitle: rentalData ? rentalData.itemTitle : 'Rentora Platform Fee',
+          renterUsername: rentalData ? rentalData.renterUsername : 'pioneer',
+          ownerUsername: rentalData ? rentalData.ownerUsername : 'pioneer',
+          amount: feeAmount,
+          platformFee: feeAmount,
+          type: 'platform_fee',
           status: 'completed',
           blockchainVerified: true,
           timestamp: new Date().toISOString()
         };
         cDb.transactions = [newTx].concat(cDb.transactions || []);
 
-        if (rentalData && rentalData.itemId) {
+        if (rentalData && rentalData.id) {
           var confirmedRental = Object.assign({}, rentalData, {
             status: 'confirmed',
             paymentStatus: 'paid_confirmed',
-            paymentId: cPaymentId,
-            txid: txid,
+            piPaymentId: cPaymentId,
+            piTxRef: txid,
             paidAt: new Date().toISOString()
           });
           cDb.rentals = [confirmedRental].concat((cDb.rentals || []).filter(function(r) { return r.id !== confirmedRental.id; }));
@@ -264,7 +277,7 @@ export default {
         return jsonResponse({ handled: true });
       }
 
-      // 6. Sync All (Broadcasts across all phones)
+      // 6. Sync All (Universal Public Data Sync)
       if (method === 'GET' && path === '/api/sync/all') {
         var user = getRequestUser(request);
         var syncDb = await getDatabase(env);
@@ -312,7 +325,7 @@ export default {
         return jsonResponse({ success: true, item: item });
       }
 
-      // 9. Sync Rental
+      // 9. Sync Rental Booking
       if (method === 'POST' && path === '/api/sync/rental') {
         var rental = await request.json().catch(function() { return {}; });
         if (!rental || !rental.id) return errorResponse('Invalid rental', 400);
@@ -334,7 +347,7 @@ export default {
         return jsonResponse({ success: true, review: review });
       }
 
-      // 11. Sync Chat (Create or Update Chat Thread)
+      // 11. Sync Chat
       if (method === 'POST' && path === '/api/sync/chat') {
         var chatPayload = await request.json().catch(function() { return {}; });
         if (!chatPayload || !chatPayload.id) return errorResponse('Invalid chat payload', 400);
@@ -345,7 +358,6 @@ export default {
         var p1 = (chatPayload.ownerUsername || '').toLowerCase();
         var p2 = (chatPayload.renterUsername || '').toLowerCase();
 
-        // Find existing thread by ID or by same two users
         var existingChatIdx = chatList.findIndex(function(c) {
           if (c.id === chatPayload.id) return true;
           var u1 = (c.ownerUsername || '').toLowerCase();
@@ -366,7 +378,7 @@ export default {
           var combinedMessages = Array.from(msgMap.values());
           
           chatList[existingChatIdx] = Object.assign({}, existingChat, chatPayload, {
-            id: existingChat.id, // Retain stable thread ID
+            id: existingChat.id,
             messages: combinedMessages,
             lastMessageAt: chatPayload.lastMessageAt || new Date().toISOString()
           });
@@ -378,16 +390,7 @@ export default {
         return jsonResponse({ success: true, chat: chatList[existingChatIdx !== -1 ? existingChatIdx : 0] });
       }
 
-      // Fast Chat Polling Endpoint
-      if (method === 'GET' && path === '/api/sync/chats') {
-        var pollDb = await getDatabase(env);
-        return jsonResponse({
-          chats: pollDb.chats || [],
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      // 12. Delete Chat Thread Endpoint
+      // 12. Delete Chat Thread
       if (method === 'POST' && (path === '/api/sync/chat/delete' || path === '/api/sync/chat-delete')) {
         var delBody = await request.json().catch(function() { return {}; });
         var threadId = delBody.id || delBody.threadId;
@@ -406,7 +409,7 @@ export default {
         return jsonResponse({ success: true, purged: true });
       }
 
-      // Pass-through for static asset fetch on Cloudflare Pages
+      // Cloudflare Pages Static Assets fallback
       if (env && env.ASSETS && typeof env.ASSETS.fetch === 'function') {
         return env.ASSETS.fetch(request);
       }

@@ -249,8 +249,9 @@ export default function ItemDetailPage({
 
       {/* 6. Pricing Breakdown Card */}
       <div className="p-4 rounded-xl rentora-card space-y-2 text-xs">
-        <h3 className="font-bold text-slate-900 dark:text-white pb-1.5 border-b border-slate-150 dark:border-slate-800">
-          {t('itemPriceCardTitle')}
+        <h3 className="font-bold text-slate-900 dark:text-white pb-1.5 border-b border-slate-150 dark:border-slate-800 flex items-center justify-between">
+          <span>{t('itemPriceCardTitle')}</span>
+          <span className="text-[10px] font-normal text-slate-400">{l('تسویه مستقیم P2P', 'Direct P2P', 'تسوية مباشرة', '点对点直接结算')}</span>
         </h3>
 
         <div className="flex justify-between text-slate-600 dark:text-slate-300">
@@ -264,12 +265,17 @@ export default function ItemDetailPage({
         </div>
 
         <div className="flex justify-between text-slate-600 dark:text-slate-300">
-          <span>{l('شیوه تحویل:', 'Handover Method:', 'طريقة التسليم:', '交接方式：')}</span>
-          <span className="font-medium text-[#534AB7] dark:text-[#AFA9EC]">{l('حضوری و مستقیم (تست در محل)', 'In-Person Handover (inspect on site)', 'تسليم مباشر يداً بيد (فحص في الموقع)', '当面交接（现场验机）')}</span>
+          <span>{l('شیوه تسویه و تحویل:', 'Settlement & Handover:', 'طريقة التسليم والتسوية:', '交付与结算方式：')}</span>
+          <span className="font-medium text-[#534AB7] dark:text-[#AFA9EC]">{l('مستقیم و حضوری بین طرفین (غیر امانی)', 'Direct P2P in person (Non-Escrow)', 'مباشر يداً بيد بين الطرفين', '双方当面直接结清（非托管）')}</span>
         </div>
 
-        <div className="pt-1.5 text-[10px] text-slate-400 border-t border-slate-200 dark:border-slate-800">
-          {t('itemDirectHandoverNotice')}
+        <div className="pt-1.5 text-[10px] text-slate-400 border-t border-slate-200 dark:border-slate-800 leading-relaxed">
+          {l(
+            'مبالغ اجاره و ودیعه مستقیماً در زمان تحویل بین موجر و مستأجر تسویه می‌شود و رنتورا تنها کارمزد رزرو را دریافت می‌کند.',
+            'Rental fee and security deposit are settled directly between owner and renter at handover. Rentora only processes the booking commission fee.',
+            'يُسوى الإيجار والتأمين مباشرة بين المؤجر والمستأجر عند الاستلام، وتحصل رنتورا عمولة الحجز فقط.',
+            '租金与押金均由双方当面直接结清，Rentora 仅收取预订平台费。'
+          )}
         </div>
       </div>
 

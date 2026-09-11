@@ -166,7 +166,7 @@ export default function Sidebar({
               >
                 <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-medium">
                   <ReceiptText className="w-3.5 h-3.5 text-[#534AB7] stroke-[1.8]" />
-                  <span>{l('سوابق پرداخت (Pi Ledger)', 'Pi Payment Ledger', 'سجل معاملات باي', 'Pi 交易账本')}</span>
+                  <span>{l('فعالیت‌های پای (Pi Activity)', 'Pi Activity & Ledger', 'نشاطات باي', 'Pi 交易账本')}</span>
                 </div>
                 <span className="text-[10px] text-slate-400">❯</span>
               </button>

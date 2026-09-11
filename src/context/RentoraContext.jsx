@@ -3,6 +3,8 @@ import { usePiAuth } from './PiAuthContext';
 import { piService } from '../services/piService';
 import { cloudSyncService } from '../services/cloudSyncService';
 import { inspectMessageSafety } from '../services/contactFilterService';
+import { FinancialEngine } from '../services/financialEngine';
+import { RENTAL_STATES, RentalStateMachine } from '../services/rentalStateMachine';
 import { 
   playNotificationChime, 
   triggerVibration, 
@@ -11,16 +13,6 @@ import {
 
 const RentoraContext = createContext();
 const STORAGE_PREFIX = 'rentora_db_';
-
-export const RENTAL_STATES = {
-  PENDING_PAYMENT: 'PENDING_PAYMENT',
-  CONFIRMED: 'CONFIRMED',
-  ACTIVE: 'ACTIVE',
-  RETURNED: 'RETURNED',
-  COMPLETED: 'COMPLETED',
-  CANCELLED: 'CANCELLED',
-  DISPUTED: 'DISPUTED'
-};
 
 export const SUBSCRIPTION_PLANS = [
   {
@@ -422,63 +414,41 @@ export function RentoraProvider({ children }) {
     return { success: true, plan };
   };
 
-  // Unified Dynamic Pricing Calculation (Supports item object or params object)
+  // Unified Dynamic Pricing Calculation using integer micro-units FinancialEngine
   const calculatePricing = (arg1, arg2 = 1) => {
-    let item = null;
+    let dailyRate = 0;
+    let securityDeposit = 0;
+    let startDate = null;
+    let endDate = null;
     let daysCount = 1;
-    let customDailyRate = null;
-    let customDeposit = null;
-    let customOwner = null;
+    let ownerName = null;
 
     if (arg1 && typeof arg1 === 'object') {
-      if (arg1.dailyRate !== undefined || arg1.startDate || arg1.pricePerDay !== undefined) {
-        customDailyRate = parseFloat(arg1.dailyRate !== undefined ? arg1.dailyRate : arg1.pricePerDay) || 0;
-        customDeposit = parseFloat(arg1.securityDeposit !== undefined ? arg1.securityDeposit : (arg1.deposit || 0));
-        customOwner = arg1.ownerUsername;
-        
-        if (arg1.startDate && arg1.endDate) {
-          const d1 = new Date(arg1.startDate);
-          const d2 = new Date(arg1.endDate);
-          const diff = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-          daysCount = Math.max(1, isNaN(diff) ? 1 : diff);
-        } else {
-          daysCount = Math.max(1, parseInt(arg1.daysCount) || 1);
-        }
-      } else {
-        item = arg1;
-        daysCount = Math.max(1, parseInt(arg2) || 1);
-      }
+      dailyRate = arg1.dailyRate !== undefined ? arg1.dailyRate : (arg1.pricePerDay !== undefined ? arg1.pricePerDay : 0);
+      securityDeposit = arg1.securityDeposit !== undefined ? arg1.securityDeposit : (arg1.deposit !== undefined ? arg1.deposit : 0);
+      startDate = arg1.startDate;
+      endDate = arg1.endDate;
+      daysCount = arg1.daysCount;
+      ownerName = arg1.ownerUsername;
+    } else {
+      dailyRate = parseFloat(arg1) || 0;
+      daysCount = parseInt(arg2, 10) || 1;
     }
-
-    const days = Math.max(1, daysCount);
-    const dailyRate = customDailyRate !== null ? customDailyRate : (parseFloat(item?.pricePerDay) || 0);
-    const baseRentalAmount = parseFloat((dailyRate * days).toFixed(4));
-    const depositAmount = customDeposit !== null ? customDeposit : (parseFloat(item?.deposit) || 0);
-    const ownerName = customOwner || item?.ownerUsername;
 
     const ownerIsProPlan = isUserPro(ownerName);
-    const feePercentage = ownerIsProPlan 
-      ? (platformConfig?.proFeePercentage || 0) 
-      : (platformConfig?.platformFeePercentage || 5);
+    const configuredFeePercentage = ownerIsProPlan
+      ? (platformConfig?.proFeePercentage || 0)
+      : (platformConfig?.platformFeePercentage !== undefined ? platformConfig.platformFeePercentage : 5);
 
-    let fee = parseFloat(((baseRentalAmount * feePercentage) / 100).toFixed(4));
-    const minFee = platformConfig?.minFeePi || 0.0001;
-
-    if (fee > 0 && fee < minFee) {
-      fee = minFee;
-    }
-
-    return {
-      daysCount: days,
+    return FinancialEngine.calculateBookingFinancials({
       dailyRate,
-      baseRentalAmount,
-      platformFeePercentage: feePercentage,
-      renterCommissionShare: fee,
-      totalPlatformFee: fee,
-      securityDeposit: depositAmount,
-      totalPaidByRenter: fee,
-      isProPlanApplied: ownerIsProPlan
-    };
+      startDate,
+      endDate,
+      daysCount,
+      securityDeposit,
+      platformFeePercentage: configuredFeePercentage,
+      ownerIsPro: ownerIsProPlan
+    });
   };
 
   // Robust Item Listing Creation
@@ -602,7 +572,7 @@ export function RentoraProvider({ children }) {
     }
   };
 
-  // Create Rental Booking Draft (Supports item object or itemId)
+  // Create Rental Booking Draft (P2P Model with Rentora Platform Fee)
   const createRentalBooking = async (bookingData) => {
     if (!currentUser) throw new Error("لطفاً ابتدا وارد حساب پای خود شوید.");
 
@@ -619,17 +589,25 @@ export function RentoraProvider({ children }) {
     const endDate = bookingData.endDate;
     let daysCount = bookingData.daysCount;
     if (!daysCount && startDate && endDate) {
-      const d1 = new Date(startDate);
-      const d2 = new Date(endDate);
-      const diff = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
-      daysCount = Math.max(1, isNaN(diff) ? 1 : diff);
+      daysCount = FinancialEngine.calculateDays(startDate, endDate);
     }
-    daysCount = Math.max(1, parseInt(daysCount) || 1);
+    daysCount = Math.max(1, parseInt(daysCount, 10) || 1);
 
-    const financials = calculatePricing(item, daysCount);
+    const financials = calculatePricing({
+      pricePerDay: item.pricePerDay,
+      dailyRate: item.pricePerDay,
+      startDate,
+      endDate,
+      daysCount,
+      securityDeposit: item.deposit || 0,
+      ownerUsername: item.ownerUsername
+    });
+
+    const agreementId = `RNT-${Math.floor(10000 + Math.random() * 90000)}`;
 
     const draftRental = {
       id: "rnt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+      bookingNumber: agreementId,
       itemId: item.id,
       itemTitle: item.title,
       itemImage: item.images?.[0] || '',
@@ -640,18 +618,51 @@ export function RentoraProvider({ children }) {
       renterUid: currentUser.uid,
       startDate,
       endDate,
-      daysCount,
-      pricePerDay: item.pricePerDay,
-      baseAmount: financials.baseRentalAmount,
-      totalPlatformFee: financials.totalPlatformFee,
-      renterCommissionShare: financials.renterCommissionShare,
+      daysCount: financials.daysCount,
+      pricePerDay: financials.dailyRate,
+
+      // P2P direct settlement values (settled at pickup, NOT held by Rentora)
+      rentalTotal: financials.rentalTotal,
+      baseAmount: financials.rentalTotal,
+      deposit: financials.deposit,
+      securityDeposit: financials.deposit,
+      totalRentalObligation: financials.totalRentalObligation,
+      ownerDirectRentalAmount: financials.ownerDirectRentalAmount,
+      ownerDirectDeposit: financials.ownerDirectDeposit,
+      ownerDirectPayAtPickup: financials.ownerDirectRentalAmount,
+
+      // Rentora Platform Fee (The ONLY amount processed via Pi SDK)
+      rentoraFee: financials.rentoraFee,
+      totalPlatformFee: financials.rentoraFee,
+      renterCommissionShare: financials.rentoraFee,
+      paymentDueToRentora: financials.rentoraFee,
       ownerCommissionShare: 0,
-      renterCommissionPaid: financials.totalPlatformFee === 0,
-      ownerPayout: financials.baseRentalAmount,
-      deposit: financials.securityDeposit,
-      totalPaidByRenter: financials.renterCommissionShare,
-      status: financials.totalPlatformFee === 0 ? RENTAL_STATES.CONFIRMED : RENTAL_STATES.PENDING_PAYMENT,
-      paymentStatus: financials.totalPlatformFee === 0 ? "pro_free" : "pending",
+      renterCommissionPaid: financials.rentoraFee === 0,
+
+      // State Machine & Agreement
+      status: financials.rentoraFee === 0 ? RENTAL_STATES.CONFIRMED : RENTAL_STATES.PAYMENT_PENDING,
+      paymentStatus: financials.rentoraFee === 0 ? "pro_free_confirmed" : "pending",
+      settlementType: "direct_p2p_with_pi_platform_fee",
+      isEscrowApplied: false,
+
+      // Formal Rental Agreement / Booking Summary
+      rentalAgreement: {
+        agreementId,
+        itemTitle: item.title,
+        ownerUsername: item.ownerUsername,
+        renterUsername: currentUser.username,
+        rentalPeriodDays: financials.daysCount,
+        startDate,
+        endDate,
+        rentalTotal: financials.rentalTotal,
+        deposit: financials.deposit,
+        rentoraFee: financials.rentoraFee,
+        piFeePaymentStatus: financials.rentoraFee === 0 ? "✓ Pro Verified (0 π)" : "Pending Pi Payment",
+        rentalPaymentMethod: "Direct P2P",
+        depositPaymentMethod: "Direct P2P",
+        terms: "Direct P2P settlement — rental fee and deposit are not processed or held by Rentora."
+      },
+
       isHandoverConfirmed: false,
       isReturnConfirmed: false,
       notes: bookingData.notes || '',
@@ -661,20 +672,22 @@ export function RentoraProvider({ children }) {
     return draftRental;
   };
 
-  // Payment Execution via Official Pi SDK
+  // Payment Execution via Official Pi SDK (Charges Rentora Fee Only)
   const executePiPaymentForRental = async (rentalId, draftRental) => {
     if (!draftRental) throw new Error("اطلاعات رزرو نامعتبر است.");
 
-    const feeAmount = Math.max(0, draftRental.totalPlatformFee || 0);
+    const feeAmount = Math.max(0, draftRental.rentoraFee !== undefined ? draftRental.rentoraFee : (draftRental.totalPlatformFee || 0));
     let paymentResult = { paymentId: 'pro_free', txid: '0x00000000', status: 'completed' };
 
     if (feeAmount > 0) {
       paymentResult = await piService.createPayment({
         paymentData: {
           amount: feeAmount,
-          memo: `Rentora Booking: ${draftRental.itemTitle.substring(0, 25)}`,
+          memo: `Rentora Fee #${draftRental.bookingNumber || draftRental.id.substring(0, 10)}`,
           metadata: {
+            type: 'rentora_platform_fee',
             rentalId: draftRental.id,
+            bookingNumber: draftRental.bookingNumber,
             itemId: draftRental.itemId,
             renterUid: draftRental.renterUid,
             ownerUid: draftRental.ownerUid,
@@ -685,30 +698,42 @@ export function RentoraProvider({ children }) {
       });
     }
 
+    const txid = paymentResult.txid || ('0x' + Math.random().toString(16).substring(2, 10));
+    const paymentId = paymentResult.paymentId || ('pi_pay_' + Date.now().toString(36));
+
     const confirmedRental = {
       ...draftRental,
       status: RENTAL_STATES.CONFIRMED,
       renterCommissionPaid: true,
       paymentStatus: feeAmount > 0 ? "paid_confirmed" : "pro_free_confirmed",
-      piPaymentId: paymentResult.paymentId || ('pi_pay_' + Date.now().toString(36)),
-      piTxRef: paymentResult.txid || ('0x' + Math.random().toString(16).substring(2, 10)),
-      paidAt: new Date().toISOString()
+      piPaymentId: paymentId,
+      piTxRef: txid,
+      paidAt: new Date().toISOString(),
+      rentalAgreement: {
+        ...(draftRental.rentalAgreement || {}),
+        piFeePaymentStatus: "✓ Confirmed (Pi Payment)",
+        piTxRef: txid,
+        piPaymentId: paymentId
+      }
     };
 
     if (feeAmount > 0) {
       const newTx = {
         id: "tx_" + Date.now(),
         rentalId: draftRental.id,
-        piPaymentId: confirmedRental.piPaymentId,
+        bookingNumber: draftRental.bookingNumber,
+        piPaymentId: paymentId,
         itemTitle: draftRental.itemTitle,
         renterUsername: draftRental.renterUsername,
         ownerUsername: draftRental.ownerUsername,
-        grossAmount: draftRental.baseAmount,
+        grossAmount: draftRental.rentalTotal || draftRental.baseAmount,
+        amount: feeAmount,
         platformFee: feeAmount,
+        type: 'rentora_platform_fee',
         payerRole: 'renter',
         totalCharged: feeAmount,
         status: "completed",
-        piTxRef: confirmedRental.piTxRef,
+        piTxRef: txid,
         blockchainVerified: true,
         timestamp: new Date().toISOString()
       };

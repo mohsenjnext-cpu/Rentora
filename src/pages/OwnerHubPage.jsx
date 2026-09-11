@@ -245,7 +245,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
                     {rental.startDate} ➔ {rental.endDate} ({rental.daysCount} {l('روز', 'days', 'أيام', '天')})
                   </div>
                   <div className="text-[11px] text-[#0F6E56] font-bold font-mono">
-                    {l('کرایه نقدی دریافتی در محل:', 'Cash payout at pickup:', 'المبلغ النقدي عند الاستلام:', '线下实收现金：')} {rental.baseAmount} π
+                    {l('مبلغ اجاره دریافتی مستقیم (P2P):', 'Direct P2P rental payout:', 'إجمالي الإيجار المباشر:', '线下实收租金：')} {rental.rentalTotal || rental.baseAmount} π
                   </div>
                 </div>
 

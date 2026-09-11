@@ -193,13 +193,13 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
               )}
             </button>
 
-            {/* Payment Ledger Icon */}
+            {/* Pi Activity & Ledger Icon */}
             {isAuthenticated && (
               <button
                 type="button"
                 onClick={() => setIsWalletModalOpen(true)}
                 className="p-2 rounded-lg bg-slate-100 dark:bg-[#1C1B30] text-slate-700 dark:text-slate-200 hover:bg-[#EEEDFE] dark:hover:bg-[#1E1B3D] transition cursor-pointer"
-                title={l('سوابق پرداخت (Pi Ledger)', 'Pi Ledger', 'سجل باي', 'Pi 交易账本')}
+                title={l('فعالیت‌ها و تراکنش‌های پای (Pi Activity)', 'Pi Activity & Ledger', 'نشاطات باي', 'Pi 链上账本')}
               >
                 <ReceiptText className="w-4 h-4 text-[#26215C] dark:text-[#EEEDFE] stroke-[1.8]" />
               </button>
