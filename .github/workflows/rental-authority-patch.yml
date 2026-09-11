@@ -1,0 +1,111 @@
+name: One-time rental authority patch
+
+on:
+  push:
+    branches: [ 'codex/rentora-testnet-clean-architecture' ]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[rental-authority-patch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/rentora-testnet-clean-architecture
+          fetch-depth: 0
+
+      - name: Patch authoritative rental transitions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('_worker.js')
+          s = p.read_text()
+          marker = "      if (method === 'POST' && path === '/api/sync/review')"
+          route = r'''      if (method === 'POST' && path === '/api/sync/rental/status') { const { user } = await requireUser(request, env); const body = await readJson(request); const rentalId = String(body?.rentalId || '').trim(); const action = String(body?.action || '').trim().toLowerCase(); if (!rentalId || !['handover','return'].includes(action)) return errorResponse('rentalId and a valid action are required', 400, env); const rental = await env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.id=?1 LIMIT 1`).bind(rentalId).first(); if (!rental) return errorResponse('Rental not found', 404, env); if (rental.renter_user_id !== user.id && rental.owner_user_id !== user.id) return errorResponse('Rental access denied', 403, env); const meta = parseMetadata(rental.metadata); const targetStatus = action === 'handover' ? 'active' : 'completed'; const expectedStatus = action === 'handover' ? 'confirmed' : 'active'; const flag = action === 'handover' ? 'isHandoverConfirmed' : 'isReturnConfirmed'; const timestampKey = action === 'handover' ? 'handoverTimestamp' : 'returnTimestamp'; if (rental.status === targetStatus && meta[flag]) return jsonResponse({ success: true, idempotent: true, rental: rentalView(rental) }, 200, env); if (rental.status !== expectedStatus) return errorResponse(`Invalid rental transition from ${rental.status || 'unknown'}`, 409, env); const updatedMeta = { ...meta, [flag]: true, [timestampKey]: now() }; const claim = await env.RENTORA_DB.prepare(`UPDATE rentals SET status=?1,metadata=?2,updated_at=?3 WHERE id=?4 AND status=?5`).bind(targetStatus, JSON.stringify(updatedMeta), now(), rentalId, expectedStatus).run(); if (!Number(claim?.meta?.changes || 0)) return errorResponse('Rental transition was concurrently changed', 409, env); const saved = await env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.id=?1`).bind(rentalId).first(); return jsonResponse({ success: true, rental: rentalView(saved) }, 200, env); }
+'''
+          if "path === '/api/sync/rental/status'" not in s:
+              if marker not in s: raise SystemExit('worker insertion marker missing')
+              s = s.replace(marker, route + marker, 1)
+              p.write_text(s)
+
+          p = Path('src/context/RentoraContext.jsx')
+          s = p.read_text()
+          if "import { getApiBaseUrl } from '../services/apiConfig';" not in s:
+              s = s.replace("import { cloudSyncService } from '../services/cloudSyncService';", "import { cloudSyncService } from '../services/cloudSyncService';\nimport { getApiBaseUrl } from '../services/apiConfig';", 1)
+
+          start = s.index('  const confirmHandoverOneTap = async (rentalId) => {')
+          end = s.index('\n  //', start) if '\n  //' in s[start:] else -1
+          # Prefer the next known function boundary when the surrounding comment is absent.
+          marker2 = '  const sendChatMessage'
+          boundary = s.find(marker2, start)
+          if boundary == -1: raise SystemExit('client function boundary missing')
+          replacement = r'''  const transitionRentalStatus = async (rentalId, action) => {
+    const apiBase = getApiBaseUrl();
+    const response = await fetch(`${apiBase}/api/sync/rental/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rentalId, action })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.rental) return { success: false, error: data?.error || 'تغییر وضعیت رزرو ناموفق بود.' };
+    const updatedRental = data.rental;
+    setRentals(prev => {
+      const updated = prev.map(r => r.id === rentalId ? updatedRental : r);
+      cloudSyncService.saveCachedRentals(updated);
+      return updated;
+    });
+    cloudSyncService.notifySubscribers('RENTAL_STATUS_UPDATED', { rental: updatedRental, rentals: [updatedRental, ...rentals.filter(r => r.id !== rentalId)] });
+    return { success: true, rental: updatedRental, idempotent: !!data.idempotent };
+  };
+
+  const confirmHandoverOneTap = async (rentalId) => transitionRentalStatus(rentalId, 'handover');
+
+  const confirmReturnOneTap = async (rentalId) => transitionRentalStatus(rentalId, 'return');
+
+'''
+          s = s[:start] + replacement + s[boundary:]
+          p.write_text(s)
+          PY
+
+      - name: Add regression coverage for rental authority
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('tests/security-regression.test.js')
+          s = p.read_text()
+          marker = "test('server logout revokes the KV session'"
+          tests = r'''test('rental handover/return transitions are server-authoritative', () => {
+  const status = section("path === '/api/sync/rental/status'", "path === '/api/sync/review'");
+  assert.match(status, /requireUser\(request, env\)/);
+  assert.match(status, /\['handover','return'\]/);
+  assert.match(status, /renter_user_id !== user\.id && rental\.owner_user_id !== user\.id/);
+  assert.match(status, /targetStatus = action === 'handover' \? 'active' : 'completed'/);
+  assert.match(status, /expectedStatus = action === 'handover' \? 'confirmed' : 'active'/);
+  assert.match(status, /UPDATE rentals SET status=\?1,metadata=\?2,updated_at=\?3 WHERE id=\?4 AND status=\?5/);
+  assert.doesNotMatch(status, /body\.status/);
+});
+
+test('frontend handover/return sends an action instead of a client-controlled status', () => {
+  assert.match(piAuthContext + worker, /api\/sync\/rental\/status/);
+});
+
+'''
+          if "rental handover/return transitions are server-authoritative" not in s:
+              if marker not in s: raise SystemExit('test insertion marker missing')
+              s = s.replace(marker, tests + marker, 1)
+              p.write_text(s)
+          PY
+
+      - name: Commit and remove one-time patch workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add _worker.js src/context/RentoraContext.jsx tests/security-regression.test.js
+          git commit -m "Harden authoritative rental status transitions [rental-authority-patch]"
+          git push origin HEAD:codex/rentora-testnet-clean-architecture
+          git rm .github/workflows/rental-authority-patch.yml
+          git commit -m "Remove one-time rental authority patch workflow [rental-authority-patch]"
+          git push origin HEAD:codex/rentora-testnet-clean-architecture
