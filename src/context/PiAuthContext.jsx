@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { piService } from '../services/piService';
 import { cloudSyncService } from '../services/cloudSyncService';
+import { getApiBaseUrl } from '../services/apiConfig';
 
 const PiAuthContext = createContext();
 const STORAGE_KEY_USER = 'rentora_live_v1_session';
@@ -12,9 +13,7 @@ export function PiAuthProvider({ children }) {
       const raw = localStorage.getItem(STORAGE_KEY_USER);
       const parsed = raw ? JSON.parse(raw) : null;
       return parsed?.sessionToken && parsed?.uid ? parsed : null;
-    } catch (_) {
-      return null;
-    }
+    } catch (_) { return null; }
   });
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -40,10 +39,7 @@ export function PiAuthProvider({ children }) {
     setAuthError(null);
     try {
       const authData = await piService.authenticate();
-      if (!authData?.sessionToken || !authData?.uid) {
-        throw new Error('سرور رنتورا یک نشست معتبر صادر نکرد.');
-      }
-
+      if (!authData?.sessionToken || !authData?.uid) throw new Error('سرور رنتورا یک نشست معتبر صادر نکرد.');
       const userObj = {
         ...authData.user,
         uid: authData.uid,
@@ -56,7 +52,6 @@ export function PiAuthProvider({ children }) {
         piWalletConnected: true,
         status: authData.user?.status || 'active'
       };
-
       setCurrentUser(userObj);
       setUsers(prev => {
         const updated = [userObj, ...prev.filter(u => u.uid !== userObj.uid)];
@@ -67,31 +62,50 @@ export function PiAuthProvider({ children }) {
       return userObj;
     } catch (err) {
       const message = err?.message || 'احراز هویت در Pi Browser با خطا مواجه شد.';
-      setAuthError(message === 'NOT_IN_PI_BROWSER'
-        ? 'ورود رسمی فقط در Pi Browser امکان‌پذیر است.'
-        : message);
+      setAuthError(message === 'NOT_IN_PI_BROWSER' ? 'ورود رسمی فقط در Pi Browser امکان‌پذیر است.' : message);
       throw err;
+    } finally { setIsLoading(false); }
+  };
+
+  const logout = async () => {
+    const sessionToken = currentUser?.sessionToken;
+    try {
+      const apiBase = getApiBaseUrl();
+      if (apiBase && sessionToken) {
+        await fetch(`${apiBase}/api/auth/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${sessionToken}` }
+        });
+      }
+    } catch (_) {
+      // Local logout still happens even if the network is unavailable.
     } finally {
-      setIsLoading(false);
+      setCurrentUser(null);
     }
   };
 
-  const logout = () => setCurrentUser(null);
-
-  const updateUserProfile = (updatedFields) => {
+  const updateUserProfile = async (updatedFields) => {
     if (!currentUser) return null;
     const allowed = {};
-    for (const key of ['displayName', 'bio', 'location']) {
+    for (const key of ['displayName', 'bio', 'location', 'avatar', 'phoneMasked']) {
       if (Object.prototype.hasOwnProperty.call(updatedFields || {}, key)) allowed[key] = updatedFields[key];
     }
-    const updated = { ...currentUser, ...allowed };
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
+    const response = await fetch(`${apiBase}/api/sync/user`, {
+      method: 'POST',
+      headers: piService.getSessionHeaders(),
+      body: JSON.stringify(allowed)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.user) throw new Error(data?.error || 'ذخیره پروفایل ناموفق بود.');
+    const updated = { ...currentUser, ...data.user, sessionToken: currentUser.sessionToken, isOfficialSdk: true, piWalletConnected: true };
     setCurrentUser(updated);
+    setUsers(prev => [updated, ...prev.filter(u => u.uid !== updated.uid)]);
     return updated;
   };
 
-  const toggleUserStatus = () => {
-    throw new Error('تغییر وضعیت کاربران فقط از طریق API مدیریتی سرور مجاز است.');
-  };
+  const toggleUserStatus = () => { throw new Error('تغییر وضعیت کاربران فقط از طریق API مدیریتی سرور مجاز است.'); };
 
   return (
     <PiAuthContext.Provider value={{
