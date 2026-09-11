@@ -8,6 +8,7 @@ const STORAGE_ITEMS_KEY = 'rentora_live_v1_items';
 const STORAGE_RENTALS_KEY = 'rentora_live_v1_rentals';
 const STORAGE_USERS_KEY = 'rentora_live_v1_users_dir';
 const STORAGE_REVIEWS_KEY = 'rentora_live_v1_reviews';
+const STORAGE_CHATS_KEY = 'rentora_live_v1_chats';
 const STORAGE_USER_KEY = 'rentora_live_v1_session';
 
 export class CloudSyncService {
@@ -54,6 +55,18 @@ export class CloudSyncService {
       const updated = [data, ...reviews.filter(r => r.id !== data.id)];
       this.saveCachedReviews(updated);
       this.notifySubscribers('REVIEW_SYNC', { reviews: updated, review: data });
+    } else if (type === 'CHAT_UPDATE' && data) {
+      const chats = this.getCachedChats();
+      const existingIdx = chats.findIndex(c => c.id === data.id);
+      let updated;
+      if (existingIdx !== -1) {
+        updated = [...chats];
+        updated[existingIdx] = data;
+      } else {
+        updated = [data, ...chats];
+      }
+      this.saveCachedChats(updated);
+      this.notifySubscribers('CHAT_SYNC', { chats: updated, chat: data });
     }
   }
 
@@ -190,11 +203,46 @@ export class CloudSyncService {
     return true;
   }
 
+  async broadcastChatMessage(chatThread) {
+    if (!chatThread || !chatThread.id) return false;
+
+    const cached = this.getCachedChats();
+    const existingIdx = cached.findIndex(c => c.id === chatThread.id);
+    let updated;
+    if (existingIdx !== -1) {
+      updated = [...cached];
+      updated[existingIdx] = chatThread;
+    } else {
+      updated = [chatThread, ...cached];
+    }
+    this.saveCachedChats(updated);
+
+    try {
+      this.broadcastChannel?.postMessage({ type: 'CHAT_UPDATE', data: chatThread });
+    } catch (e) {}
+
+    const apiBase = getApiBaseUrl();
+    if (apiBase) {
+      try {
+        const res = await fetch(`${apiBase}/api/sync/chat`, {
+          method: 'POST',
+          headers: this.getAuthHeaders(),
+          body: JSON.stringify(chatThread)
+        });
+        return res.ok;
+      } catch (e) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   async fetchSharedData() {
     const localItems = this.getCachedItems();
     const localRentals = this.getCachedRentals();
     const localUsers = this.getCachedUsers();
     const localReviews = this.getCachedReviews();
+    const localChats = this.getCachedChats();
 
     const apiBase = getApiBaseUrl();
     if (!apiBase) {
@@ -203,6 +251,7 @@ export class CloudSyncService {
         rentals: localRentals,
         users: localUsers,
         reviews: localReviews,
+        chats: localChats,
         transactions: []
       };
     }
@@ -256,11 +305,38 @@ export class CloudSyncService {
         const mergedReviews = Array.from(mergedReviewsMap.values());
         this.saveCachedReviews(mergedReviews);
 
+        // 5. Merge chats (Cross-Phone Real-Time Chat sync)
+        const remoteChats = Array.isArray(data.chats) ? data.chats : [];
+        const mergedChatsMap = new Map();
+        localChats.forEach(c => mergedChatsMap.set(c.id, c));
+        remoteChats.forEach(rc => {
+          const local = mergedChatsMap.get(rc.id);
+          if (!local) {
+            mergedChatsMap.set(rc.id, rc);
+          } else {
+            // Merge messages if remote has newer or more messages
+            const combinedMsgs = [...(local.messages || [])];
+            (rc.messages || []).forEach(rm => {
+              if (!combinedMsgs.some(m => m.id === rm.id)) {
+                combinedMsgs.push(rm);
+              }
+            });
+            mergedChatsMap.set(rc.id, {
+              ...local,
+              ...rc,
+              messages: combinedMsgs
+            });
+          }
+        });
+        const mergedChats = Array.from(mergedChatsMap.values());
+        this.saveCachedChats(mergedChats);
+
         return {
           items: mergedItems,
           rentals: mergedRentals,
           users: mergedUsers,
           reviews: mergedReviews,
+          chats: mergedChats,
           transactions: data.transactions || []
         };
       }
@@ -273,6 +349,7 @@ export class CloudSyncService {
       rentals: localRentals,
       users: localUsers,
       reviews: localReviews,
+      chats: localChats,
       transactions: []
     };
   }
@@ -284,20 +361,20 @@ export class CloudSyncService {
       clearInterval(this.pollInterval);
     }
 
-    // Gentle polling (every 30s) with change detection to prevent lag
+    // Polling every 12s for active sync
     this.pollInterval = setInterval(async () => {
       const apiBase = getApiBaseUrl();
       if (!apiBase) return;
 
       try {
         const data = await this.fetchSharedData();
-        const currentHash = `${data.items.length}_${data.users.length}_${data.rentals.length}_${data.reviews.length}`;
+        const currentHash = `${data.items.length}_${data.users.length}_${data.rentals.length}_${data.reviews.length}_${data.chats.length}`;
         if (currentHash !== this.lastSyncedHash) {
           this.lastSyncedHash = currentHash;
           this.notifySubscribers('DATA_SYNC', data);
         }
       } catch (e) {}
-    }, 30000);
+    }, 12000);
   }
 
   getCachedItems() {
@@ -376,34 +453,23 @@ export class CloudSyncService {
     } catch (e) {}
   }
 
-  async compressImage(file, maxWidth = 800, quality = 0.7) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (readerEvent) => {
-        const image = new Image();
-        image.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = image.width;
-          let height = image.height;
+  getCachedChats() {
+    try {
+      const saved = localStorage.getItem(STORAGE_CHATS_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
 
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(image, 0, 0, width, height);
-
-          resolve(canvas.toDataURL('image/jpeg', quality));
-        };
-        image.onerror = reject;
-        image.src = readerEvent.target.result;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  saveCachedChats(chats) {
+    try {
+      localStorage.setItem(STORAGE_CHATS_KEY, JSON.stringify(chats || []));
+    } catch (e) {}
   }
 
   subscribe(callback) {

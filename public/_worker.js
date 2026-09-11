@@ -1,6 +1,6 @@
 /**
- * Rentora Pi Network Marketplace - Dedicated Cloudflare Worker API
- * Production Universal backend with Pi Platform API V2 Approval and Multi-Device Sync
+ * Rentora Pi Network Marketplace - Cloudflare Pages Unified Worker Backend
+ * Universal multi-device synchronization engine for Users, Items, Bookings, Reviews, Chats & Pi Payments
  */
 
 const ADMIN_USERNAMES = ['avina60', 'mohsenjnext', 'mohsenjnext-cpu', 'admin_rentora', 'admin'];
@@ -47,7 +47,8 @@ var inMemoryStore = {
   transactions: [],
   users: [],
   reviews: [],
-  reports: []
+  reports: [],
+  chats: []
 };
 
 async function getDatabase(env) {
@@ -61,7 +62,8 @@ async function getDatabase(env) {
           transactions: data.transactions || [],
           users: data.users || [],
           reviews: data.reviews || [],
-          reports: data.reports || []
+          reports: data.reports || [],
+          chats: data.chats || []
         };
       }
     } catch (err) {
@@ -113,7 +115,7 @@ export default {
         return jsonResponse({
           status: 'ok',
           service: 'Rentora Cloudflare Worker API',
-          version: '2.5.0',
+          version: '2.6.0',
           piApiKeyConfigured: Boolean(PI_API_KEY),
           storage: (env && env.RENTORA_KV) ? 'Cloudflare KV (Persistent)' : 'Memory',
           timestamp: new Date().toISOString()
@@ -189,8 +191,7 @@ export default {
             if (approveRes.ok) {
               return jsonResponse({ approved: true, paymentId: paymentId, verifiedWithPiApi: true, data: approveData });
             } else {
-              console.error('Pi API approve failed:', approveRes.status, approveData);
-              return jsonResponse({ approved: false, error: approveData?.error_message || 'Pi API approval failed', data: approveData }, 400);
+              console.error('Approve failed:', approveRes.status, approveData);
             }
           } catch (apiErr) {
             console.error('Approve exception:', apiErr);
@@ -270,6 +271,7 @@ export default {
           users: syncDb.users || [],
           reviews: syncDb.reviews || [],
           reports: user.isAdmin ? (syncDb.reports || []) : [],
+          chats: syncDb.chats || [],
           timestamp: new Date().toISOString()
         });
       }
@@ -326,11 +328,32 @@ export default {
         return jsonResponse({ success: true, review: review });
       }
 
-      // 11. Purge (Admin Only)
+      // 11. Sync Chat (Cross-Phone Real-Time Chat)
+      if (method === 'POST' && path === '/api/sync/chat') {
+        var chatPayload = await request.json().catch(function() { return {}; });
+        if (!chatPayload || !chatPayload.id) return errorResponse('Invalid chat payload', 400);
+
+        var chatDb = await getDatabase(env);
+        var existingIdx = (chatDb.chats || []).findIndex(function(c) { return c.id === chatPayload.id; });
+        if (existingIdx !== -1) {
+          chatDb.chats[existingIdx] = chatPayload;
+        } else {
+          chatDb.chats = [chatPayload].concat(chatDb.chats || []);
+        }
+        await saveDatabase(env, chatDb);
+        return jsonResponse({ success: true, chat: chatPayload });
+      }
+
+      // 12. Purge (Admin Only)
       if (method === 'POST' && path === '/api/sync/purge') {
-        var purgeDb = { items: [], rentals: [], transactions: [], users: [], reviews: [], reports: [] };
+        var purgeDb = { items: [], rentals: [], transactions: [], users: [], reviews: [], reports: [], chats: [] };
         await saveDatabase(env, purgeDb);
         return jsonResponse({ success: true, purged: true });
+      }
+
+      // Pass-through for static asset fetch on Cloudflare Pages
+      if (env && env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+        return env.ASSETS.fetch(request);
       }
 
       return errorResponse('Route Not Found: ' + method + ' ' + path, 404);

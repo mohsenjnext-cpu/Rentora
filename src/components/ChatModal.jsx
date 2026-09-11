@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
-import { containsPhoneNumber, QUICK_QUESTIONS } from '../services/contactFilterService';
+import { cloudSyncService } from '../services/cloudSyncService';
+import { inspectMessageSafety, QUICK_QUESTIONS } from '../services/contactFilterService';
 import { 
   X, 
   Send, 
@@ -18,7 +19,8 @@ import {
   ArrowRight,
   ArrowLeft,
   User,
-  Clock
+  Clock,
+  RotateCw
 } from 'lucide-react';
 
 export default function ChatModal({ 
@@ -32,10 +34,10 @@ export default function ChatModal({
 }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
-  const { chats = [], sendChatMessage, isUserPro } = useRentora();
+  const { chats = [], sendChatMessage, isUserPro, refreshApp } = useRentora();
 
   const [messageText, setMessageText] = useState('');
-  const [filterWarning, setFilterWarning] = useState(false);
+  const [filterWarningMessage, setFilterWarningMessage] = useState('');
   const [selectedThread, setSelectedThread] = useState(null);
   const messagesEndRef = useRef(null);
 
@@ -70,9 +72,6 @@ export default function ChatModal({
       ? currentThread.ownerUsername
       : currentThread.renterUsername;
   }
-  if (!activeRecipient && !activeItem && myThreads.length > 0 && !selectedThread) {
-    // We are on thread list view
-  }
 
   const isRecipientPro = activeRecipient ? isUserPro(activeRecipient) : false;
   const messagesList = currentThread?.messages || [];
@@ -81,14 +80,27 @@ export default function ChatModal({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Real-time Chat Sync interval (every 3 seconds while chat is open)
   useEffect(() => {
-    if (isOpen) {
-      if (activeItem) {
-        setSelectedThread(null);
-      }
-      scrollToBottom();
+    if (!isOpen) return;
+
+    if (activeItem) {
+      setSelectedThread(null);
     }
-  }, [isOpen, activeItem, messagesList.length]);
+    scrollToBottom();
+
+    const interval = setInterval(async () => {
+      try {
+        await cloudSyncService.fetchSharedData();
+      } catch (e) {}
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [isOpen, activeItem]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messagesList.length]);
 
   if (!isOpen) return null;
 
@@ -101,24 +113,25 @@ export default function ChatModal({
     const text = (textToSend || messageText || '').trim();
     if (!text) return;
 
-    // Anti-bypass phone number check before booking
-    if (containsPhoneNumber(text)) {
-      setFilterWarning(true);
+    // Strict Anti-Bypass Filter Inspection
+    const safety = inspectMessageSafety(text);
+    if (safety.isViolating) {
+      setFilterWarningMessage(safety.message || t('chatPhoneWarning'));
       return;
     }
 
-    setFilterWarning(false);
+    setFilterWarningMessage('');
     try {
-      const sent = sendChatMessage({
+      sendChatMessage({
         recipientUsername: activeRecipient || 'pioneer',
         itemId: activeItem?.id || currentThread?.itemId || 'general',
         itemTitle: itemTitle || currentThread?.itemTitle || 'گفتگوی رنتورا',
         text: text
       });
       setMessageText('');
-      setTimeout(scrollToBottom, 50);
+      setTimeout(scrollToBottom, 60);
     } catch (e) {
-      console.warn(e);
+      setFilterWarningMessage(e.message || 'خطا در ارسال پیام.');
     }
   };
 
@@ -226,21 +239,21 @@ export default function ChatModal({
           </div>
         </div>
 
-        {/* Security / Policy Banner (Clean & Reassuring - No Confusing Lock) */}
+        {/* Security / Policy Banner */}
         <div className="p-2 px-3 bg-[#EEEDFE]/70 dark:bg-[#1E1B3D]/70 border-b border-[#7F77DD]/20 text-[10px] sm:text-[11px] text-[#26215C] dark:text-[#EEEDFE] flex items-center gap-2 font-medium">
           <ShieldCheck className="w-4 h-4 text-[#534AB7] dark:text-[#AFA9EC] shrink-0" />
           <span className="truncate">{t('chatNotice')}</span>
         </div>
 
-        {/* Phone Number Anti-Bypass Warning */}
-        {filterWarning && (
-          <div className="p-2.5 bg-rose-500/10 border-b border-rose-300/40 text-[11px] text-rose-700 dark:text-rose-300 flex items-center gap-2 font-semibold animate-fadeIn">
-            <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{t('chatPhoneWarning')}</span>
+        {/* Phone Number Anti-Bypass Alert Warning */}
+        {filterWarningMessage && (
+          <div className="p-2.5 bg-rose-500/10 border-b border-rose-300/40 text-[11px] text-rose-700 dark:text-rose-300 flex items-start gap-2 font-semibold animate-fadeIn">
+            <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <span className="leading-relaxed">{filterWarningMessage}</span>
           </div>
         )}
 
-        {/* THREAD LIST VIEW (If user opened from header with multiple conversations) */}
+        {/* THREAD LIST VIEW (If opened with multiple conversations) */}
         {isThreadListView ? (
           <div className="flex-1 p-3 overflow-y-auto space-y-2">
             {myThreads.map(th => {
@@ -385,7 +398,7 @@ export default function ChatModal({
               disabled={!isAuthenticated}
               onChange={(e) => {
                 setMessageText(e.target.value);
-                if (filterWarning) setFilterWarning(false);
+                if (filterWarningMessage) setFilterWarningMessage('');
               }}
               placeholder={isAuthenticated ? t('chatInputPlaceholder') : l('جهت ارسال پیام وارد شوید...', 'Sign in to chat...', 'سجل الدخول للمراسلة...', '登录后即可输入消息...')}
               className="flex-1 p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#121124] text-slate-900 dark:text-white focus:outline-none focus:border-[#534AB7] disabled:opacity-60"

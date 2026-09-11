@@ -36,13 +36,25 @@ export function inspectMessageSafety(rawText) {
   const normalized = normalizeText(rawText);
   const lowerCase = normalized.toLowerCase();
   
-  const strippedSeparators = lowerCase.replace(/[\s\-_.,،;:\\/()[\]{}|]/g, '');
+  // Strip all whitespace, dots, dashes, commas, colons, slashes to reveal hidden numbers
+  const strippedSeparators = lowerCase.replace(/[\s\-_.,،;:\\/()[\]{}|@+*#]/g, '');
 
-  // 1. PHONE NUMBER DETECTION
+  // 1. SEQUENCE OF 7 OR MORE DIGITS (Covers all phone and landline numbers)
+  if (/\d{7,}/.test(strippedSeparators)) {
+    return {
+      isViolating: true,
+      matchedType: 'phone_digits',
+      message: 'جهت امنیت شما و پیشگیری از کلاهبرداری، ارسال شماره تماس قبل از نهایی‌شدن رزرو در چت مسدود است. شماره تماس پس از تایید رزرو خودکار نمایش داده می‌شود.'
+    };
+  }
+
+  // 2. IRANIAN & INTERNATIONAL PHONE PATTERNS
   const phonePatterns = [
     /(?:(?:\+98|0098|98|0)?9\d{9})/,
-    /(?:(?:\+98|0098|98|0)?[1-8]\d{9})/,
-    /(?:09[0-9]{2}[ -.]?[0-9]{3}[ -.]?[0-9]{4})/
+    /(?:(?:\+98|0098|98|0)?[1-8]\d{8,9})/,
+    /(?:09[0-9]{2}[ -.]?[0-9]{3}[ -.]?[0-9]{4})/,
+    /09\d{2}\s*\d{3}\s*\d{4}/,
+    /9\d{2}\s*\d{3}\s*\d{4}/
   ];
 
   for (const regex of phonePatterns) {
@@ -50,71 +62,66 @@ export function inspectMessageSafety(rawText) {
       return {
         isViolating: true,
         matchedType: 'phone',
-        message: 'جهت حفظ امنیت و هماهنگی دقیق تحویل حضوری، شماره تماس پس از تایید رزرو به‌صورت خودکار در اختیارتان قرار می‌گیرد.'
+        message: 'ارسال شماره تماس مستقیم مجاز نیست. هماهنگی و دریافت شماره تماس پس از ثبت رزرو انجام می‌شود.'
       };
     }
   }
 
-  // Detect Spelled-Out Persian Digits
-  const persianNumberWordsRegex = /(صفر|نه|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نهصد|دویست|سیصد|چهارصد|پانصد|شصت|هفتاد|هشتاد|نود)[\s‌]+(نه|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نود|دوازده|سیزده|چهارده|پانزده|شانزده|هفده|هجده|نوزده)/i;
-  if (persianNumberWordsRegex.test(normalized) && (normalized.includes('تماس') || normalized.includes('شماره') || normalized.includes('زنگ') || normalized.includes('خط'))) {
-    return {
-      isViolating: true,
-      matchedType: 'phone_words',
-      message: 'تبادل شماره تماس خارج از سیستم رنتورا مجاز نیست.'
-    };
+  // 3. SPELLED-OUT PERSIAN NUMBER WORDS & CONTACT INTENT
+  const persianNumberWordsRegex = /(صفر|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|یازده|دوازده|سیزده|چهارده|پانزده|شانزده|هفده|هجده|نوزده|بیست|سی|چهل|پنجاه|شصت|هفتاد|هشتاد|نود|نهصد|دویست|سیصد|چهارصد|پانصد)/i;
+  const contactKeywords = ['شماره', 'تماس', 'زنگ', 'خط', 'تلفن', 'واتس', 'تلگرام', 'روبیکا', 'ایتا', 'بله', 'پیامک', 'اس ام اس', 'آیدی', 'ایدی', 'phone', 'call', 'whatsapp', 'telegram', 'contact'];
+
+  const hasContactKeyword = contactKeywords.some(kw => lowerCase.includes(kw));
+
+  if (hasContactKeyword) {
+    // If text contains contact intent and either digits or spelled out numbers
+    if (/\d{4,}/.test(strippedSeparators) || persianNumberWordsRegex.test(normalized)) {
+      return {
+        isViolating: true,
+        matchedType: 'contact_intent',
+        message: 'تبادل اطلاعات تماس یا پیام‌رسان‌های خارجی قبل از رزرو در پلتفرم رنتورا مسدود است.'
+      };
+    }
   }
 
-  // 2. EMAIL ADDRESSES
+  // 4. MESSAGING APPS & SOCIAL MEDIA HANDLES
+  const socialPatterns = [
+    /(?:تلگرام|telegram|t\.me|tg)[\s:؛=@_-]*[a-zA-Z0-9_]{3,}/i,
+    /(?:واتساپ|واتس‌اپ|whatsapp|wa\.me)[\s:؛=@_-]*[0-9a-zA-Z_]{3,}/i,
+    /(?:اینستاگرام|اینستا|instagram|insta|ig)[\s:؛=@_-]*[a-zA-Z0-9_.]{3,}/i,
+    /(?:روبیکا|rubika)[\s:؛=@_-]*[a-zA-Z0-9_.]{3,}/i,
+    /(?:ایتا|eitaa)[\s:؛=@_-]*[a-zA-Z0-9_.]{3,}/i,
+    /(?:بله|bale)[\s:؛=@_-]*[a-zA-Z0-9_.]{3,}/i,
+    /@(?:[a-zA-Z0-9_]{4,})/i
+  ];
+
+  for (const regex of socialPatterns) {
+    if (regex.test(normalized) || regex.test(lowerCase)) {
+      return {
+        isViolating: true,
+        matchedType: 'social',
+        message: 'ارسال آیدی یا لینک شبکه‌های اجتماعی مجاز نیست. لطفاً تمام هماهنگی‌ها را از طریق چت امن رنتورا انجام دهید.'
+      };
+    }
+  }
+
+  // 5. EMAIL ADDRESSES
   const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/i;
   if (emailPattern.test(normalized)) {
     return {
       isViolating: true,
       matchedType: 'email',
-      message: 'ارسال ایمیل مجاز نیست. جهت حفظ امنیت از گفتگوی درون برنامه استفاده نمایید.'
+      message: 'ارسال آدرس ایمیل در گفتگوی قبل از رزرو مجاز نیست.'
     };
   }
 
-  // 3. TELEGRAM DETECTION
-  const telegramPatterns = [
-    /t\.me\/[a-zA-Z0-9_+]{3,}/i,
-    /telegram\.me\/[a-zA-Z0-9_+]{3,}/i,
-    /(?:تلگرام[مهت]?|telegram|tg)[\s:؛=@_-]*[a-zA-Z0-9_]{3,}/i
-  ];
-
-  for (const regex of telegramPatterns) {
-    if (regex.test(normalized)) {
-      return {
-        isViolating: true,
-        matchedType: 'telegram',
-        message: 'ارسال آیدی تلگرام قبل از رزرو مسدود است.'
-      };
-    }
-  }
-
-  // 4. INSTAGRAM DETECTION
-  const instagramPatterns = [
-    /instagram\.com\/[a-zA-Z0-9_.]+/i,
-    /(?:اینستاگرام[مهت]?|اینستا[مهت]?|instagram|insta|ig)[\s:؛=@_-]*[a-zA-Z0-9_.]{3,}/i
-  ];
-
-  for (const regex of instagramPatterns) {
-    if (regex.test(normalized)) {
-      return {
-        isViolating: true,
-        matchedType: 'instagram',
-        message: 'ارسال پیج اینستاگرام در چت مجاز نیست.'
-      };
-    }
-  }
-
-  // 5. EXTERNAL LINKS
+  // 6. EXTERNAL URLS
   const urlPattern = /(https?:\/\/[^\s]+)|(www\.[^\s]+)/i;
   if (urlPattern.test(normalized)) {
     return {
       isViolating: true,
       matchedType: 'url',
-      message: 'ارسال پیوندها و لینک‌های خارجی در چت مجاز نمی‌باشد.'
+      message: 'ارسال لینک‌های خارجی در چت مجاز نمی‌باشد.'
     };
   }
 

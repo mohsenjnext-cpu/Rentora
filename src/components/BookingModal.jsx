@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
@@ -30,14 +30,20 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
     isUserPro
   } = useRentora();
 
-  // Booking Form State
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const nextWeek = new Date();
-  nextWeek.setDate(nextWeek.getDate() + 4);
+  // Helper date formatter
+  const getInitialDates = () => {
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(today.getDate() + 1);
+    const end = new Date(today);
+    end.setDate(today.getDate() + 4);
+    return {
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0]
+    };
+  };
 
-  const [startDate, setStartDate] = useState(tomorrow.toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(nextWeek.toISOString().split('T')[0]);
+  const [dates, setDates] = useState(getInitialDates);
   const [notes, setNotes] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,15 +51,24 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
   const [confirmedBookingData, setConfirmedBookingData] = useState(null);
   const [copiedPhone, setCopiedPhone] = useState(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      setDates(getInitialDates());
+      setErrorMessage('');
+      setConfirmedBookingData(null);
+    }
+  }, [isOpen]);
+
   if (!isOpen || !item) return null;
 
   const isOwnerPro = item.ownerIsPro || isUserPro(item.ownerUsername);
 
-  // Calculate live financials
+  // Calculate live financials accurately
   const pricing = calculatePricing({
+    pricePerDay: item.pricePerDay,
     dailyRate: item.pricePerDay,
-    startDate,
-    endDate,
+    startDate: dates.startDate,
+    endDate: dates.endDate,
     securityDeposit: item.deposit || 0,
     ownerUsername: item.ownerUsername
   });
@@ -79,7 +94,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
       return;
     }
 
-    if (new Date(endDate) <= new Date(startDate)) {
+    if (new Date(dates.endDate) <= new Date(dates.startDate)) {
       setErrorMessage(l(
         'تاریخ بازگشت باید پس از تاریخ تحویل باشد.',
         'Return date must be after pickup date.',
@@ -95,8 +110,10 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
       // 1. Create Draft Booking State
       const draftRental = await createRentalBooking({
         item,
-        startDate,
-        endDate,
+        itemId: item.id,
+        startDate: dates.startDate,
+        endDate: dates.endDate,
+        daysCount: pricing.daysCount,
         notes
       });
 
@@ -280,9 +297,9 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
                     <span className="text-[10px] text-slate-400 block mb-0.5">{t('bookingStartDate')}</span>
                     <input
                       type="date"
-                      value={startDate}
+                      value={dates.startDate}
                       min={new Date().toISOString().split('T')[0]}
-                      onChange={(e) => setStartDate(e.target.value)}
+                      onChange={(e) => setDates(prev => ({ ...prev, startDate: e.target.value }))}
                       className="w-full p-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono"
                     />
                   </div>
@@ -290,9 +307,9 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
                     <span className="text-[10px] text-slate-400 block mb-0.5">{t('bookingEndDate')}</span>
                     <input
                       type="date"
-                      value={endDate}
-                      min={startDate}
-                      onChange={(e) => setEndDate(e.target.value)}
+                      value={dates.endDate}
+                      min={dates.startDate}
+                      onChange={(e) => setDates(prev => ({ ...prev, endDate: e.target.value }))}
                       className="w-full p-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono"
                     />
                   </div>
@@ -303,7 +320,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
               <div className="p-3.5 rounded-xl rentora-card space-y-2 border border-slate-150 dark:border-slate-800">
                 <div className="flex justify-between items-center text-xs font-bold text-slate-800 dark:text-slate-200 pb-1.5 border-b border-slate-150 dark:border-slate-800">
                   <span>{t('priceBreakdown')}</span>
-                  <span className="text-[#534AB7] dark:text-[#AFA9EC] font-bold">{pricing.daysCount} {l('روز', 'days', 'أيام', '天')}</span>
+                  <span className="text-[#534AB7] dark:text-[#AFA9EC] font-bold font-mono">{pricing.daysCount} {l('روز', 'days', 'أيام', '天')}</span>
                 </div>
 
                 <div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-300">
@@ -314,7 +331,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
                   <span className="font-mono font-bold text-slate-900 dark:text-white">{pricing.baseRentalAmount} π</span>
                 </div>
 
-                {item.deposit > 0 && (
+                {parseFloat(item.deposit) > 0 && (
                   <div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-300">
                     <div>
                       <span>{t('securityDeposit')}</span>

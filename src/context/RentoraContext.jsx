@@ -132,25 +132,13 @@ export function RentoraProvider({ children }) {
     }
   });
 
-  // 9. In-App User Messages / Chats State
+  // 9. In-App User Messages / Chats State (Synced with Cloud)
   const [chats, setChats] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_PREFIX + 'chats_v2');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
+    return cloudSyncService.getCachedChats();
   });
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Initial cleanup of old test keys
-  useEffect(() => {
-    try {
-      localStorage.removeItem('rentora_db_pro_subs_v8');
-      localStorage.removeItem('rentora_db_chats_v1');
-    } catch (e) {}
-  }, []);
   useEffect(() => {
     try { localStorage.setItem(STORAGE_PREFIX + 'config_v9', JSON.stringify(platformConfig)); } catch (e) {}
   }, [platformConfig]);
@@ -172,7 +160,10 @@ export function RentoraProvider({ children }) {
   }, [proSubscriptions]);
 
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_PREFIX + 'chats_v2', JSON.stringify(chats)); } catch (e) {}
+    try { 
+      localStorage.setItem(STORAGE_PREFIX + 'chats_v2', JSON.stringify(chats)); 
+      cloudSyncService.saveCachedChats(chats);
+    } catch (e) {}
   }, [chats]);
 
   // Subscribe to Multi-Device Cloud Sync with change detection to prevent lag
@@ -187,6 +178,9 @@ export function RentoraProvider({ children }) {
         }
         if (Array.isArray(data.reviews)) {
           setReviews(prev => JSON.stringify(prev) === JSON.stringify(data.reviews) ? prev : data.reviews);
+        }
+        if (Array.isArray(data.chats)) {
+          setChats(prev => JSON.stringify(prev) === JSON.stringify(data.chats) ? prev : data.chats);
         }
       }
     });
@@ -210,6 +204,7 @@ export function RentoraProvider({ children }) {
         if (Array.isArray(data.items)) setItems(data.items);
         if (Array.isArray(data.rentals)) setRentals(data.rentals);
         if (Array.isArray(data.reviews)) setReviews(data.reviews);
+        if (Array.isArray(data.chats)) setChats(data.chats);
       }
       return { success: true };
     } catch (e) {
@@ -241,6 +236,7 @@ export function RentoraProvider({ children }) {
       cloudSyncService.saveCachedItems([]);
       cloudSyncService.saveCachedRentals([]);
       cloudSyncService.saveCachedReviews([]);
+      cloudSyncService.saveCachedChats([]);
 
       return { success: true };
     } catch (err) {
@@ -344,16 +340,41 @@ export function RentoraProvider({ children }) {
     return { success: true, plan };
   };
 
-  // Dynamic Pricing Calculation
-  const calculatePricing = (item, daysCount = 1) => {
-    if (!item) return { baseRentalAmount: 0, renterCommissionShare: 0, totalPlatformFee: 0, securityDeposit: 0, totalPaidByRenter: 0 };
+  // Unified Dynamic Pricing Calculation (Supports item object or params object)
+  const calculatePricing = (arg1, arg2 = 1) => {
+    let item = null;
+    let daysCount = 1;
+    let customDailyRate = null;
+    let customDeposit = null;
+    let customOwner = null;
 
-    const days = Math.max(1, parseInt(daysCount) || 1);
-    const dailyRate = parseFloat(item.pricePerDay) || 0;
+    if (arg1 && typeof arg1 === 'object') {
+      if (arg1.dailyRate !== undefined || arg1.startDate || arg1.pricePerDay !== undefined) {
+        customDailyRate = parseFloat(arg1.dailyRate !== undefined ? arg1.dailyRate : arg1.pricePerDay) || 0;
+        customDeposit = parseFloat(arg1.securityDeposit !== undefined ? arg1.securityDeposit : (arg1.deposit || 0));
+        customOwner = arg1.ownerUsername;
+        
+        if (arg1.startDate && arg1.endDate) {
+          const d1 = new Date(arg1.startDate);
+          const d2 = new Date(arg1.endDate);
+          const diff = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+          daysCount = Math.max(1, isNaN(diff) ? 1 : diff);
+        } else {
+          daysCount = Math.max(1, parseInt(arg1.daysCount) || 1);
+        }
+      } else {
+        item = arg1;
+        daysCount = Math.max(1, parseInt(arg2) || 1);
+      }
+    }
+
+    const days = Math.max(1, daysCount);
+    const dailyRate = customDailyRate !== null ? customDailyRate : (parseFloat(item?.pricePerDay) || 0);
     const baseRentalAmount = parseFloat((dailyRate * days).toFixed(4));
-    const depositAmount = parseFloat(item.deposit) || 0;
+    const depositAmount = customDeposit !== null ? customDeposit : (parseFloat(item?.deposit) || 0);
+    const ownerName = customOwner || item?.ownerUsername;
 
-    const ownerIsProPlan = isUserPro(item.ownerUsername);
+    const ownerIsProPlan = isUserPro(ownerName);
     const feePercentage = ownerIsProPlan 
       ? (platformConfig?.proFeePercentage || 0) 
       : (platformConfig?.platformFeePercentage || 5);
@@ -366,7 +387,10 @@ export function RentoraProvider({ children }) {
     }
 
     return {
+      daysCount: days,
+      dailyRate,
       baseRentalAmount,
+      platformFeePercentage: feePercentage,
       renterCommissionShare: fee,
       totalPlatformFee: fee,
       securityDeposit: depositAmount,
@@ -469,13 +493,23 @@ export function RentoraProvider({ children }) {
     });
   };
 
-  // Create Rental Booking Draft
+  // Create Rental Booking Draft (Supports item object or itemId)
   const createRentalBooking = async (bookingData) => {
     if (!currentUser) throw new Error("لطفاً ابتدا وارد حساب پای خود شوید.");
 
-    const { itemId, startDate, endDate, daysCount, notes } = bookingData;
-    const item = items.find(i => i.id === itemId);
+    const item = bookingData.item || items.find(i => i.id === bookingData.itemId);
     if (!item) throw new Error("کالای مورد نظر یافت نشد.");
+
+    const startDate = bookingData.startDate;
+    const endDate = bookingData.endDate;
+    let daysCount = bookingData.daysCount;
+    if (!daysCount && startDate && endDate) {
+      const d1 = new Date(startDate);
+      const d2 = new Date(endDate);
+      const diff = Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+      daysCount = Math.max(1, isNaN(diff) ? 1 : diff);
+    }
+    daysCount = Math.max(1, parseInt(daysCount) || 1);
 
     const financials = calculatePricing(item, daysCount);
 
@@ -491,7 +525,7 @@ export function RentoraProvider({ children }) {
       renterUid: currentUser.uid,
       startDate,
       endDate,
-      daysCount: parseInt(daysCount) || 1,
+      daysCount,
       pricePerDay: item.pricePerDay,
       baseAmount: financials.baseRentalAmount,
       totalPlatformFee: financials.totalPlatformFee,
@@ -505,7 +539,7 @@ export function RentoraProvider({ children }) {
       paymentStatus: financials.totalPlatformFee === 0 ? "pro_free" : "pending",
       isHandoverConfirmed: false,
       isReturnConfirmed: false,
-      notes,
+      notes: bookingData.notes || '',
       createdAt: new Date().toISOString()
     };
 
@@ -620,7 +654,7 @@ export function RentoraProvider({ children }) {
     return { success: true };
   };
 
-  // In-App Chat Messaging System
+  // In-App Chat Messaging System with Cloud Sync & Anti-Bypass Filter
   const sendChatMessage = (arg1, arg2) => {
     if (!currentUser) return;
 
@@ -642,6 +676,7 @@ export function RentoraProvider({ children }) {
 
     if (!messageText) return;
 
+    // Strict Anti-Bypass Security Check
     const safety = inspectMessageSafety(messageText);
     if (safety.isViolating) {
       throw new Error(safety.message);
@@ -649,7 +684,7 @@ export function RentoraProvider({ children }) {
 
     const now = new Date().toISOString();
     const newMsg = {
-      id: "msg_" + Date.now(),
+      id: "msg_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
       senderUsername: currentUser.username,
       senderUid: currentUser.uid || 'usr',
       text: messageText,
@@ -657,26 +692,32 @@ export function RentoraProvider({ children }) {
       read: true
     };
 
+    let targetThreadToBroadcast = null;
+
     setChats(prev => {
       let matched = false;
       const updated = prev.map(c => {
         if (targetChatId && c.id === targetChatId) {
           matched = true;
-          return { ...c, lastMessageAt: now, messages: [...(c.messages || []), newMsg] };
+          const updatedThread = { ...c, lastMessageAt: now, messages: [...(c.messages || []), newMsg] };
+          targetThreadToBroadcast = updatedThread;
+          return updatedThread;
         }
         if (recipientUsername && (
           (c.ownerUsername?.toLowerCase() === recipientUsername.toLowerCase() && c.renterUsername?.toLowerCase() === currentUser.username.toLowerCase()) ||
           (c.renterUsername?.toLowerCase() === recipientUsername.toLowerCase() && c.ownerUsername?.toLowerCase() === currentUser.username.toLowerCase())
         )) {
           matched = true;
-          return { ...c, lastMessageAt: now, messages: [...(c.messages || []), newMsg] };
+          const updatedThread = { ...c, lastMessageAt: now, messages: [...(c.messages || []), newMsg] };
+          targetThreadToBroadcast = updatedThread;
+          return updatedThread;
         }
         return c;
       });
 
       if (!matched) {
         const newChat = {
-          id: "chat_" + Date.now(),
+          id: "chat_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
           itemId: itemId || 'general',
           itemTitle: itemTitle,
           ownerUsername: recipientUsername || 'pioneer',
@@ -685,11 +726,16 @@ export function RentoraProvider({ children }) {
           lastMessageAt: now,
           unreadCount: 0
         };
+        targetThreadToBroadcast = newChat;
         return [newChat, ...updated];
       }
 
       return updated;
     });
+
+    if (targetThreadToBroadcast) {
+      cloudSyncService.broadcastChatMessage(targetThreadToBroadcast);
+    }
 
     return newMsg;
   };
