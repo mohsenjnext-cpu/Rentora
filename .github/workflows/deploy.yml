@@ -25,7 +25,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install dependencies
@@ -43,22 +43,27 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Verify Cloudflare credentials are available
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "CLOUDFLARE_API_TOKEN is missing"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "CLOUDFLARE_ACCOUNT_ID is missing"; exit 1; }
+          echo "Cloudflare credentials are present."
+
+      - name: Install Wrangler
+        run: npm install --no-save --no-package-lock wrangler@4
+
+      - name: Show Wrangler version
+        run: npx wrangler --version
+
       - name: Apply D1 schema
-        uses: cloudflare/wrangler-action@v3
-        with:
-          command: d1 execute RENTORA_DB --remote --file=db/schema.sql
+        run: npx wrangler d1 execute RENTORA_DB --remote --file=db/schema.sql
 
       - name: Apply D1 payment replay guards
-        uses: cloudflare/wrangler-action@v3
-        with:
-          command: d1 execute RENTORA_DB --remote --file=db/migrations/0003_payment_replay_guards.sql
+        run: npx wrangler d1 execute RENTORA_DB --remote --file=db/migrations/0003_payment_replay_guards.sql
 
       - name: Apply D1 listing status guards
-        uses: cloudflare/wrangler-action@v3
-        with:
-          command: d1 execute RENTORA_DB --remote --file=db/migrations/0004_listing_status_guards.sql
+        run: npx wrangler d1 execute RENTORA_DB --remote --file=db/migrations/0004_listing_status_guards.sql
 
       - name: Deploy Worker and static assets
-        uses: cloudflare/wrangler-action@v3
-        with:
-          command: deploy
+        run: npx wrangler deploy
