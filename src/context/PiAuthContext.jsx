@@ -6,6 +6,42 @@ import { getApiBaseUrl } from '../services/apiConfig';
 const PiAuthContext = createContext();
 const STORAGE_KEY_USER = 'rentora_live_v1_session';
 
+function installSessionFetchBridge() {
+  if (typeof window === 'undefined' || typeof window.fetch !== 'function') return () => {};
+  if (window.__rentoraSessionFetchBridge) return () => {};
+
+  const originalFetch = window.fetch.bind(window);
+  const apiBase = getApiBaseUrl();
+
+  window.fetch = async (input, init = {}) => {
+    try {
+      const url = typeof input === 'string' ? input : input?.url || '';
+      const isApiRequest = apiBase && url.startsWith(apiBase);
+      const isPiLogin = url.includes('/api/auth/pi-login');
+      if (isApiRequest && !isPiLogin) {
+        const raw = localStorage.getItem(STORAGE_KEY_USER);
+        const session = raw ? JSON.parse(raw) : null;
+        if (session?.sessionToken) {
+          const headers = new Headers(input instanceof Request ? input.headers : undefined);
+          new Headers(init.headers || {}).forEach((value, key) => headers.set(key, value));
+          headers.delete('x-pi-uid');
+          headers.delete('x-pi-username');
+          if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${session.sessionToken}`);
+          return originalFetch(input, { ...init, headers });
+        }
+      }
+    } catch (_) {}
+    return originalFetch(input, init);
+  };
+
+  window.__rentoraSessionFetchBridge = true;
+  return () => {
+    if (window.fetch === originalFetch) return;
+    window.fetch = originalFetch;
+    delete window.__rentoraSessionFetchBridge;
+  };
+}
+
 export function PiAuthProvider({ children }) {
   const [users, setUsers] = useState(() => cloudSyncService.getCachedUsers());
   const [currentUser, setCurrentUser] = useState(() => {
@@ -19,6 +55,11 @@ export function PiAuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+
+  useEffect(() => {
+    const restoreFetch = installSessionFetchBridge();
+    return restoreFetch;
+  }, []);
 
   useEffect(() => {
     try {
