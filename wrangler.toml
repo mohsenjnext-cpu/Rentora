@@ -3,6 +3,10 @@ main = "_worker.js"
 compatibility_date = "2024-09-01"
 compatibility_flags = ["nodejs_compat"]
 
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+
 [vars]
 PI_API_URL = "https://api.minepi.com/v2"
 NODE_ENV = "production"
