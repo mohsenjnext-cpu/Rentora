@@ -6,3 +6,8 @@ compatibility_flags = ["nodejs_compat"]
 [vars]
 PI_API_URL = "https://api.minepi.com/v2"
 NODE_ENV = "production"
+
+# Bindings are configured in Cloudflare. Do not commit database IDs or secrets.
+# Required for the hardened architecture:
+# - D1 binding: RENTORA_DB
+# - KV binding: RENTORA_KV
