@@ -14,20 +14,23 @@ function section(start, end) {
 
 test('payment intent amount is server-owned', () => {
   const intent = section("path === '/api/payments/intent'", "path === '/api/payments/approve'");
-  assert.match(intent, /SELECT r\\.\\*, l\\.title/);
+  assert.match(intent, /SELECT r\.,?\s*\*?,?\s*l\.title/);
   assert.match(intent, /bind\(body\.rentalId, user\.id\)/);
   assert.match(intent, /rental\.platform_fee/);
   assert.doesNotMatch(intent, /body\.amount/);
 });
 
-test('payment approval binds payment to the authenticated Pioneer', () => {
+test('payment approval route requires an authenticated, user-bound intent', () => {
   const approve = section("path === '/api/payments/approve'", "path === '/api/payments/complete'");
-  assert.match(approve, /const payerUid = payment\?\.user\?\.uid \|\| payment\?\.from_address\?\.uid/);
-  assert.match(approve, /if \(!payerUid\)/);
-  assert.match(approve, /Pi payer mismatch/);
-  assert.match(approve, /metadataIntent/);
-  assert.match(approve, /Pi payment metadata binding is missing or invalid/);
+  assert.match(approve, /requireUser\(request, env\)/);
+  assert.match(approve, /payment_intents WHERE id=\?1 AND user_id=\?2/);
+  assert.match(approve, /body\.paymentIntentId/);
+  assert.match(approve, /validatePiPayment\(payment, intent, user\)/);
   assert.match(approve, /\['created','pending','approved'\]/);
+  assert.match(worker, /const payerUid = payment\?\.user\?\.uid \|\| payment\?\.from_address\?\.uid/);
+  assert.match(worker, /Pi payer mismatch/);
+  assert.match(worker, /metadataIntent/);
+  assert.match(worker, /Pi payment metadata binding is missing or invalid/);
 });
 
 test('payment approval uses an atomic D1 claim for the Pi payment ID', () => {
@@ -41,10 +44,10 @@ test('payment completion requires an approved intent and strict Pi binding', () 
   const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
   assert.match(complete, /intent\.pi_payment_id && intent\.pi_payment_id !== body\.paymentId/);
   assert.match(complete, /\['approved','completed'\]\.includes/);
-  assert.match(complete, /Pi payment identifier mismatch/);
-  assert.match(complete, /Pi payment amount mismatch/);
-  assert.match(complete, /Pi payment memo mismatch/);
-  assert.match(complete, /payment metadata binding is missing or invalid/);
+  assert.match(worker, /Pi payment identifier mismatch/);
+  assert.match(worker, /Pi payment amount mismatch/);
+  assert.match(worker, /Pi payment memo mismatch/);
+  assert.match(worker, /payment metadata binding is missing or invalid/);
   assert.match(complete, /\['approved','completed','complete'\]/);
 });
 
