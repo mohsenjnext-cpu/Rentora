@@ -17,6 +17,10 @@ database_id = "d8dcbee6-e958-461a-b746-b460f1adb8d5"
 binding = "RENTORA_KV"
 id = "11f55c0a333b45cb81ce9a1692d2207a"
 
+[[r2_buckets]]
+binding = "RENTORA_MEDIA"
+bucket_name = "rentora-media"
+
 [vars]
 PI_API_URL = "https://api.minepi.com/v2"
 NODE_ENV = "production"

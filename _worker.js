@@ -1,7 +1,9 @@
 /**
  * Rentora Cloudflare Worker API.
  * Browser = UI. Worker = authority. D1 = marketplace source of truth.
- * KV = short-lived sessions/idempotency only. Pi API = payment authority.
+ * KV = short-lived sessions/idempotency/legacy image fallback.
+ * R2 = authoritative media storage (JPEG, PNG, WebP).
+ * Pi API = payment authority.
  */
 
 const SESSION_TTL = 60 * 60 * 8;
@@ -37,6 +39,41 @@ function isAdmin(uid, env) {
   const id = String(uid || '').trim().toLowerCase();
   return Boolean(id && (allowed.includes(id) || id === 'avina60' || id === 'mohsenjnext' || allowed.includes('avina60') || allowed.includes('mohsenjnext')));
 }
+function detectImageFormat(bytes) {
+  if (bytes.length >= 3 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'image/jpeg';
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 && bytes[4] === 0x0D && bytes[5] === 0x0A && bytes[6] === 0x1A && bytes[7] === 0x0A) return 'image/png';
+  if (bytes.length >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return 'image/webp';
+  return null;
+}
+function extractImageIds(images) {
+  if (!images) return [];
+  const list = Array.isArray(images) ? images : [images];
+  const ids = [];
+  for (const item of list) {
+    if (typeof item === 'string') {
+      const match = item.match(/\/api\/images\/(img_[a-zA-Z0-9_-]+)/);
+      if (match && match[1]) {
+        ids.push(match[1]);
+      }
+    }
+  }
+  return ids;
+}
+async function safeDeleteR2Image(imgId, env) {
+  if (!env?.RENTORA_MEDIA || !imgId) return;
+  try {
+    const pattern = `%${imgId}%`;
+    const [listingRef, userRef] = await Promise.all([
+      env.RENTORA_DB?.prepare("SELECT id FROM listings WHERE metadata LIKE ?1 AND status != 'deleted' LIMIT 1").bind(pattern).first().catch(() => null),
+      env.RENTORA_DB?.prepare("SELECT id FROM users WHERE (avatar_url LIKE ?1 OR metadata LIKE ?1) LIMIT 1").bind(pattern).first().catch(() => null)
+    ]);
+    if (!listingRef && !userRef) {
+      await env.RENTORA_MEDIA.delete(`images/${imgId}`);
+    }
+  } catch (err) {
+    console.warn('Safe delete R2 error', imgId, err?.message);
+  }
+}
 async function piFetch(env, path, options = {}) { if (!env?.PI_API_KEY) throw new Error('Pi server API key is not configured'); const base = String(env.PI_API_URL || 'https://api.minepi.com/v2').replace(/\/$/, ''); const headers = new Headers(options.headers || {}); headers.set('Authorization', `Key ${env.PI_API_KEY}`); if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json'); return fetch(`${base}${path}`, { ...options, headers }); }
 async function verifyPiAccessToken(env, accessToken) { if (!accessToken || !env?.PI_API_KEY) throw new Error('Pi authentication is unavailable'); const base = String(env.PI_API_URL || 'https://api.minepi.com/v2').replace(/\/$/, ''); const response = await fetch(`${base}/me`, { headers: { Authorization: `Bearer ${accessToken}` } }); const data = await response.json().catch(() => ({})); if (!response.ok || !data?.uid || !data?.username) throw new Error('Pi authentication rejected'); return data; }
 async function createSession(env, user) { const token = randomToken('sess'); const hash = await sha256(token); await env.RENTORA_KV.put(`session:${hash}`, JSON.stringify({ uid: user.pi_uid, username: user.username, role: user.role }), { expirationTtl: SESSION_TTL }); return token; }
@@ -64,7 +101,7 @@ function validatePiPayment(payment, intent, user) {
   return String(payment?.status || '').toLowerCase();
 }
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url); const path = url.pathname; const method = request.method; const origin = request.headers.get('Origin');
     const allowed = isOriginAllowed(origin, request.url, env);
     if (method === 'OPTIONS') {
@@ -85,7 +122,19 @@ export default {
       if (method === 'GET' && path === '/validation-key.txt') { return new Response('d8b5b506fc41746eb0aba3ff56bcb32ed03dd33bf0348a3af22893ba437b437544a2c160e3ba460b7986e1994fa19964a4beabd3ae98620da1f8b90dece4f7b8\n', { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' } }); }
       if (method === 'GET' && (path === '/privacy' || path === '/privacy.html')) { if (env?.ASSETS && typeof env.ASSETS.fetch === 'function') return env.ASSETS.fetch(new Request(new URL('/privacy.html', request.url), request)); }
       if (method === 'GET' && (path === '/terms' || path === '/terms.html' || path === '/tos')) { if (env?.ASSETS && typeof env.ASSETS.fetch === 'function') return env.ASSETS.fetch(new Request(new URL('/terms.html', request.url), request)); }
-      if (method === 'GET' && (path === '/api/health' || path === '/health')) { const dbReady = Boolean(env?.RENTORA_DB); const kvReady = Boolean(env?.RENTORA_KV); return jsonResponse({ status: dbReady && kvReady ? 'ok' : 'degraded', service: 'Rentora Cloudflare Worker', version: '4.1.0', storage: { d1: dbReady, kv: kvReady }, piApiKeyConfigured: Boolean(env?.PI_API_KEY), timestamp: now() }, dbReady && kvReady ? 200 : 503, env); }
+      if (method === 'GET' && (path === '/api/health' || path === '/health')) {
+        const dbReady = Boolean(env?.RENTORA_DB);
+        const kvReady = Boolean(env?.RENTORA_KV);
+        const r2Ready = Boolean(env?.RENTORA_MEDIA);
+        return jsonResponse({
+          status: dbReady && kvReady && r2Ready ? 'ok' : 'degraded',
+          service: 'Rentora Cloudflare Worker',
+          version: '4.2.0',
+          storage: { d1: dbReady, kv: kvReady, r2: r2Ready },
+          piApiKeyConfigured: Boolean(env?.PI_API_KEY),
+          timestamp: now()
+        }, dbReady && kvReady ? 200 : 503, env);
+      }
       if (method === 'GET' && path === '/api/sync/all') { requireBindings(env); let auth = null; try { auth = await requireUser(request, env); } catch (_) {} return jsonResponse(await listAll(env, auth), 200, env); }
       if (method === 'POST' && path === '/api/auth/pi-login') { requireBindings(env); const body = await readJson(request); const piUser = await verifyPiAccessToken(env, body.accessToken); const uid = String(piUser.uid); const username = cleanUsername(piUser.username); const existing = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE pi_uid=?1 LIMIT 1').bind(uid).first(); const role = (isAdmin(uid, env) || isAdmin(username, env)) ? 'admin' : 'user'; const userId = existing?.id || `usr_${crypto.randomUUID()}`; if (existing) await env.RENTORA_DB.prepare('UPDATE users SET username=?1, display_name=?2, role=?3, status=CASE WHEN status=\'suspended\' THEN status ELSE \'active\' END, metadata=?4, updated_at=?5 WHERE id=?6').bind(username, username, role, JSON.stringify({ kycStatus: 'verified', isOfficialSdk: true }), now(), userId).run(); else await env.RENTORA_DB.prepare('INSERT INTO users(id,pi_uid,username,display_name,role,status,metadata,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,\'active\',?6,?7,?7)').bind(userId, uid, username, username, role, JSON.stringify({ kycStatus: 'verified', isOfficialSdk: true }), now()).run(); const user = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE id=?1').bind(userId).first(); if (user.status !== 'active') return errorResponse('User is suspended', 403, env); const sessionToken = await createSession(env, user); return jsonResponse({ authenticated: true, verifiedWithPiApi: true, user: userView(user), sessionToken, uid, username }, 200, env); }
       if (method === 'POST' && path === '/api/auth/logout') { requireBindings(env); const header = request.headers.get('Authorization') || ''; if (header.startsWith('Bearer ')) { const token = header.slice(7).trim(); if (token) await env.RENTORA_KV.delete(`session:${await sha256(token)}`); } return jsonResponse({ success: true }, 200, env); }
@@ -105,8 +154,9 @@ export default {
       }
       if (method === 'POST' && path === '/api/payments/complete') {
         const { user } = await requireUser(request, env); const body = await readJson(request); if (!body.paymentId || !body.txid || !body.paymentIntentId) return errorResponse('paymentId, txid and paymentIntentId are required', 400, env);
-        const intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(body.paymentIntentId, user.id).first(); if (!intent) return errorResponse('Payment intent not found', 404, env); if (intent.status === 'completed') return jsonResponse({ completed: true, paymentId: intent.pi_payment_id, txid: intent.pi_txid, idempotent: true }, 200, env); if (intent.pi_payment_id && intent.pi_payment_id !== body.paymentId) return errorResponse('Payment ID does not match intent', 409, env); if (!['approved','completed'].includes(String(intent.status || '').toLowerCase())) return errorResponse('Payment intent is not approved for completion', 409, env);
-        const paymentResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}`); const payment = await paymentResponse.json().catch(() => ({})); if (!paymentResponse.ok) return errorResponse('Unable to verify Pi payment before completion', 502, env);
+        const intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(body.paymentIntentId, user.id).first(); if (!intent) return errorResponse('Payment intent not found', 404, env); if (intent.status === 'completed') return jsonResponse({ completed: true, paymentId: intent.pi_payment_id, txid: intent.pi_txid, idempotent: true }, 200, env);
+        if (intent.pi_payment_id && intent.pi_payment_id !== body.paymentId) return errorResponse('Payment ID does not match intent', 409, env); if (!['approved','completed'].includes(intent.status)) return errorResponse('Payment intent is not approved for completion', 409, env);
+        const paymentResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}`); const payment = await paymentResponse.json().catch(() => ({})); if (!paymentResponse.ok) return errorResponse('Unable to verify Pi payment', 502, env);
         const status = validatePiPayment(payment, { ...intent, pi_payment_id: body.paymentId }, user); if (!['approved','completed','complete'].includes(status)) return errorResponse(`Pi payment cannot be completed from status ${status || 'unknown'}`, 409, env);
         const completionResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}/complete`, { method: 'POST', body: JSON.stringify({ txid: body.txid }) }); const completion = await completionResponse.json().catch(() => ({})); if (!completionResponse.ok && !['completed','complete'].includes(status)) return errorResponse('Pi payment completion failed', 502, env, { details: completion });
         await env.RENTORA_DB.batch([env.RENTORA_DB.prepare(`UPDATE payment_intents SET pi_payment_id=?1,pi_txid=?2,status='completed',updated_at=?3 WHERE id=?4 AND status IN ('approved','completed')`).bind(body.paymentId, body.txid, now(), intent.id),env.RENTORA_DB.prepare(`UPDATE rentals SET payment_status='completed',status='confirmed',updated_at=?1 WHERE id=?2`).bind(now(), intent.rental_id),env.RENTORA_DB.prepare(`INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)`).bind(`tx_${crypto.randomUUID()}`, intent.id, body.paymentId, body.txid, user.id, intent.amount, now())]);
@@ -114,11 +164,31 @@ export default {
         return jsonResponse({ completed: true, paymentId: body.paymentId, txid: body.txid, data: completion }, 200, env);
       }
       if (method === 'POST' && path === '/api/payments/incomplete') { const { user } = await requireUser(request, env); const body = await readJson(request); const payment = body.payment || {}; if (payment.identifier) await env.RENTORA_KV.put(`incomplete-payment:${payment.identifier}`, JSON.stringify({ uid: user.pi_uid, payment, at: now() }), { expirationTtl: 60 * 60 * 24 * 7 }); return jsonResponse({ handled: true }, 200, env); }
-      if (method === 'POST' && path === '/api/sync/item') { const { user } = await requireUser(request, env); const item = await readJson(request); if (!item?.id || !String(item.title || '').trim()) return errorResponse('Invalid listing', 400, env); const existing = await env.RENTORA_DB.prepare('SELECT * FROM listings WHERE id=?1 LIMIT 1').bind(item.id).first(); if (existing) { if (existing.owner_user_id !== user.id && !isAdmin(user.pi_uid, env)) return errorResponse('Listing ownership denied', 403, env); const price = Number(existing.price_per_day); const deposit = Number(existing.deposit_amount); await env.RENTORA_DB.prepare(`UPDATE listings SET title=?1,description=?2,category=?3,location=?4,status=?5,metadata=?6,updated_at=?7 WHERE id=?8`).bind(String(item.title).trim(), item.description || '', item.category || null, item.location || null, item.status || 'active', JSON.stringify(item), now(), item.id).run(); return jsonResponse({ success: true, item: { ...item, pricePerDay: price, deposit } }, 200, env); } const price = Number(item.pricePerDay); const deposit = Number(item.deposit || 0); if (!Number.isFinite(price) || price < 0 || !Number.isFinite(deposit) || deposit < 0) return errorResponse('Invalid listing price', 400, env); await env.RENTORA_DB.prepare(`INSERT INTO listings(id,owner_user_id,title,description,category,location,price_per_day,deposit_amount,platform_fee_rate,status,metadata,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,'active',?10,?11,?11)`).bind(item.id, user.id, String(item.title).trim(), item.description || '', item.category || null, item.location || null, price, deposit, Number(env.PLATFORM_FEE_RATE || 0.05), JSON.stringify(item), now()).run(); return jsonResponse({ success: true, item }, 201, env); }
+      if (method === 'POST' && path === '/api/sync/item') { const { user } = await requireUser(request, env); const item = await readJson(request); if (!item?.id || !String(item.title || '').trim()) return errorResponse('Invalid listing', 400, env); const existing = await env.RENTORA_DB.prepare('SELECT * FROM listings WHERE id=?1 LIMIT 1').bind(item.id).first(); if (existing) { if (existing.owner_user_id !== user.id && !isAdmin(user.pi_uid, env)) return errorResponse('Listing ownership denied', 403, env); const isDeleting = item.status === 'deleted' && existing.status !== 'deleted'; const existingMeta = parseMetadata(existing.metadata); const price = Number(existing.price_per_day); const deposit = Number(existing.deposit_amount); await env.RENTORA_DB.prepare(`UPDATE listings SET title=?1,description=?2,category=?3,location=?4,status=?5,metadata=?6,updated_at=?7 WHERE id=?8`).bind(String(item.title).trim(), item.description || '', item.category || null, item.location || null, item.status || 'active', JSON.stringify(item), now(), item.id).run(); if (isDeleting) { const existingImgIds = extractImageIds(existingMeta.images); const newImgIds = extractImageIds(item.images); const allImgIds = [...new Set([...existingImgIds, ...newImgIds])]; for (const id of allImgIds) { if (ctx && typeof ctx.waitUntil === 'function') { ctx.waitUntil(safeDeleteR2Image(id, env)); } else { await safeDeleteR2Image(id, env); } } } return jsonResponse({ success: true, item: { ...item, pricePerDay: price, deposit } }, 200, env); } const price = Number(item.pricePerDay); const deposit = Number(item.deposit || 0); if (!Number.isFinite(price) || price < 0 || !Number.isFinite(deposit) || deposit < 0) return errorResponse('Invalid listing price', 400, env); await env.RENTORA_DB.prepare(`INSERT INTO listings(id,owner_user_id,title,description,category,location,price_per_day,deposit_amount,platform_fee_rate,status,metadata,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,'active',?10,?11,?11)`).bind(item.id, user.id, String(item.title).trim(), item.description || '', item.category || null, item.location || null, price, deposit, Number(env.PLATFORM_FEE_RATE || 0.05), JSON.stringify(item), now()).run(); return jsonResponse({ success: true, item }, 201, env); }
       if (method === 'POST' && path === '/api/sync/rental') { const { user } = await requireUser(request, env); const rental = await readJson(request); if (!rental?.id || !rental.itemId || !rental.startDate || !rental.endDate) return errorResponse('Invalid rental', 400, env); const listing = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.id=?1 AND l.status='active' LIMIT 1`).bind(rental.itemId).first(); if (!listing) return errorResponse('Listing not found', 404, env); if (listing.owner_user_id === user.id) return errorResponse('Owner cannot rent own listing', 409, env); const start = new Date(`${rental.startDate}T00:00:00Z`); const end = new Date(`${rental.endDate}T00:00:00Z`); const days = Math.max(1, Math.ceil((end - start) / 86400000)); const rentalAmount = Number(listing.price_per_day) * days; const deposit = Number(listing.deposit_amount); const fee = Math.max(0.0001, rentalAmount * Number(listing.platform_fee_rate || env.PLATFORM_FEE_RATE || 0.05)); const total = fee; const existing = await env.RENTORA_DB.prepare('SELECT id FROM rentals WHERE id=?1').bind(rental.id).first(); const metadata = JSON.stringify({ ...rental, id: rental.id, itemId: listing.id, ownerUid: listing.owner_pi_uid, ownerUsername: listing.owner_username, renterUid: user.pi_uid, renterUsername: user.username, daysCount: days, pricePerDay: listing.price_per_day, rentalTotal: rentalAmount, baseAmount: rentalAmount, deposit, securityDeposit: deposit, rentoraFee: fee, totalPlatformFee: fee, paymentDueToRentora: fee }); if (existing) { const own = await env.RENTORA_DB.prepare('SELECT renter_user_id FROM rentals WHERE id=?1').bind(rental.id).first(); if (!own || own.renter_user_id !== user.id) return errorResponse('Rental ownership denied', 403, env); await env.RENTORA_DB.prepare(`UPDATE rentals SET start_date=?1,end_date=?2,rental_amount=?3,deposit_amount=?4,platform_fee=?5,total_amount=?6,metadata=?7,updated_at=?8 WHERE id=?9`).bind(rental.startDate, rental.endDate, rentalAmount, deposit, fee, total, metadata, now(), rental.id).run(); } else { await env.RENTORA_DB.prepare(`INSERT INTO rentals(id,listing_id,renter_user_id,start_date,end_date,rental_amount,deposit_amount,platform_fee,total_amount,status,payment_status,metadata,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,'pending_payment','unpaid',?10,?11,?11)`).bind(rental.id, listing.id, user.id, rental.startDate, rental.endDate, rentalAmount, deposit, fee, total, metadata, now()).run(); } const saved = await env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.id=?1`).bind(rental.id).first(); return jsonResponse({ success: true, rental: rentalView(saved) }, 200, env); }
       if (method === 'POST' && path === '/api/sync/rental/status') { const { user } = await requireUser(request, env); const body = await readJson(request); const rentalId = String(body?.rentalId || '').trim(); const action = String(body?.action || '').trim().toLowerCase(); if (!rentalId || !['handover','return'].includes(action)) return errorResponse('rentalId and a valid action are required', 400, env); const rental = await env.RENTORA_DB.prepare(`SELECT r.*, l.owner_user_id, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.id=?1 LIMIT 1`).bind(rentalId).first(); if (!rental) return errorResponse('Rental not found', 404, env); if (rental.renter_user_id !== user.id && rental.owner_user_id !== user.id) return errorResponse('Rental access denied', 403, env); const meta = parseMetadata(rental.metadata); const targetStatus = action === 'handover' ? 'active' : 'completed'; const expectedStatus = action === 'handover' ? 'confirmed' : 'active'; const flag = action === 'handover' ? 'isHandoverConfirmed' : 'isReturnConfirmed'; const timestampKey = action === 'handover' ? 'handoverTimestamp' : 'returnTimestamp'; if (rental.status === targetStatus && meta[flag]) return jsonResponse({ success: true, idempotent: true, rental: rentalView(rental) }, 200, env); if (rental.status !== expectedStatus) return errorResponse(`Invalid rental transition from ${rental.status || 'unknown'}`, 409, env); const updatedMeta = { ...meta, [flag]: true, [timestampKey]: now() }; const updatedAt = now(); const claim = await env.RENTORA_DB.prepare(`UPDATE rentals SET status=?1,metadata=?2,updated_at=?3 WHERE id=?4 AND status=?5`).bind(targetStatus, JSON.stringify(updatedMeta), updatedAt, rentalId, expectedStatus).run(); if (!Number(claim?.meta?.changes || 0)) return errorResponse('Rental transition was concurrently changed', 409, env); const saved = await env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.id=?1`).bind(rentalId).first(); return jsonResponse({ success: true, rental: rentalView(saved) }, 200, env); }
       if (method === 'POST' && path === '/api/sync/review') { const { user } = await requireUser(request, env); const review = await readJson(request); const rental = review?.rentalId ? await env.RENTORA_DB.prepare('SELECT * FROM rentals WHERE id=?1').bind(review.rentalId).first() : null; if (!rental || rental.renter_user_id !== user.id || rental.status !== 'completed') return errorResponse('Review is not allowed for this rental', 403, env); if (!review.targetUid) return errorResponse('targetUid is required', 400, env); const target = await env.RENTORA_DB.prepare('SELECT id FROM users WHERE pi_uid=?1').bind(review.targetUid).first(); if (!target) return errorResponse('Review target not found', 404, env); const id = review.id || `rev_${crypto.randomUUID()}`; await env.RENTORA_DB.prepare(`INSERT INTO reviews(id,rental_id,author_user_id,target_user_id,rating,body,metadata,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(rental_id,author_user_id) DO UPDATE SET rating=excluded.rating,body=excluded.body,metadata=excluded.metadata`).bind(id, rental.id, user.id, target.id, Number(review.rating), review.body || '', JSON.stringify(review), now()).run(); return jsonResponse({ success: true, review }, 200, env); }
-      if (method === 'POST' && path === '/api/sync/user') { const { user } = await requireUser(request, env); const body = await readJson(request); const allowed = { displayName: body.displayName, avatar: body.avatar, bio: body.bio, phoneMasked: body.phoneMasked }; const meta = { ...parseMetadata(user.metadata), ...Object.fromEntries(Object.entries(allowed).filter(([,v]) => v !== undefined)) }; await env.RENTORA_DB.prepare('UPDATE users SET display_name=?1,avatar_url=?2,metadata=?3,updated_at=?4 WHERE id=?5').bind(String(body.displayName || user.display_name), body.avatar || user.avatar_url || null, JSON.stringify(meta), now(), user.id).run(); const updated = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE id=?1').bind(user.id).first(); return jsonResponse({ success: true, user: userView(updated) }, 200, env); }
+      if (method === 'POST' && path === '/api/sync/user') {
+        const { user } = await requireUser(request, env);
+        const body = await readJson(request);
+        const allowed = { displayName: body.displayName, avatar: body.avatar, bio: body.bio, phoneMasked: body.phoneMasked };
+        const meta = { ...parseMetadata(user.metadata), ...Object.fromEntries(Object.entries(allowed).filter(([,v]) => v !== undefined)) };
+        const newAvatar = body.avatar !== undefined ? body.avatar : user.avatar_url;
+        const oldAvatar = user.avatar_url;
+        await env.RENTORA_DB.prepare('UPDATE users SET display_name=?1,avatar_url=?2,metadata=?3,updated_at=?4 WHERE id=?5').bind(String(body.displayName || user.display_name), newAvatar || null, JSON.stringify(meta), now(), user.id).run();
+        if (oldAvatar && newAvatar && oldAvatar !== newAvatar) {
+          const oldIds = extractImageIds(oldAvatar);
+          for (const oldId of oldIds) {
+            if (ctx && typeof ctx.waitUntil === 'function') {
+              ctx.waitUntil(safeDeleteR2Image(oldId, env));
+            } else {
+              await safeDeleteR2Image(oldId, env);
+            }
+          }
+        }
+        const updated = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE id=?1').bind(user.id).first();
+        return jsonResponse({ success: true, user: userView(updated) }, 200, env);
+      }
       if (method === 'POST' && path === '/api/upload') {
         const { user } = await requireUser(request, env);
         const body = await readJson(request, 2 * 1024 * 1024);
@@ -130,41 +200,121 @@ export default {
         if (data.length > 2 * 1024 * 1024) {
           return errorResponse('Image file size exceeds the 2MB limit.', 413, env);
         }
+        let bytes;
+        try {
+          const commaIdx = data.indexOf(',');
+          const base64Data = commaIdx !== -1 ? data.slice(commaIdx + 1) : data;
+          const binaryStr = atob(base64Data);
+          bytes = new Uint8Array(binaryStr.length);
+          for (let i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+          }
+        } catch (_) {
+          return errorResponse('Invalid base64 image data', 400, env);
+        }
+        if (bytes.byteLength > 2 * 1024 * 1024) {
+          return errorResponse('Image file size exceeds the 2MB limit.', 413, env);
+        }
+        const detectedMime = detectImageFormat(bytes);
+        if (!detectedMime) {
+          return errorResponse('Invalid image magic bytes. Supported formats: JPEG, PNG, WebP.', 400, env);
+        }
+        const normalizedMime = (mimeType === 'image/jpg') ? 'image/jpeg' : mimeType;
+        if (detectedMime !== normalizedMime) {
+          return errorResponse(`MIME type mismatch: declared '${mimeType}' but detected '${detectedMime}'`, 400, env);
+        }
+        if (!env?.RENTORA_MEDIA) {
+          return errorResponse('Media storage binding required', 503, env);
+        }
         const imgId = `img_${crypto.randomUUID()}`;
-        await env.RENTORA_KV.put(`image:${imgId}`, data, {
-          expirationTtl: 60 * 60 * 24 * 365,
-          metadata: { mimeType, uploaderUid: user.pi_uid, createdAt: now() }
+        await env.RENTORA_MEDIA.put(`images/${imgId}`, bytes, {
+          httpMetadata: {
+            contentType: detectedMime,
+            cacheControl: 'public, max-age=31536000, immutable'
+          },
+          customMetadata: {
+            uploaderUid: user.pi_uid,
+            createdAt: now()
+          }
         });
         return jsonResponse({ success: true, id: imgId, url: `/api/images/${imgId}` }, 201, env);
       }
       if (method === 'GET' && path.startsWith('/api/images/')) {
         const imgId = path.slice('/api/images/'.length).trim();
-        if (!imgId) return errorResponse('Image ID required', 400, env);
-        const item = await env.RENTORA_KV.getWithMetadata(`image:${imgId}`);
-        if (!item?.value) return errorResponse('Image not found', 404, env);
-        const raw = item.value;
-        const mime = item.metadata?.mimeType || 'image/jpeg';
-        if (raw.startsWith('data:')) {
-          const commaIdx = raw.indexOf(',');
-          const base64Data = commaIdx !== -1 ? raw.slice(commaIdx + 1) : raw;
-          const binary = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-          return new Response(binary, {
-            status: 200,
-            headers: {
-              'Content-Type': mime,
-              'Cache-Control': 'public, max-age=31536000, immutable',
-              'X-Content-Type-Options': 'nosniff'
+        if (!imgId || !/^img_[a-zA-Z0-9_-]+$/.test(imgId)) return errorResponse('Invalid image ID', 400, env);
+
+        // 1. Primary: Retrieve from Cloudflare R2
+        if (env?.RENTORA_MEDIA) {
+          try {
+            const r2Obj = await env.RENTORA_MEDIA.get(`images/${imgId}`);
+            if (r2Obj) {
+              const mime = r2Obj.httpMetadata?.contentType || 'image/jpeg';
+              const cacheControl = r2Obj.httpMetadata?.cacheControl || 'public, max-age=31536000, immutable';
+              const headers = {
+                'Content-Type': mime,
+                'Cache-Control': cacheControl,
+                'X-Content-Type-Options': 'nosniff'
+              };
+              if (r2Obj.httpEtag) headers['ETag'] = r2Obj.httpEtag;
+              return new Response(r2Obj.body, { status: 200, headers });
             }
-          });
-        }
-        return new Response(raw, {
-          status: 200,
-          headers: {
-            'Content-Type': mime,
-            'Cache-Control': 'public, max-age=31536000, immutable',
-            'X-Content-Type-Options': 'nosniff'
+          } catch (r2Err) {
+            console.warn('R2 get error for', imgId, r2Err?.message);
           }
-        });
+        }
+
+        // 2. Backward-Compatible Fallback: Retrieve from Legacy Cloudflare KV
+        if (env?.RENTORA_KV) {
+          const item = await env.RENTORA_KV.getWithMetadata(`image:${imgId}`);
+          if (item?.value) {
+            const raw = item.value;
+            const mime = item.metadata?.mimeType || 'image/jpeg';
+            let binary;
+            if (typeof raw === 'string' && raw.startsWith('data:')) {
+              const commaIdx = raw.indexOf(',');
+              const base64Data = commaIdx !== -1 ? raw.slice(commaIdx + 1) : raw;
+              binary = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+            } else if (typeof raw === 'string') {
+              binary = Uint8Array.from(raw, c => c.charCodeAt(0));
+            } else {
+              binary = raw;
+            }
+
+            // 3. Lazy migration to R2 in background
+            if (env?.RENTORA_MEDIA && binary) {
+              const lazyMigrate = (async () => {
+                try {
+                  await env.RENTORA_MEDIA.put(`images/${imgId}`, binary, {
+                    httpMetadata: {
+                      contentType: mime,
+                      cacheControl: 'public, max-age=31536000, immutable'
+                    },
+                    customMetadata: {
+                      uploaderUid: item.metadata?.uploaderUid || 'legacy_migration',
+                      createdAt: item.metadata?.createdAt || now()
+                    }
+                  });
+                } catch (migErr) {
+                  console.warn('Lazy R2 migration failed for', imgId, migErr?.message);
+                }
+              })();
+              if (ctx && typeof ctx.waitUntil === 'function') {
+                ctx.waitUntil(lazyMigrate);
+              }
+            }
+
+            return new Response(binary, {
+              status: 200,
+              headers: {
+                'Content-Type': mime,
+                'Cache-Control': 'public, max-age=31536000, immutable',
+                'X-Content-Type-Options': 'nosniff'
+              }
+            });
+          }
+        }
+
+        return errorResponse('Image not found', 404, env);
       }
       if (method === 'POST' && path === '/api/sync/chat') {
         const { user } = await requireUser(request, env);
