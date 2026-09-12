@@ -168,7 +168,7 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
         type="file"
         ref={fileInputRef}
         onChange={handleImageFileChange}
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp"
         className="hidden"
       />
 

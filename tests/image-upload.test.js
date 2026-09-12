@@ -46,39 +46,67 @@ function createMockEnv(initialData = {}) {
   };
 }
 
-test('Image upload: Authenticated user uploads valid JPEG and receives URL', async () => {
+test('1. JPEG upload → PASS (201)', async () => {
   const { env, kvStore, user } = createMockEnv();
-  const token = 'valid_token';
+  const token = 'valid_token_jpeg';
   kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: user.pi_uid, username: user.username, role: user.role }));
 
-  const base64Data = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/';
   const res = await gateway.fetch(new Request('https://rentora.example/api/upload', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ data: base64Data, mimeType: 'image/jpeg' })
+    body: JSON.stringify({ data: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/', mimeType: 'image/jpeg' })
   }), env);
 
   assert.equal(res.status, 201);
   const json = await res.json();
   assert.equal(json.success, true);
   assert.match(json.url, /^\/api\/images\/img_/);
-
-  // Fetch the uploaded image
-  const imgRes = await gateway.fetch(new Request(`https://rentora.example${json.url}`, { method: 'GET' }), env);
-  assert.equal(imgRes.status, 200);
-  assert.equal(imgRes.headers.get('Content-Type'), 'image/jpeg');
-  assert.match(imgRes.headers.get('Cache-Control'), /immutable/);
 });
 
-test('Image upload: Invalid MIME type is rejected with 400', async () => {
+test('2. PNG upload → PASS (201)', async () => {
   const { env, kvStore, user } = createMockEnv();
-  const token = 'valid_token';
+  const token = 'valid_token_png';
   kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: user.pi_uid, username: user.username, role: user.role }));
 
   const res = await gateway.fetch(new Request('https://rentora.example/api/upload', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ data: 'dangerous_executable_content', mimeType: 'application/x-msdownload' })
+    body: JSON.stringify({ data: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', mimeType: 'image/png' })
+  }), env);
+
+  assert.equal(res.status, 201);
+  const json = await res.json();
+  assert.equal(json.success, true);
+  assert.match(json.url, /^\/api\/images\/img_/);
+});
+
+test('3. WebP upload → PASS (201)', async () => {
+  const { env, kvStore, user } = createMockEnv();
+  const token = 'valid_token_webp';
+  kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: user.pi_uid, username: user.username, role: user.role }));
+
+  const res = await gateway.fetch(new Request('https://rentora.example/api/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ data: 'data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', mimeType: 'image/webp' })
+  }), env);
+
+  assert.equal(res.status, 201);
+  const json = await res.json();
+  assert.equal(json.success, true);
+  assert.match(json.url, /^\/api\/images\/img_/);
+});
+
+test('4. SVG upload (image/svg+xml) → REJECTED (400)', async () => {
+  const { env, kvStore, user } = createMockEnv();
+  const token = 'valid_token_svg';
+  kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: user.pi_uid, username: user.username, role: user.role }));
+
+  const svgPayload = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxzY3JpcHQ+YWxlcnQoMSk8L3NjcmlwdD48L3N2Zz4=';
+  const res = await gateway.fetch(new Request('https://rentora.example/api/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ data: svgPayload, mimeType: 'image/svg+xml' })
   }), env);
 
   assert.equal(res.status, 400);
@@ -86,7 +114,7 @@ test('Image upload: Invalid MIME type is rejected with 400', async () => {
   assert.match(json.error, /Invalid image format/);
 });
 
-test('Image upload: Unauthenticated request is rejected with 401', async () => {
+test('5. Unauthenticated upload → 401', async () => {
   const { env } = createMockEnv();
 
   const res = await gateway.fetch(new Request('https://rentora.example/api/upload', {
@@ -96,4 +124,42 @@ test('Image upload: Unauthenticated request is rejected with 401', async () => {
   }), env);
 
   assert.equal(res.status, 401);
+  const json = await res.json();
+  assert.equal(json.error, 'Authentication required');
+});
+
+test('6. Oversized image (> 2MB) → 413', async () => {
+  const { env, kvStore, user } = createMockEnv();
+  const token = 'valid_token_large';
+  kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: user.pi_uid, username: user.username, role: user.role }));
+
+  // Create > 2MB dummy payload
+  const largeData = 'data:image/jpeg;base64,' + 'A'.repeat(2.5 * 1024 * 1024);
+  const res = await gateway.fetch(new Request('https://rentora.example/api/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ data: largeData, mimeType: 'image/jpeg' })
+  }), env);
+
+  assert.equal(res.status, 413);
+  const json = await res.json();
+  assert.match(json.error, /too large|exceeds/i);
+});
+
+test('7. Existing image retrieval → PASS (200)', async () => {
+  const { env, kvStore, user } = createMockEnv();
+  const token = 'valid_token_get';
+  kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: user.pi_uid, username: user.username, role: user.role }));
+
+  const res = await gateway.fetch(new Request('https://rentora.example/api/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ data: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/', mimeType: 'image/jpeg' })
+  }), env);
+
+  const json = await res.json();
+  const imgRes = await gateway.fetch(new Request(`https://rentora.example${json.url}`, { method: 'GET' }), env);
+  assert.equal(imgRes.status, 200);
+  assert.equal(imgRes.headers.get('Content-Type'), 'image/jpeg');
+  assert.match(imgRes.headers.get('Cache-Control'), /immutable/);
 });

@@ -207,7 +207,7 @@ export default function AvatarModal({ isOpen, onClose }) {
             <input
               type="file"
               ref={fileInputRef}
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               onChange={handleFileChange}
               className="hidden"
             />

@@ -28,7 +28,7 @@ function jsonResponse(data, status, env, origin) {
 }
 function errorResponse(message, status, env, extra, origin) { return jsonResponse({ error: message, ...(extra || {}) }, status ?? 400, env, origin); }
 function requireBindings(env) { if (!env?.RENTORA_DB) throw new Error('RENTORA_DB binding is required'); if (!env?.RENTORA_KV) throw new Error('RENTORA_KV binding is required'); }
-async function readJson(request) { const length = Number(request.headers.get('content-length') || 0); if (length > MAX_BODY_BYTES) throw new Error('Request body too large'); const text = await request.text(); if (new TextEncoder().encode(text).byteLength > MAX_BODY_BYTES) throw new Error('Request body too large'); if (!text) return {}; try { return JSON.parse(text); } catch (_) { throw new Error('Invalid JSON'); } }
+async function readJson(request, maxBytes = MAX_BODY_BYTES) { const length = Number(request.headers.get('content-length') || 0); if (length > maxBytes) throw Object.assign(new Error('Request body too large'), { status: 413 }); const text = await request.text(); if (new TextEncoder().encode(text).byteLength > maxBytes) throw Object.assign(new Error('Request body too large'), { status: 413 }); if (!text) return {}; try { return JSON.parse(text); } catch (_) { throw Object.assign(new Error('Invalid JSON'), { status: 400 }); } }
 async function sha256(value) { const bytes = new TextEncoder().encode(value); const digest = await crypto.subtle.digest('SHA-256', bytes); return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join(''); }
 function randomToken(prefix) { return `${prefix}_${crypto.randomUUID()}_${crypto.randomUUID()}`; }
 function adminUids(env) { return String(env?.ADMIN_PI_UIDS || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean); }
@@ -121,11 +121,11 @@ export default {
       if (method === 'POST' && path === '/api/sync/user') { const { user } = await requireUser(request, env); const body = await readJson(request); const allowed = { displayName: body.displayName, avatar: body.avatar, bio: body.bio, phoneMasked: body.phoneMasked }; const meta = { ...parseMetadata(user.metadata), ...Object.fromEntries(Object.entries(allowed).filter(([,v]) => v !== undefined)) }; await env.RENTORA_DB.prepare('UPDATE users SET display_name=?1,avatar_url=?2,metadata=?3,updated_at=?4 WHERE id=?5').bind(String(body.displayName || user.display_name), body.avatar || user.avatar_url || null, JSON.stringify(meta), now(), user.id).run(); const updated = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE id=?1').bind(user.id).first(); return jsonResponse({ success: true, user: userView(updated) }, 200, env); }
       if (method === 'POST' && path === '/api/upload') {
         const { user } = await requireUser(request, env);
-        const body = await readJson(request);
+        const body = await readJson(request, 2 * 1024 * 1024);
         const data = String(body?.data || '').trim();
         const mimeType = String(body?.mimeType || 'image/jpeg').trim().toLowerCase();
-        if (!data || !['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'].includes(mimeType)) {
-          return errorResponse('Invalid image format. Supported formats: JPEG, PNG, WebP, SVG.', 400, env);
+        if (!data || !['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+          return errorResponse('Invalid image format. Supported formats: JPEG, PNG, WebP.', 400, env);
         }
         if (data.length > 2 * 1024 * 1024) {
           return errorResponse('Image file size exceeds the 2MB limit.', 413, env);

@@ -122,8 +122,8 @@ export class CloudSyncService {
   }
 
   async compressImage(file, maxWidth = 800, quality = 0.7) {
-    if (!file || !file.type?.startsWith('image/')) {
-      throw new Error('فایل انتخابی باید تصویر باشد.');
+    if (!file || !['image/jpeg', 'image/png', 'image/webp', 'image/jpg'].includes(file.type?.toLowerCase())) {
+      throw new Error('فقط فرمت‌های تصویری JPEG، PNG و WebP مجاز هستند.');
     }
     if (file.size > 10 * 1024 * 1024) {
       throw new Error('حجم تصویر نباید بیشتر از ۱۰ مگابایت باشد.');
