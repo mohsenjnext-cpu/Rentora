@@ -3,11 +3,11 @@ import { getApiBaseUrl } from './apiConfig';
 class PiNetworkService {
   constructor() { this.isInitialized = false; this.isSandbox = true; }
   hasPiSdk() { return typeof window !== 'undefined' && !!window.Pi && typeof window.Pi.authenticate === 'function'; }
-  setSandboxMode(enabled = true) { this.isSandbox = Boolean(enabled); this.isInitialized = false; return this.init(); }
-  async init(sandbox = null) {
-    if (sandbox !== null) this.isSandbox = Boolean(sandbox);
+  setSandboxMode() { this.isSandbox = true; this.isInitialized = false; return this.init(); }
+  async init() {
+    this.isSandbox = true;
     if (!this.hasPiSdk() || typeof window.Pi.init !== 'function') return false;
-    try { window.Pi.init({ version: '2.0', sandbox: this.isSandbox }); this.isInitialized = true; return true; }
+    try { window.Pi.init({ version: '2.0', sandbox: true }); this.isInitialized = true; return true; }
     catch (_) { this.isInitialized = false; throw new Error('راه‌اندازی Pi SDK ناموفق بود.'); }
   }
   async authenticate(customIncompleteHandler = null) {

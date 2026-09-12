@@ -10,10 +10,7 @@ import {
   Copy, 
   Check, 
   Smartphone,
-  ExternalLink,
-  RotateCw,
-  FlaskConical,
-  Radio
+  FlaskConical
 } from 'lucide-react';
 
 export default function PiAuthModal() {
@@ -21,7 +18,6 @@ export default function PiAuthModal() {
   const { authModalOpen, setAuthModalOpen, loginWithPi, isLoading, authError } = usePiAuth();
   
   const [copied, setCopied] = useState(false);
-  const [isSandbox, setIsSandbox] = useState(false);
   const [isInsidePiBrowser, setIsInsidePiBrowser] = useState(() => piService.hasPiSdk());
 
   useEffect(() => {
@@ -46,11 +42,6 @@ export default function PiAuthModal() {
   }, [authModalOpen]);
 
   if (!authModalOpen) return null;
-
-  const handleToggleSandbox = (mode) => {
-    setIsSandbox(mode);
-    piService.setSandboxMode(mode);
-  };
 
   const handlePiOfficialLogin = async () => {
     await loginWithPi();
@@ -88,37 +79,20 @@ export default function PiAuthModal() {
             {l('احراز هویت رسمی در شبکه پای', 'Official Pi Network Authentication', 'المصادقة الرسمية عبر شبكة باي', 'Pi Network 官方权威认证')}
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            {l('ورود مستقیم پیشگامان با تایید هویت KYC', 'Direct Pioneer login with authentic KYC badge', 'تسجيل دخول مباشر وآمن لرواد باي الموثقين', '基于 Pi 区块链的 KYC 实名认证通道')}
+            {l('ورود مستقیم پیشگامان در شبکه تست‌نت پای', 'Direct Pioneer login on Pi Testnet', 'تسجيل دخول مباشر لرواد باي على شبكة الاختبار', '基于 Pi Testnet 测试网的安全登录通道')}
           </p>
         </div>
 
-        {/* Network Selector Tabs (Mainnet / Sandbox) */}
-        <div className="mb-3.5 p-1 bg-slate-100 dark:bg-[#1C1B30] rounded-xl flex items-center gap-1 text-xs">
-          <button
-            type="button"
-            onClick={() => handleToggleSandbox(false)}
-            className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-              !isSandbox 
-                ? 'bg-white dark:bg-[#26215C] text-[#26215C] dark:text-white shadow-2xs' 
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-[#0F6E56]" />
-            <span>{l('شبکه اصلی (Mainnet)', 'Mainnet', 'الشبكة الرئيسية', '主网模式')}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleToggleSandbox(true)}
-            className={`flex-1 py-1.5 px-2 rounded-lg font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-              isSandbox 
-                ? 'bg-amber-400 text-[#26215C] shadow-2xs' 
-                : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            <FlaskConical className="w-3.5 h-3.5" />
-            <span>{l('سندباکس تستی (Sandbox)', 'Testnet Sandbox', 'وضع الاختبار', '沙盒测试')}</span>
-          </button>
+        {/* Network Badge: Pi Testnet / Sandbox Only */}
+        <div className="mb-3.5 p-2 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900/60 rounded-xl flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300 font-bold">
+            <FlaskConical className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            <span>{l('شبکه تست‌نت پای (Pi Testnet / Sandbox)', 'Pi Testnet / Sandbox Mode', 'شبكة باي التجريبية (Testnet)', 'Pi Testnet 测试网模式')}</span>
+          </div>
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 border border-purple-300 dark:border-purple-700">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            {l('فعال', 'Active', 'نشط', '已启用')}
+          </span>
         </div>
 
         {/* Error Alert */}
@@ -137,10 +111,10 @@ export default function PiAuthModal() {
               <ShieldCheck className="w-4 h-4 shrink-0 text-[#0F6E56] dark:text-[#48D2A8]" />
               <span className="leading-relaxed">
                 {l(
-                  isSandbox ? 'حالت سندباکس توسعه فعال است. روی دکمه زیر کلیک کنید.' : 'محیط رسمی Pi Browser شناسایی شد. روی دکمه زیر کلیک کنید.',
-                  isSandbox ? 'Sandbox mode active. Tap below to authenticate.' : 'Pi Browser detected. Tap below to authenticate.',
-                  isSandbox ? 'وضع الاختبار مفعل. اضغط بالأسفل للمصادقة.' : 'تم التعرف على متصفح باي. اضغط بالأسفل للمصادقة.',
-                  isSandbox ? '沙盒测试环境已启用，点击下方按钮登录。' : '已检测到 Pi 浏览器，点击下方按钮一键登录。'
+                  'محیط رسمی Pi Browser شناسایی شد. روی دکمه زیر کلیک کنید.',
+                  'Pi Browser detected. Tap below to authenticate.',
+                  'تم التعرف على متصفح باي. اضغط بالأسفل للمصادقة.',
+                  '已检测到 Pi 浏览器，点击下方按钮一键登录。'
                 )}
               </span>
             </div>
