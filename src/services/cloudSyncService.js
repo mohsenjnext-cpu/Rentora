@@ -112,76 +112,144 @@ export class CloudSyncService {
         const userRaw = localStorage.getItem(STORAGE_USER_KEY);
         if (userRaw) {
           const u = JSON.parse(userRaw);
-          if (u.uid) headers['x-pi-uid'] = u.uid;
-          if (u.username) headers['x-pi-username'] = u.username;
+          if (u.sessionToken) {
+            headers['Authorization'] = `Bearer ${u.sessionToken}`;
+          }
         }
       }
     } catch (e) {}
     return headers;
   }
 
+  async compressImage(file, maxWidth = 800, quality = 0.7) {
+    if (!file || !file.type?.startsWith('image/')) {
+      throw new Error('فایل انتخابی باید تصویر باشد.');
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('حجم تصویر نباید بیشتر از ۱۰ مگابایت باشد.');
+    }
+
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed);
+        };
+        img.onerror = () => reject(new Error('خطا در پردازش تصویر.'));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error('خطا در خواندن فایل تصویر.'));
+      reader.readAsDataURL(file);
+    });
+
+    const apiBase = getApiBaseUrl();
+    if (apiBase) {
+      try {
+        const res = await fetch(`${apiBase}/api/upload`, {
+          method: 'POST',
+          headers: this.getAuthHeaders(),
+          body: JSON.stringify({ data: dataUrl, mimeType: 'image/jpeg' })
+        });
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && json?.url) {
+          return json.url;
+        }
+      } catch (_) {}
+    }
+    return dataUrl;
+  }
+
   async broadcastUserProfile(userObj) {
     if (!userObj || !userObj.username) return false;
     
-    // 1. Save to local cache
+    // 1. Remote Cloudflare backend
+    const apiBase = getApiBaseUrl();
+    if (apiBase) {
+      const res = await fetch(`${apiBase}/api/sync/user`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(userObj)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success !== true) {
+        throw new Error(data?.error || 'خطا در ذخیره پروفایل کاربر در سرور');
+      }
+      if (data.user) userObj = data.user;
+    }
+
+    // 2. Save to local cache
     const cachedUsers = this.getCachedUsers();
     const updatedUsers = [userObj, ...cachedUsers.filter(u => u.username?.toLowerCase() !== userObj.username?.toLowerCase())];
     this.saveCachedUsers(updatedUsers);
 
-    // 2. Broadcast via BroadcastChannel
+    // 3. Broadcast via BroadcastChannel
     try {
       this.broadcastChannel?.postMessage({ type: 'USER_PROFILE', data: userObj });
     } catch (e) {}
 
-    // 3. Broadcast to remote Cloudflare backend
-    const apiBase = getApiBaseUrl();
-    if (apiBase) {
-      try {
-        const res = await fetch(`${apiBase}/api/sync/user`, {
-          method: 'POST',
-          headers: this.getAuthHeaders(),
-          body: JSON.stringify(userObj)
-        });
-        return res.ok;
-      } catch (e) {
-        return false;
-      }
-    }
-    return true;
+    return userObj;
   }
 
   async broadcastNewItem(item) {
-    if (!item || !item.id) return false;
+    if (!item || !item.id) throw new Error('Invalid item payload');
 
-    // 1. Save to local cache
+    // 1. Broadcast to Cloudflare Backend
+    const apiBase = getApiBaseUrl();
+    if (apiBase) {
+      const res = await fetch(`${apiBase}/api/sync/item`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(item)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success !== true) {
+        throw new Error(data?.error || 'خطا در ثبت آگهی در سرور');
+      }
+      if (data.item) item = data.item;
+    }
+
+    // 2. Save to local cache on success
     const cached = this.getCachedItems();
     const updated = [item, ...cached.filter(i => i.id !== item.id)];
     this.saveCachedItems(updated);
 
-    // 2. Broadcast via BroadcastChannel
+    // 3. Broadcast via BroadcastChannel
     try {
       this.broadcastChannel?.postMessage({ type: 'NEW_ITEM', data: item });
     } catch (e) {}
 
-    // 3. Broadcast to Cloudflare Backend
-    const apiBase = getApiBaseUrl();
-    if (apiBase) {
-      try {
-        const res = await fetch(`${apiBase}/api/sync/item`, {
-          method: 'POST',
-          headers: this.getAuthHeaders(),
-          body: JSON.stringify(item)
-        });
-        return res.ok;
-      } catch (e) {
-        return false;
-      }
-    }
-    return true;
+    return item;
   }
 
   async broadcastNewRental(rental) {
-    if (!rental || !rental.id) return false;
+    if (!rental || !rental.id) throw new Error('Invalid rental payload');
+
+    const apiBase = getApiBaseUrl();
+    if (apiBase) {
+      const res = await fetch(`${apiBase}/api/sync/rental`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(rental)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success !== true) {
+        throw new Error(data?.error || 'خطا در ثبت رزرو در سرور');
+      }
+      if (data.rental) rental = data.rental;
+    }
 
     const cached = this.getCachedRentals();
     const updated = [rental, ...cached.filter(r => r.id !== rental.id)];
@@ -191,20 +259,7 @@ export class CloudSyncService {
       this.broadcastChannel?.postMessage({ type: 'RENTAL_UPDATE', data: rental });
     } catch (e) {}
 
-    const apiBase = getApiBaseUrl();
-    if (apiBase) {
-      try {
-        const res = await fetch(`${apiBase}/api/sync/rental`, {
-          method: 'POST',
-          headers: this.getAuthHeaders(),
-          body: JSON.stringify(rental)
-        });
-        return res.ok;
-      } catch (e) {
-        return false;
-      }
-    }
-    return true;
+    return rental;
   }
 
   async broadcastRentalUpdate(rental) {
@@ -212,7 +267,21 @@ export class CloudSyncService {
   }
 
   async broadcastReview(review) {
-    if (!review || !review.id) return false;
+    if (!review || !review.id) throw new Error('Invalid review payload');
+
+    const apiBase = getApiBaseUrl();
+    if (apiBase) {
+      const res = await fetch(`${apiBase}/api/sync/review`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(review)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success !== true) {
+        throw new Error(data?.error || 'خطا در ثبت نظر در سرور');
+      }
+      if (data.review) review = data.review;
+    }
 
     const cached = this.getCachedReviews();
     const updated = [review, ...cached.filter(r => r.id !== review.id)];
@@ -222,24 +291,29 @@ export class CloudSyncService {
       this.broadcastChannel?.postMessage({ type: 'REVIEW_ADDED', data: review });
     } catch (e) {}
 
-    const apiBase = getApiBaseUrl();
-    if (apiBase) {
-      try {
-        const res = await fetch(`${apiBase}/api/sync/review`, {
-          method: 'POST',
-          headers: this.getAuthHeaders(),
-          body: JSON.stringify(review)
-        });
-        return res.ok;
-      } catch (e) {
-        return false;
-      }
-    }
-    return true;
+    return review;
   }
 
   async broadcastChatMessage(chatThread) {
-    if (!chatThread || !chatThread.id) return false;
+    if (!chatThread || !chatThread.id) throw new Error('Invalid chat payload');
+
+    const apiBase = getApiBaseUrl();
+    if (apiBase) {
+      const res = await fetch(`${apiBase}/api/sync/chat?_t=${Date.now()}`, {
+        method: 'POST',
+        headers: {
+          ...this.getAuthHeaders(),
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
+        body: JSON.stringify(chatThread),
+        cache: 'no-store'
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success !== true) {
+        throw new Error(data?.error || 'خطا در ارسال پیام به سرور');
+      }
+    }
 
     const cached = this.getCachedChats();
     const p1 = (chatThread.ownerUsername || '').toLowerCase();
@@ -268,29 +342,29 @@ export class CloudSyncService {
       this.broadcastChannel?.postMessage({ type: 'CHAT_UPDATE', data: chatThread });
     } catch (e) {}
 
-    const apiBase = getApiBaseUrl();
-    if (apiBase) {
-      try {
-        const res = await fetch(`${apiBase}/api/sync/chat?_t=${Date.now()}`, {
-          method: 'POST',
-          headers: {
-            ...this.getAuthHeaders(),
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache'
-          },
-          body: JSON.stringify(chatThread),
-          cache: 'no-store'
-        });
-        return res.ok;
-      } catch (e) {
-        return false;
-      }
-    }
-    return true;
+    return chatThread;
   }
 
   async deleteChatThread(threadId) {
     if (!threadId) return false;
+
+    const apiBase = getApiBaseUrl();
+    if (apiBase) {
+      const res = await fetch(`${apiBase}/api/sync/chat/delete?_t=${Date.now()}`, {
+        method: 'POST',
+        headers: {
+          ...this.getAuthHeaders(),
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
+        body: JSON.stringify({ id: threadId }),
+        cache: 'no-store'
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success !== true) {
+        throw new Error(data?.error || 'خطا در حذف گفتگو از سرور');
+      }
+    }
 
     const cached = this.getCachedChats();
     const updated = cached.filter(c => c.id !== threadId);
@@ -300,24 +374,6 @@ export class CloudSyncService {
       this.broadcastChannel?.postMessage({ type: 'CHAT_DELETED', data: { id: threadId } });
     } catch (e) {}
 
-    const apiBase = getApiBaseUrl();
-    if (apiBase) {
-      try {
-        const res = await fetch(`${apiBase}/api/sync/chat/delete?_t=${Date.now()}`, {
-          method: 'POST',
-          headers: {
-            ...this.getAuthHeaders(),
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache'
-          },
-          body: JSON.stringify({ id: threadId }),
-          cache: 'no-store'
-        });
-        return res.ok;
-      } catch (e) {
-        return false;
-      }
-    }
     return true;
   }
 

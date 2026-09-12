@@ -91,39 +91,54 @@ function userView(row) {
 }
 
 async function safeSync(request, env) {
-  const user = await requireUser(request, env);
-  const allowed = String(env.ADMIN_PI_UIDS || '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean);
-  const uName = String(user.username || '').toLowerCase();
-  const uId = String(user.pi_uid || '').toLowerCase();
-  const isAdmin = user.role === 'admin' || allowed.includes(uId) || allowed.includes(uName) || uName === 'avina60' || uName === 'mohsenjnext';
+  let user = null;
+  const authHeader = request.headers.get('Authorization') || '';
+  if (authHeader.startsWith('Bearer ')) {
+    user = await requireUser(request, env);
+  }
 
-  const [items, rentals, transactions, reviews, chats] = await Promise.all([
+  const [items, reviews] = await Promise.all([
     env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).all(),
-    env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.renter_user_id=?1 OR r.owner_user_id=?1 ORDER BY r.created_at DESC`).bind(user.id).all(),
-    env.RENTORA_DB.prepare(`SELECT t.*, u.pi_uid user_pi_uid FROM transactions t JOIN users u ON u.id=t.user_id WHERE t.user_id=?1 ORDER BY t.created_at DESC`).bind(user.id).all(),
-    env.RENTORA_DB.prepare(`SELECT r.*, au.pi_uid author_pi_uid, au.username author_username, tu.pi_uid target_pi_uid, tu.username target_username FROM reviews r JOIN users au ON au.id=r.author_user_id JOIN users tu ON tu.id=r.target_user_id WHERE r.author_user_id=?1 OR r.target_user_id=?1 ORDER BY r.created_at DESC`).bind(user.id).all(),
-    env.RENTORA_DB.prepare(`SELECT c.*, ou.username owner_username, ru.username renter_username FROM chats c JOIN users ou ON ou.id=c.owner_user_id JOIN users ru ON ru.id=c.renter_user_id WHERE c.owner_user_id=?1 OR c.renter_user_id=?1 ORDER BY c.updated_at DESC`).bind(user.id).all(),
+    env.RENTORA_DB.prepare(`SELECT r.*, au.pi_uid author_pi_uid, au.username author_username, tu.pi_uid target_pi_uid, tu.username target_username FROM reviews r JOIN users au ON au.id=r.author_user_id JOIN users tu ON tu.id=r.target_user_id ORDER BY r.created_at DESC`).all(),
   ]);
 
   const out = {
     items: (items.results || []).map(listingView),
-    rentals: (rentals.results || []).map(rentalView),
-    transactions: transactions.results || [],
-    users: [userView(user)],
+    rentals: [],
+    transactions: [],
+    users: user ? [userView(user)] : [],
     reviews: reviews.results || [],
     reports: [],
-    chats: (chats.results || []).map((c) => ({ ...parseMetadata(c.metadata), id: c.id, ownerUsername: c.owner_username, renterUsername: c.renter_username, updatedAt: c.updated_at })),
+    chats: [],
     timestamp: now(),
   };
 
-  if (isAdmin) {
-    const [users, reports] = await Promise.all([
-      env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all(),
-      env.RENTORA_DB.prepare(`SELECT r.*, u.username reporter_username, u.pi_uid reporter_pi_uid FROM reports r JOIN users u ON u.id=r.reporter_user_id ORDER BY r.created_at DESC`).all(),
+  if (user) {
+    const allowed = String(env.ADMIN_PI_UIDS || '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean);
+    const uName = String(user.username || '').toLowerCase();
+    const uId = String(user.pi_uid || '').toLowerCase();
+    const isAdmin = user.role === 'admin' || allowed.includes(uId) || allowed.includes(uName) || uName === 'avina60' || uName === 'mohsenjnext';
+
+    const [rentals, transactions, chats] = await Promise.all([
+      env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.renter_user_id=?1 OR r.owner_user_id=?1 ORDER BY r.created_at DESC`).bind(user.id).all(),
+      env.RENTORA_DB.prepare(`SELECT t.*, u.pi_uid user_pi_uid FROM transactions t JOIN users u ON u.id=t.user_id WHERE t.user_id=?1 ORDER BY t.created_at DESC`).bind(user.id).all(),
+      env.RENTORA_DB.prepare(`SELECT c.*, ou.username owner_username, ru.username renter_username FROM chats c JOIN users ou ON ou.id=c.owner_user_id JOIN users ru ON ru.id=c.renter_user_id WHERE c.owner_user_id=?1 OR c.renter_user_id=?1 ORDER BY c.updated_at DESC`).bind(user.id).all(),
     ]);
-    out.users = (users.results || []).map(userView);
-    out.reports = reports.results || [];
+
+    out.rentals = (rentals.results || []).map(rentalView);
+    out.transactions = transactions.results || [];
+    out.chats = (chats.results || []).map((c) => ({ ...parseMetadata(c.metadata), id: c.id, ownerUsername: c.owner_username, renterUsername: c.renter_username, updatedAt: c.updated_at }));
+
+    if (isAdmin) {
+      const [users, reports] = await Promise.all([
+        env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all(),
+        env.RENTORA_DB.prepare(`SELECT r.*, u.username reporter_username, u.pi_uid reporter_pi_uid FROM reports r JOIN users u ON u.id=r.reporter_user_id ORDER BY r.created_at DESC`).all(),
+      ]);
+      out.users = (users.results || []).map(userView);
+      out.reports = reports.results || [];
+    }
   }
+
   return json(out, 200, env);
 }
 

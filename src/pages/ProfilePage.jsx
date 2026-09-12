@@ -21,7 +21,8 @@ import {
   Globe,
   Upload,
   Image as ImageIcon,
-  CheckCircle2
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 
 const AVATAR_PRESETS = [
@@ -133,19 +134,30 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
     reader.readAsDataURL(file);
   };
 
-  const handleSaveProfile = (e) => {
+  const [isSaving, setIsSaving] = useState(false);
+  const [profileError, setProfileError] = useState('');
+
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
+    setProfileError('');
+    setIsSaving(true);
     const updater = updateProfile || updateUserProfile;
     if (updater) {
-      updater({
-        displayName: displayName.trim() || currentUser?.username,
-        bio: bio.trim(),
-        avatar: avatar || currentUser?.avatar
-      });
+      try {
+        await updater({
+          displayName: displayName.trim() || currentUser?.username,
+          bio: bio.trim(),
+          avatar: avatar || currentUser?.avatar
+        });
+        setIsEditing(false);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 2500);
+      } catch (err) {
+        setProfileError(err?.message || l('خطا در ذخیره پروفایل.', 'Failed to save profile.', 'فشل في حفظ الملف الشخصي.', '保存个人资料失败。'));
+      } finally {
+        setIsSaving(false);
+      }
     }
-    setIsEditing(false);
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 2500);
   };
 
   return (
@@ -195,6 +207,13 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
           </button>
         </div>
       </div>
+
+      {profileError && (
+        <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-2 animate-fadeIn">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{profileError}</span>
+        </div>
+      )}
 
       {saveSuccess && (
         <div className="p-3 rounded-xl badge-trust text-xs font-bold flex items-center gap-2 animate-fadeIn">

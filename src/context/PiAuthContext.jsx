@@ -16,7 +16,7 @@ function installSessionFetchBridge() {
   window.fetch = async (input, init = {}) => {
     try {
       const url = typeof input === 'string' ? input : input?.url || '';
-      const isApiRequest = apiBase && url.startsWith(apiBase);
+      const isApiRequest = (apiBase && url.startsWith(apiBase)) || url.startsWith('/api/');
       const isPiLogin = url.includes('/api/auth/pi-login');
       if (isApiRequest && !isPiLogin) {
         const raw = localStorage.getItem(STORAGE_KEY_USER);
@@ -126,7 +126,7 @@ export function PiAuthProvider({ children }) {
   };
 
   const updateUserProfile = async (updatedFields) => {
-    if (!currentUser) return null;
+    if (!currentUser) throw new Error('ابتدا وارد حساب پای خود شوید.');
     const allowed = {};
     for (const key of ['displayName', 'bio', 'location', 'avatar', 'phoneMasked']) {
       if (Object.prototype.hasOwnProperty.call(updatedFields || {}, key)) allowed[key] = updatedFields[key];
@@ -135,7 +135,10 @@ export function PiAuthProvider({ children }) {
     if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
     const response = await fetch(`${apiBase}/api/sync/user`, {
       method: 'POST',
-      headers: piService.getSessionHeaders(),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${currentUser.sessionToken}`
+      },
       body: JSON.stringify(allowed)
     });
     const data = await response.json().catch(() => ({}));
@@ -143,6 +146,7 @@ export function PiAuthProvider({ children }) {
     const updated = { ...currentUser, ...data.user, sessionToken: currentUser.sessionToken, isOfficialSdk: true, piWalletConnected: true };
     setCurrentUser(updated);
     setUsers(prev => [updated, ...prev.filter(u => u.uid !== updated.uid)]);
+    cloudSyncService.saveCachedUsers([updated, ...users.filter(u => u.uid !== updated.uid)]);
     return updated;
   };
 

@@ -214,13 +214,24 @@ test.afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-// Scenario 1: Unauthenticated request
-test('Scenario: unauthenticated request is rejected with 401', async () => {
+// Scenario 1: Unauthenticated request on protected mutation
+test('Scenario: unauthenticated request is rejected with 401 on protected mutation', async () => {
   const { env } = createMockEnv();
-  const res = await gateway.fetch(new Request('https://rentora.example/api/sync/all', { method: 'GET' }), env);
+  const res = await gateway.fetch(new Request('https://rentora.example/api/sync/item', { method: 'POST', body: JSON.stringify({ id: 'item_1', title: 'Test' }) }), env);
   assert.equal(res.status, 401);
   const data = await res.json();
   assert.equal(data.error, 'Authentication required');
+});
+
+// Scenario 1b: Anonymous public marketplace browsing
+test('Scenario: anonymous public browsing returns active listings with 200', async () => {
+  const { env } = createMockEnv({ listings: [{ id: 'item_pub', owner_user_id: 'usr_1', title: 'Public Item', status: 'active', price_per_day: 5, deposit_amount: 10 }] });
+  const res = await gateway.fetch(new Request('https://rentora.example/api/sync/all', { method: 'GET' }), env);
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(Array.isArray(data.items), true);
+  assert.equal(data.rentals.length, 0);
+  assert.equal(data.chats.length, 0);
 });
 
 // Scenario 2: Authenticated user

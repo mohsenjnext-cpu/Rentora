@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
-import { getApiBaseUrl, setApiBaseUrl } from '../services/apiConfig';
+import { getApiBaseUrl } from '../services/apiConfig';
 import { cloudSyncService } from '../services/cloudSyncService';
 import EmptyState from '../components/EmptyState';
 import { 
@@ -132,15 +132,6 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     }
     setSaveSuccessNotice(true);
     setTimeout(() => setSaveSuccessNotice(false), 2500);
-  };
-
-  const handleSaveBackendUrl = (e) => {
-    e.preventDefault();
-    setApiBaseUrl(backendUrlInput);
-    refreshApp();
-    setBackendTestStatus('success');
-    setBackendTestMsg(l('آدرس سرور ذخیره شد.', 'Backend URL saved successfully.', 'تم حفظ رابط الخادم.', '后端服务地址已保存。'));
-    setTimeout(() => setBackendTestStatus(null), 3000);
   };
 
   const handleTestBackendConnection = async () => {
@@ -386,36 +377,28 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
               </div>
             </div>
 
-            <form onSubmit={handleSaveBackendUrl} className="space-y-3 max-w-xl">
+            <div className="space-y-3 max-w-xl">
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                   {t('adminCloudBackendUrl')}
                 </label>
-                <input
-                  type="url"
-                  value={backendUrlInput}
-                  onChange={(e) => setBackendUrlInput(e.target.value)}
-                  placeholder="https://rentora-worker.your-subdomain.workers.dev"
-                  className="w-full mt-1.5 p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#121124] text-slate-900 dark:text-white font-mono"
+                <div
+                  className="w-full mt-1.5 p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#121124] text-slate-700 dark:text-slate-200 font-mono flex items-center justify-between"
                   dir="ltr"
-                />
+                >
+                  <span>{backendUrlInput || 'https://rentora.mohsenjnext.workers.dev'}</span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">● Active</span>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <button
-                  type="submit"
-                  className="btn-primary px-4 py-2 text-xs font-bold cursor-pointer"
-                >
-                  {t('btnSave')}
-                </button>
-
-                <button
                   type="button"
                   onClick={handleTestBackendConnection}
                   disabled={backendTestStatus === 'testing'}
-                  className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 hover:border-[#534AB7] flex items-center gap-1.5 cursor-pointer"
+                  className="btn-primary px-3.5 py-2 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Wifi className="w-3.5 h-3.5 text-[#534AB7]" />
+                  <Wifi className="w-3.5 h-3.5" />
                   <span>{t('adminTestConnectionBtn')}</span>
                 </button>
 
@@ -426,7 +409,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                   className="px-3.5 py-2 rounded-xl border border-emerald-300 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                 >
                   <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{isPushingCloud ? l('در حال ارسال...', 'Pushing...', 'جارٍ الإرسال...', '正在推送...') : l('ارسال تمام آگهی‌ها به سرور', 'Push All Data to Cloud', 'مزامنة الكل سحابياً', '一键同步全部数据至云端')}</span>
+                  <span>{isPushingCloud ? l('در حال ارسال...', 'Pushing...', 'جارٍ الإرسال...', '正在推送...') : l('همگام‌سازی با فضای ابری', 'Sync Data with Cloud', 'مزامنة الكل سحابياً', '一键同步全部数据至云端')}</span>
                 </button>
               </div>
 
@@ -437,7 +420,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                   {backendTestMsg}
                 </div>
               )}
-            </form>
+            </div>
           </div>
 
           <div className="p-4 sm:p-5 rounded-2xl rentora-card space-y-4">

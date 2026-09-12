@@ -108,18 +108,18 @@ export function RentoraProvider({ children }) {
     const defaultImages = { tools: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80", cameras: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900&auto=format&fit=crop&q=80", camping: "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=900&auto=format&fit=crop&q=80", sports: "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?w=900&auto=format&fit=crop&q=80", vehicles: "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=900&auto=format&fit=crop&q=80", events: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=900&auto=format&fit=crop&q=80", home: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=900&auto=format&fit=crop&q=80" };
     const finalImage = itemData.images?.length ? itemData.images : [defaultImages[itemData.category] || defaultImages.tools];
     const newItem = { id: "item_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7), title: itemData.title.trim(), category: itemData.category || 'tools', description: itemData.description || '', pricePerDay: parseFloat(itemData.pricePerDay), deposit: parseFloat(itemData.deposit) || 0, location: itemData.location || 'ایران', city: itemData.location?.split('،')?.[0]?.trim() || itemData.location || 'ایران', images: Array.isArray(finalImage) ? finalImage : [finalImage], ownerUid: currentUser.uid, ownerUsername: currentUser.username, ownerAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}`, ownerBio: currentUser.bio || 'کاربر شبکه پای در رنتورا', ownerKYC: currentUser?.kycStatus === 'verified' && !!currentUser?.isOfficialSdk, ownerReputation: null, rating: null, ratingCount: 0, reviewsCount: 0, phoneContact: itemData.phoneContact || currentUser.phoneMasked || '', status: "active", deliveryAvailable: !!itemData.instantBook, instantBooking: !!itemData.instantBook, createdAt: new Date().toISOString() };
-    await cloudSyncService.broadcastNewItem(newItem);
-    setItems(prev => { const updated = [newItem, ...prev.filter(i => i.id !== newItem.id)]; cloudSyncService.saveCachedItems(updated); return updated; });
-    return newItem;
+    const confirmed = await cloudSyncService.broadcastNewItem(newItem);
+    setItems(prev => { const updated = [confirmed || newItem, ...prev.filter(i => i.id !== newItem.id)]; cloudSyncService.saveCachedItems(updated); return updated; });
+    return confirmed || newItem;
   };
 
   const updateItem = async (itemId, fields) => {
     const current = items.find(i => i.id === itemId);
     if (!current) return null;
     const updatedItem = { ...current, ...fields, updatedAt: new Date().toISOString() };
-    await cloudSyncService.broadcastNewItem(updatedItem);
-    setItems(prev => { const updated = prev.map(i => i.id === itemId ? updatedItem : i); cloudSyncService.saveCachedItems(updated); return updated; });
-    return updatedItem;
+    const confirmed = await cloudSyncService.broadcastNewItem(updatedItem);
+    setItems(prev => { const updated = prev.map(i => i.id === itemId ? (confirmed || updatedItem) : i); cloudSyncService.saveCachedItems(updated); return updated; });
+    return confirmed || updatedItem;
   };
 
   const toggleItemStatus = async (itemId) => {

@@ -119,7 +119,76 @@ export default {
       if (method === 'POST' && path === '/api/sync/rental/status') { const { user } = await requireUser(request, env); const body = await readJson(request); const rentalId = String(body?.rentalId || '').trim(); const action = String(body?.action || '').trim().toLowerCase(); if (!rentalId || !['handover','return'].includes(action)) return errorResponse('rentalId and a valid action are required', 400, env); const rental = await env.RENTORA_DB.prepare(`SELECT r.*, l.owner_user_id, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.id=?1 LIMIT 1`).bind(rentalId).first(); if (!rental) return errorResponse('Rental not found', 404, env); if (rental.renter_user_id !== user.id && rental.owner_user_id !== user.id) return errorResponse('Rental access denied', 403, env); const meta = parseMetadata(rental.metadata); const targetStatus = action === 'handover' ? 'active' : 'completed'; const expectedStatus = action === 'handover' ? 'confirmed' : 'active'; const flag = action === 'handover' ? 'isHandoverConfirmed' : 'isReturnConfirmed'; const timestampKey = action === 'handover' ? 'handoverTimestamp' : 'returnTimestamp'; if (rental.status === targetStatus && meta[flag]) return jsonResponse({ success: true, idempotent: true, rental: rentalView(rental) }, 200, env); if (rental.status !== expectedStatus) return errorResponse(`Invalid rental transition from ${rental.status || 'unknown'}`, 409, env); const updatedMeta = { ...meta, [flag]: true, [timestampKey]: now() }; const updatedAt = now(); const claim = await env.RENTORA_DB.prepare(`UPDATE rentals SET status=?1,metadata=?2,updated_at=?3 WHERE id=?4 AND status=?5`).bind(targetStatus, JSON.stringify(updatedMeta), updatedAt, rentalId, expectedStatus).run(); if (!Number(claim?.meta?.changes || 0)) return errorResponse('Rental transition was concurrently changed', 409, env); const saved = await env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.id=?1`).bind(rentalId).first(); return jsonResponse({ success: true, rental: rentalView(saved) }, 200, env); }
       if (method === 'POST' && path === '/api/sync/review') { const { user } = await requireUser(request, env); const review = await readJson(request); const rental = review?.rentalId ? await env.RENTORA_DB.prepare('SELECT * FROM rentals WHERE id=?1').bind(review.rentalId).first() : null; if (!rental || rental.renter_user_id !== user.id || rental.status !== 'completed') return errorResponse('Review is not allowed for this rental', 403, env); if (!review.targetUid) return errorResponse('targetUid is required', 400, env); const target = await env.RENTORA_DB.prepare('SELECT id FROM users WHERE pi_uid=?1').bind(review.targetUid).first(); if (!target) return errorResponse('Review target not found', 404, env); const id = review.id || `rev_${crypto.randomUUID()}`; await env.RENTORA_DB.prepare(`INSERT INTO reviews(id,rental_id,author_user_id,target_user_id,rating,body,metadata,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(rental_id,author_user_id) DO UPDATE SET rating=excluded.rating,body=excluded.body,metadata=excluded.metadata`).bind(id, rental.id, user.id, target.id, Number(review.rating), review.body || '', JSON.stringify(review), now()).run(); return jsonResponse({ success: true, review }, 200, env); }
       if (method === 'POST' && path === '/api/sync/user') { const { user } = await requireUser(request, env); const body = await readJson(request); const allowed = { displayName: body.displayName, avatar: body.avatar, bio: body.bio, phoneMasked: body.phoneMasked }; const meta = { ...parseMetadata(user.metadata), ...Object.fromEntries(Object.entries(allowed).filter(([,v]) => v !== undefined)) }; await env.RENTORA_DB.prepare('UPDATE users SET display_name=?1,avatar_url=?2,metadata=?3,updated_at=?4 WHERE id=?5').bind(String(body.displayName || user.display_name), body.avatar || user.avatar_url || null, JSON.stringify(meta), now(), user.id).run(); const updated = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE id=?1').bind(user.id).first(); return jsonResponse({ success: true, user: userView(updated) }, 200, env); }
-      if (method === 'POST' && path === '/api/sync/chat') { const { user } = await requireUser(request, env); const body = await readJson(request); if (!body?.id) return errorResponse('Invalid chat payload', 400, env); const recipient = cleanUsername(body.ownerUsername || body.renterUsername); const target = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE username=?1 LIMIT 1').bind(recipient).first(); if (!target || target.id === user.id) return errorResponse('Chat recipient not found', 404, env); const ownerId = cleanUsername(body.ownerUsername) === user.username ? user.id : target.id; const renterId = ownerId === user.id ? target.id : user.id; const existing = await env.RENTORA_DB.prepare('SELECT * FROM chats WHERE id=?1').bind(body.id).first(); const metadata = JSON.stringify({ ...body, ownerUsername: body.ownerUsername || target.username, renterUsername: body.renterUsername || user.username }); if (existing && existing.owner_user_id !== user.id && existing.renter_user_id !== user.id) return errorResponse('Chat access denied', 403, env); if (existing) await env.RENTORA_DB.prepare('UPDATE chats SET metadata=?1,updated_at=?2 WHERE id=?3').bind(metadata, now(), body.id).run(); else await env.RENTORA_DB.prepare('INSERT INTO chats(id,owner_user_id,renter_user_id,rental_id,metadata,updated_at) VALUES(?1,?2,?3,?4,?5,?6)').bind(body.id, ownerId, renterId, body.rentalId || null, metadata, now()).run(); return jsonResponse({ success: true, chat: body }, 200, env); }
+      if (method === 'POST' && path === '/api/upload') {
+        const { user } = await requireUser(request, env);
+        const body = await readJson(request);
+        const data = String(body?.data || '').trim();
+        const mimeType = String(body?.mimeType || 'image/jpeg').trim().toLowerCase();
+        if (!data || !['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'].includes(mimeType)) {
+          return errorResponse('Invalid image format. Supported formats: JPEG, PNG, WebP, SVG.', 400, env);
+        }
+        if (data.length > 2 * 1024 * 1024) {
+          return errorResponse('Image file size exceeds the 2MB limit.', 413, env);
+        }
+        const imgId = `img_${crypto.randomUUID()}`;
+        await env.RENTORA_KV.put(`image:${imgId}`, data, {
+          expirationTtl: 60 * 60 * 24 * 365,
+          metadata: { mimeType, uploaderUid: user.pi_uid, createdAt: now() }
+        });
+        return jsonResponse({ success: true, id: imgId, url: `/api/images/${imgId}` }, 201, env);
+      }
+      if (method === 'GET' && path.startsWith('/api/images/')) {
+        const imgId = path.slice('/api/images/'.length).trim();
+        if (!imgId) return errorResponse('Image ID required', 400, env);
+        const item = await env.RENTORA_KV.getWithMetadata(`image:${imgId}`);
+        if (!item?.value) return errorResponse('Image not found', 404, env);
+        const raw = item.value;
+        const mime = item.metadata?.mimeType || 'image/jpeg';
+        if (raw.startsWith('data:')) {
+          const commaIdx = raw.indexOf(',');
+          const base64Data = commaIdx !== -1 ? raw.slice(commaIdx + 1) : raw;
+          const binary = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+          return new Response(binary, {
+            status: 200,
+            headers: {
+              'Content-Type': mime,
+              'Cache-Control': 'public, max-age=31536000, immutable',
+              'X-Content-Type-Options': 'nosniff'
+            }
+          });
+        }
+        return new Response(raw, {
+          status: 200,
+          headers: {
+            'Content-Type': mime,
+            'Cache-Control': 'public, max-age=31536000, immutable',
+            'X-Content-Type-Options': 'nosniff'
+          }
+        });
+      }
+      if (method === 'POST' && path === '/api/sync/chat') {
+        const { user } = await requireUser(request, env);
+        const body = await readJson(request);
+        if (!body?.id) return errorResponse('Invalid chat payload', 400, env);
+        const ownerName = cleanUsername(body.ownerUsername);
+        const renterName = cleanUsername(body.renterUsername);
+        const currentName = cleanUsername(user.username);
+        let recipient = '';
+        if (ownerName && ownerName !== currentName) recipient = ownerName;
+        else if (renterName && renterName !== currentName) recipient = renterName;
+        else if (body.recipientUsername && cleanUsername(body.recipientUsername) !== currentName) recipient = cleanUsername(body.recipientUsername);
+        if (!recipient || recipient === currentName) return errorResponse('Chat recipient cannot be self', 400, env);
+        const target = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE username=?1 LIMIT 1').bind(recipient).first();
+        if (!target) return errorResponse('Chat recipient not found', 404, env);
+        const ownerId = ownerName === currentName ? user.id : target.id;
+        const renterId = renterName === currentName ? user.id : target.id;
+        const existing = await env.RENTORA_DB.prepare('SELECT * FROM chats WHERE id=?1').bind(body.id).first();
+        const metadata = JSON.stringify({ ...body, ownerUsername: body.ownerUsername || target.username, renterUsername: body.renterUsername || user.username });
+        if (existing && existing.owner_user_id !== user.id && existing.renter_user_id !== user.id) return errorResponse('Chat access denied', 403, env);
+        if (existing) await env.RENTORA_DB.prepare('UPDATE chats SET metadata=?1,updated_at=?2 WHERE id=?3').bind(metadata, now(), body.id).run();
+        else await env.RENTORA_DB.prepare('INSERT INTO chats(id,owner_user_id,renter_user_id,rental_id,metadata,updated_at) VALUES(?1,?2,?3,?4,?5,?6)').bind(body.id, ownerId, renterId, body.rentalId || null, metadata, now()).run();
+        return jsonResponse({ success: true, chat: body }, 200, env);
+      }
       if (method === 'POST' && (path === '/api/sync/chat/delete' || path === '/api/sync/chat-delete')) { const { user } = await requireUser(request, env); const body = await readJson(request); if (!body.id && !body.threadId) return errorResponse('Missing chat thread ID', 400, env); const id = body.id || body.threadId; await env.RENTORA_DB.prepare('DELETE FROM chats WHERE id=?1 AND (owner_user_id=?2 OR renter_user_id=?2)').bind(id, user.id).run(); return jsonResponse({ success: true, deletedThreadId: id }, 200, env); }
       if (method === 'POST' && path === '/api/sync/purge') { const { user } = await requireAdmin(request, env); await env.RENTORA_DB.batch([env.RENTORA_DB.prepare('DELETE FROM transactions'), env.RENTORA_DB.prepare('DELETE FROM payment_intents'), env.RENTORA_DB.prepare('DELETE FROM rentals'), env.RENTORA_DB.prepare('DELETE FROM reviews'), env.RENTORA_DB.prepare('DELETE FROM listings'), env.RENTORA_DB.prepare('DELETE FROM chats'), env.RENTORA_DB.prepare('DELETE FROM reports')]); return jsonResponse({ success: true, purged: true, by: user.pi_uid }, 200, env); }
       if (env?.ASSETS && typeof env.ASSETS.fetch === 'function') return env.ASSETS.fetch(request);

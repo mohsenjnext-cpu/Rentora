@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 const gateway = fs.readFileSync(new URL('../worker-gateway.js', import.meta.url), 'utf8');
 
-test('sync endpoint requires an authenticated active user', () => {
+test('sync endpoint supports public active listings and user-aware sync', () => {
   assert.match(gateway, /url\.pathname === '\/api\/sync\/all'/);
   assert.match(gateway, /await requireUser\(request, env\)/);
   assert.match(gateway, /SELECT \* FROM users WHERE pi_uid=\?1 LIMIT 1/);
@@ -17,7 +17,7 @@ test('regular users only receive their own rentals and transactions', () => {
 });
 
 test('regular users do not receive the complete user directory', () => {
-  assert.match(gateway, /users: \[userView\(user\)\]/);
+  assert.match(gateway, /users:\s*user\s*\?\s*\[userView\(user\)\]\s*:\s*\[\]/);
   assert.match(gateway, /if \(isAdmin\)/);
   assert.match(gateway, /SELECT \* FROM users ORDER BY created_at DESC/);
 });
