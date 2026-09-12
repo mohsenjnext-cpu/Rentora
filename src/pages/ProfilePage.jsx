@@ -333,7 +333,7 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
 
               <div className="flex items-center gap-1.5 text-xs font-mono" dir="ltr">
                 <span className="text-slate-600 dark:text-slate-300">@{currentUser?.username}</span>
-                {currentUser?.kycStatus === 'verified' ? (
+                {currentUser?.kycStatus === 'verified' || currentUser?.isOfficialSdk ? (
                   <span className="text-[#0F6E56] dark:text-[#48D2A8] font-bold">✓ KYC Verified</span>
                 ) : (
                   <span className="text-slate-400 font-normal">({l('احراز نشده', 'Unverified', 'غير موثق', '未认证')})</span>

@@ -22,7 +22,7 @@ PI_API_URL = "https://api.minepi.com/v2"
 NODE_ENV = "production"
 PLATFORM_FEE_RATE = "0.05"
 CORS_ORIGIN = ""
-ADMIN_PI_UIDS = ""
+ADMIN_PI_UIDS = "avina60,mohsenjnext"
 
 # Required secret (Cloudflare secret, never [vars]):
 # - PI_API_KEY
