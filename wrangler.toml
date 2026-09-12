@@ -21,7 +21,7 @@ id = "11f55c0a333b45cb81ce9a1692d2207a"
 PI_API_URL = "https://api.minepi.com/v2"
 NODE_ENV = "production"
 PLATFORM_FEE_RATE = "0.05"
-CORS_ORIGIN = "https://your-rentora-app.example"
+CORS_ORIGIN = ""
 ADMIN_PI_UIDS = ""
 
 # Required secret (Cloudflare secret, never [vars]):

@@ -10,13 +10,23 @@ const MAX_BODY_BYTES = 16 * 1024;
 
 function now() { return new Date().toISOString(); }
 function cleanUsername(value) { return String(value || '').replace(/^@/, '').trim().toLowerCase(); }
-function jsonResponse(data, status, env) {
-  const origin = env?.CORS_ORIGIN || '';
+function isOriginAllowed(origin, requestUrl, env) {
+  if (!origin) return true;
+  try {
+    const requestOrigin = new URL(requestUrl).origin;
+    if (origin === requestOrigin) return true;
+  } catch (_) {}
+  const configured = (env?.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (configured.length === 0 || configured.includes('*') || configured.includes(origin)) return true;
+  return false;
+}
+function jsonResponse(data, status, env, origin) {
+  const allowOrigin = origin || env?.CORS_ORIGIN || '';
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=()' };
-  if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+  if (allowOrigin) { headers['Access-Control-Allow-Origin'] = allowOrigin; headers['Vary'] = 'Origin'; }
   return new Response(JSON.stringify(data), { status: status ?? 200, headers });
 }
-function errorResponse(message, status, env, extra) { return jsonResponse({ error: message, ...(extra || {}) }, status ?? 400, env); }
+function errorResponse(message, status, env, extra, origin) { return jsonResponse({ error: message, ...(extra || {}) }, status ?? 400, env, origin); }
 function requireBindings(env) { if (!env?.RENTORA_DB) throw new Error('RENTORA_DB binding is required'); if (!env?.RENTORA_KV) throw new Error('RENTORA_KV binding is required'); }
 async function readJson(request) { const length = Number(request.headers.get('content-length') || 0); if (length > MAX_BODY_BYTES) throw new Error('Request body too large'); const text = await request.text(); if (new TextEncoder().encode(text).byteLength > MAX_BODY_BYTES) throw new Error('Request body too large'); if (!text) return {}; try { return JSON.parse(text); } catch (_) { throw new Error('Invalid JSON'); } }
 async function sha256(value) { const bytes = new TextEncoder().encode(value); const digest = await crypto.subtle.digest('SHA-256', bytes); return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join(''); }
@@ -51,9 +61,22 @@ function validatePiPayment(payment, intent, user) {
 }
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url); const path = url.pathname; const method = request.method; const origin = request.headers.get('Origin'); const allowedOrigin = env?.CORS_ORIGIN || '';
-    if (method === 'OPTIONS') { if (allowedOrigin && origin && origin !== allowedOrigin) return new Response(null, { status: 403 }); return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': allowedOrigin || origin || 'null', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '86400' }}); }
-    if (allowedOrigin && origin && origin !== allowedOrigin) return errorResponse('Origin not allowed', 403, env);
+    const url = new URL(request.url); const path = url.pathname; const method = request.method; const origin = request.headers.get('Origin');
+    const allowed = isOriginAllowed(origin, request.url, env);
+    if (method === 'OPTIONS') {
+      if (!allowed) return new Response(null, { status: 403 });
+      return new Response(null, {
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': origin || '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Max-Age': '86400',
+          'Vary': 'Origin'
+        }
+      });
+    }
+    if (origin && !allowed) return errorResponse('Origin not allowed', 403, env, undefined, origin);
     try {
       if (method === 'GET' && (path === '/api/health' || path === '/health')) { const dbReady = Boolean(env?.RENTORA_DB); const kvReady = Boolean(env?.RENTORA_KV); return jsonResponse({ status: dbReady && kvReady ? 'ok' : 'degraded', service: 'Rentora Cloudflare Worker', version: '4.1.0', storage: { d1: dbReady, kv: kvReady }, piApiKeyConfigured: Boolean(env?.PI_API_KEY), timestamp: now() }, dbReady && kvReady ? 200 : 503, env); }
       if (method === 'GET' && path === '/api/sync/all') { requireBindings(env); let auth = null; try { auth = await requireUser(request, env); } catch (_) {} return jsonResponse(await listAll(env, auth), 200, env); }

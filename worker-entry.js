@@ -6,22 +6,34 @@ function now() {
   return new Date().toISOString();
 }
 
-function json(data, status, env) {
+function isOriginAllowed(origin, requestUrl, env) {
+  if (!origin) return true;
+  try {
+    const requestOrigin = new URL(requestUrl).origin;
+    if (origin === requestOrigin) return true;
+  } catch (_) {}
+  const configured = (env?.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (configured.length === 0 || configured.includes('*') || configured.includes(origin)) return true;
+  return false;
+}
+
+function json(data, status, env, origin) {
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
   };
-  if (env?.CORS_ORIGIN) {
-    headers['Access-Control-Allow-Origin'] = env.CORS_ORIGIN;
+  const allowOrigin = origin || env?.CORS_ORIGIN || '';
+  if (allowOrigin) {
+    headers['Access-Control-Allow-Origin'] = allowOrigin;
     headers.Vary = 'Origin';
   }
   return new Response(JSON.stringify(data), { status, headers });
 }
 
-function error(message, status, env, extra = {}) {
-  return json({ error: message, ...extra }, status, env);
+function error(message, status, env, extra = {}, origin) {
+  return json({ error: message, ...extra }, status, env, origin);
 }
 
 async function readJson(request) {
@@ -174,11 +186,12 @@ async function complete(request, env) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const origin = request.headers.get('Origin');
     if (request.method === 'POST' && url.pathname === '/api/payments/approve') {
-      try { return await approve(request, env); } catch (err) { return error(err?.message || 'Server error', Number(err?.status) || 500, env); }
+      try { return await approve(request, env); } catch (err) { return error(err?.message || 'Server error', Number(err?.status) || 500, env, {}, origin); }
     }
     if (request.method === 'POST' && url.pathname === '/api/payments/complete') {
-      try { return await complete(request, env); } catch (err) { return error(err?.message || 'Server error', Number(err?.status) || 500, env); }
+      try { return await complete(request, env); } catch (err) { return error(err?.message || 'Server error', Number(err?.status) || 500, env, {}, origin); }
     }
     return legacyWorker.fetch(request, env, ctx);
   },
