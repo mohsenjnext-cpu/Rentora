@@ -554,3 +554,46 @@ test('Scenario: session logout revokes KV session and subsequent calls return 40
   );
   assert.equal(res.status, 401);
 });
+
+// Scenario 13: Non-admin user cannot access admin purge endpoint (403)
+test('Scenario: non-admin user is rejected with 403 on admin purge endpoint', async () => {
+  const alice = { id: 'usr_alice', pi_uid: 'pi_alice', username: 'alice', display_name: 'Alice', role: 'user', status: 'active', created_at: '2026-01-01T00:00:00Z' };
+  const { env, kvStore } = createMockEnv({ users: [alice] });
+
+  const token = 'token_alice_regular';
+  kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: alice.pi_uid, username: alice.username, role: 'user' }));
+
+  const res = await gateway.fetch(
+    new Request('https://rentora.example/api/sync/purge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({}),
+    }),
+    env
+  );
+  assert.equal(res.status, 403);
+  const data = await res.json();
+  assert.equal(data.error, 'Admin access required');
+});
+
+// Scenario 14: KYC verification status is strictly unverified for non-KYC users
+test('Scenario: Pi login strictly assigns unverified status when user is not KYC-verified', async () => {
+  const bob = { id: 'usr_bob', pi_uid: 'pi_bob', username: 'bob', display_name: 'Bob', role: 'user', status: 'active', metadata: JSON.stringify({ kycStatus: 'unverified' }), created_at: '2026-01-01T00:00:00Z' };
+  const { env, kvStore } = createMockEnv({ users: [bob] });
+
+  const token = 'token_bob';
+  kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: bob.pi_uid, username: bob.username, role: 'user' }));
+
+  const res = await gateway.fetch(
+    new Request('https://rentora.example/api/sync/all', {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    env
+  );
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  const bobUser = data.users.find(u => u.uid === 'pi_bob');
+  assert.ok(bobUser);
+  assert.equal(bobUser.kycStatus, 'unverified');
+});

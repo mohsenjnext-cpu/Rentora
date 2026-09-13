@@ -138,12 +138,14 @@ export default function ItemDetailPage({
           />
 
           {/* Badges in top corners */}
-          <div className="absolute top-3 left-3 rtl:left-auto rtl:right-3 flex items-center gap-1.5">
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold badge-trust flex items-center gap-1 shadow-sm">
-              <ShieldCheck className="w-3 h-3 stroke-[2.2]" />
-              <span>{t('badgeKycVerified')}</span>
-            </span>
-          </div>
+          {item.ownerKYC && (
+            <div className="absolute top-3 left-3 rtl:left-auto rtl:right-3 flex items-center gap-1.5">
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold badge-trust flex items-center gap-1 shadow-sm">
+                <ShieldCheck className="w-3 h-3 stroke-[2.2]" />
+                <span>{t('badgeKycVerified')}</span>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Thumbnail row if multiple images */}

@@ -83,9 +83,9 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
           username: item.ownerUsername,
           displayName: item.ownerUsername,
           avatar: item.ownerAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${item.ownerUsername}`,
-          bio: item.ownerBio || 'پیشگام تاییدشده شبکه پای',
+          bio: item.ownerBio || 'کاربر شبکه پای در پلتفرم رنتورا',
           role: 'user',
-          kycStatus: 'verified',
+          kycStatus: item.ownerKYC ? 'verified' : 'unverified',
           status: 'active'
         });
       }

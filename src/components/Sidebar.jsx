@@ -148,10 +148,17 @@ export default function Sidebar({
                   <h4 className="font-semibold text-xs text-slate-900 dark:text-white truncate group-hover:text-[#534AB7] transition" dir="ltr">
                     @{currentUser?.username}
                   </h4>
-                  <div className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md mt-0.5 badge-trust">
-                    <ShieldCheck className="w-3 h-3 stroke-[2]" />
-                    <span>{t('badgeKycVerified')}</span>
-                  </div>
+                  {currentUser?.kycStatus === 'verified' ? (
+                    <div className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md mt-0.5 badge-trust">
+                      <ShieldCheck className="w-3 h-3 stroke-[2]" />
+                      <span>{t('badgeKycVerified')}</span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md mt-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500">
+                      <ShieldAlert className="w-3 h-3 stroke-[2]" />
+                      <span>{l('احراز نشده', 'Unverified', 'غير موثق', '未认证')}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 

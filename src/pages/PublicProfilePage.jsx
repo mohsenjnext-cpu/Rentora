@@ -69,7 +69,7 @@ export default function PublicProfilePage({
             </div>
 
             <div className="flex items-center gap-1 text-xs font-bold">
-              {targetUser?.kycStatus === 'verified' || !targetUser ? (
+              {targetUser?.kycStatus === 'verified' ? (
                 <>
                   <ShieldCheck className="w-3.5 h-3.5 stroke-[2.2] text-[#0F6E56]" />
                   <span className="text-[#0F6E56]">KYC Verified Pioneer</span>
