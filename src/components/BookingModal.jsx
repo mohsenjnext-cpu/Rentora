@@ -4,19 +4,21 @@ import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import { RENTAL_STATES } from '../services/rentalStateMachine';
 import confetti from 'canvas-confetti';
-import { 
-  X, 
-  Coins, 
-  Calendar, 
-  MapPin, 
-  AlertCircle, 
-  Check, 
-  ShieldCheck, 
+import {
+  X,
+  Coins,
+  Calendar,
+  MapPin,
+  AlertCircle,
+  Check,
+  ShieldCheck,
   Receipt,
   Copy,
   ArrowRight,
   Sparkles,
   PhoneCall,
+  Phone,
+  MessageCircle,
   CheckCircle2,
   FileText,
   Info
@@ -25,10 +27,11 @@ import {
 export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
-  const { 
-    calculatePricing, 
-    createRentalBooking, 
-    executePiPaymentForRental
+  const {
+    calculatePricing,
+    createRentalBooking,
+    executePiPaymentForRental,
+    fetchRentalContact
   } = useRentora();
 
   // Initial dates helper (tomorrow to +3 days)
@@ -135,11 +138,17 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
       // 2. Pay ONLY Rentora Platform Fee via Official Pi SDK
       const paymentResult = await executePiPaymentForRental(draftRental.id, draftRental);
 
-      // 3. Success state showing formal Rental Agreement
+      // 3. Fetch verified private contact details after payment settlement
+      let contact = null;
+      try {
+        contact = await fetchRentalContact(draftRental.id);
+      } catch (_) {}
+
+      // 4. Success state showing formal Rental Agreement and unlocked private contact
       setConfirmedBookingData({
         rental: draftRental,
         paymentResult,
-        ownerPhone: item.phoneContact || "+98 912 345 6789"
+        contact
       });
 
       try {
@@ -176,19 +185,19 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 animate-fadeIn select-none">
-      
+
       {/* Backdrop */}
-      <div 
-        onClick={onClose} 
+      <div
+        onClick={onClose}
         className="fixed inset-0 bg-black/65 backdrop-blur-xs transition-opacity cursor-pointer"
       />
 
       {/* Modal Dialog */}
-      <div 
-        onClick={(e) => e.stopPropagation()} 
+      <div
+        onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-lg max-h-[92vh] bg-white dark:bg-[#121124] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden z-10"
       >
-        
+
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-slate-150 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-[#16152B]/70">
           <div className="flex items-center gap-2.5">
@@ -220,7 +229,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
           {/* If Booking Confirmed: Show Formal Rental Agreement */}
           {confirmedBookingData ? (
             <div className="space-y-4 animate-fadeIn">
-              
+
               {/* Top Success Badge */}
               <div className="p-4 rounded-xl badge-trust text-center space-y-2 border border-[#0F6E56]/30">
                 <div className="w-12 h-12 mx-auto rounded-full bg-white dark:bg-[#0B382C] text-[#0F6E56] flex items-center justify-center shadow-xs">
@@ -236,7 +245,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
 
               {/* Formal Rental Agreement / Booking Summary Card */}
               <div className="p-4 rounded-xl rentora-card space-y-3 border-2 border-[#534AB7]/30 bg-gradient-to-b from-white to-[#EEEDFE]/20 dark:from-[#121124] dark:to-[#1C1B33]/40">
-                
+
                 <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
                   <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white text-xs sm:text-sm">
                     <FileText className="w-4 h-4 text-[#534AB7]" />
@@ -297,23 +306,84 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
 
               </div>
 
-              {/* Owner Contact Card */}
-              <div className="p-4 rounded-xl rentora-card space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-500 font-semibold">{l('شماره هماهنگی تحویل با موجر:', 'Owner Phone for Handover:', 'رقم التواصل للتسليم:', '物主联系电话：')}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-slate-900 dark:text-white" dir="ltr">
-                      {confirmedBookingData.ownerPhone}
+              {/* Unlocked Owner Contact & Coordination Card */}
+              <div className="p-4 rounded-xl rentora-card space-y-3 border border-[#0F6E56]/30 bg-gradient-to-b from-white to-emerald-500/5 dark:from-[#121124] dark:to-emerald-950/10">
+                <div className="flex items-center gap-2 pb-2 border-b border-slate-150 dark:border-slate-800">
+                  <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300">
+                    <Phone className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-xs text-slate-900 dark:text-white">
+                      {l('اطلاعات تماس و هماهنگی مالک (آزادشده)', 'Unlocked Owner Contact Details', 'بيانات التواصل المفعلة مع المؤجر', '物主已解锁联系方式')}
+                    </h5>
+                    <span className="text-[10px] text-[#0F6E56] dark:text-[#48D2A8] font-semibold">
+                      ✓ {l('پرداخت تایید شد - اطلاعات تماس فعال گردید', 'Payment confirmed - Contact info active', 'تم تأكيد الدفع - البيانات نشطة', '已确认支付 - 联系方式已解锁')}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyPhone(confirmedBookingData.ownerPhone)}
-                      className="px-2 py-1 rounded bg-[#EEEDFE] dark:bg-[#26215C] text-[#26215C] dark:text-[#EEEDFE] text-[10px] font-bold cursor-pointer"
-                    >
-                      {copiedPhone ? l('کپی شد', 'Copied', 'تم النسخ', '已复制') : l('کپی', 'Copy', 'نسخ', '复制')}
-                    </button>
                   </div>
                 </div>
+
+                {confirmedBookingData.contact?.contactName && (
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-500">{l('نام رابط:', 'Contact Name:', 'اسم جهة الاتصال:', '联系人：')}</span>
+                    <strong className="text-slate-900 dark:text-white">{confirmedBookingData.contact.contactName}</strong>
+                  </div>
+                )}
+
+                {confirmedBookingData.contact?.contactPhone && (
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">{l('شماره تماس مستقیم:', 'Phone:', 'الهاتف:', '电话：')}</span>
+                      <strong className="font-mono font-bold text-slate-900 dark:text-white" dir="ltr">
+                        {confirmedBookingData.contact.contactPhone}
+                      </strong>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPhone(confirmedBookingData.contact.contactPhone)}
+                        className="px-2 py-1 rounded bg-[#EEEDFE] dark:bg-[#26215C] text-[#26215C] dark:text-[#EEEDFE] text-[10px] font-bold cursor-pointer"
+                      >
+                        {copiedPhone ? l('کپی شد', 'Copied', 'تم النسخ', '已复制') : l('کپی', 'Copy', 'نسخ', '复制')}
+                      </button>
+                      <a
+                        href={`tel:${confirmedBookingData.contact.contactPhone}`}
+                        className="btn-primary px-2.5 py-1 text-[11px] font-bold flex items-center gap-1"
+                      >
+                        <Phone className="w-3 h-3" />
+                        <span>{l('تماس', 'Call', 'اتصال', '拨打')}</span>
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {confirmedBookingData.contact?.whatsapp && (
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block">{l('واتساپ:', 'WhatsApp:', 'واتساب:', 'WhatsApp：')}</span>
+                      <strong className="font-mono text-emerald-600 dark:text-emerald-400" dir="ltr">
+                        {confirmedBookingData.contact.whatsapp}
+                      </strong>
+                    </div>
+                    <a
+                      href={confirmedBookingData.contact.whatsapp.startsWith('http') ? confirmedBookingData.contact.whatsapp : `https://wa.me/${confirmedBookingData.contact.whatsapp.replace(/[^0-9]/g, '')}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold flex items-center gap-1"
+                    >
+                      <MessageCircle className="w-3 h-3" />
+                      <span>{l('پیام', 'Chat', 'مراسلة', '发消息')}</span>
+                    </a>
+                  </div>
+                )}
+
+                {confirmedBookingData.contact?.coordinationNotes && (
+                  <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-[#18172E] border border-slate-200 dark:border-slate-800 text-[11px] space-y-0.5">
+                    <span className="text-[10px] font-bold text-slate-500 block">{l('راهنمای تحویل:', 'Handover Notes:', 'ملاحظات الاستلام:', '交接说明：')}</span>
+                    <p className="text-slate-800 dark:text-slate-200 whitespace-pre-line">
+                      {confirmedBookingData.contact.coordinationNotes}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <button
@@ -326,7 +396,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
 
             </div>
           ) : (
-            
+
             /* Booking Form */
             <form onSubmit={handleCreateBooking} className="space-y-4">
 
@@ -471,10 +541,10 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
               >
                 <Coins className="w-4 h-4 text-amber-400" />
                 <span>
-                  {isSubmitting 
-                    ? l('در حال اتصال به کیف پول پای...', 'Connecting to Pi Wallet...', 'جارٍ الاتصال بمحفظة باي...', '正在调起 Pi 钱包支付...') 
-                    : (rentoraFee === 0 
-                        ? l('تایید و ثبت رزرو رایگان', 'Confirm Free Booking', 'تأكيد الحجز المجاني', '确认免费预订') 
+                  {isSubmitting
+                    ? l('در حال اتصال به کیف پول پای...', 'Connecting to Pi Wallet...', 'جارٍ الاتصال بمحفظة باي...', '正在调起 Pi 钱包支付...')
+                    : (rentoraFee === 0
+                        ? l('تایید و ثبت رزرو رایگان', 'Confirm Free Booking', 'تأكيد الحجز المجاني', '确认免费预订')
                         : l(`پرداخت کارمزد رنتورا با پای (${rentoraFee} π)`, `Pay Rentora Fee with Pi (${rentoraFee} π)`, `دفع عمولة رنتورا عبر باي (${rentoraFee} π)`, `通过 Pi 支付平台费 (${rentoraFee} π)`))}
                 </span>
               </button>

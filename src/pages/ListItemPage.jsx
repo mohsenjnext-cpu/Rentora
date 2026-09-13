@@ -3,12 +3,12 @@ import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import { cloudSyncService } from '../services/cloudSyncService';
-import { 
-  PlusCircle, 
-  Upload, 
-  Trash2, 
-  AlertCircle, 
-  Check, 
+import {
+  PlusCircle,
+  Upload,
+  Trash2,
+  AlertCircle,
+  Check,
   ArrowRight,
   Wrench,
   Camera,
@@ -21,10 +21,15 @@ import {
   Image as ImageIcon,
   Link as LinkIcon,
   Star,
-  CheckCircle2
+  CheckCircle2,
+  Lock,
+  Phone,
+  MessageCircle,
+  Clock,
+  FileText
 } from 'lucide-react';
 
-export default function ListItemPage({ 
+export default function ListItemPage({
   itemToEdit = null,
   onCancelEdit,
   onItemUpdated,
@@ -33,7 +38,7 @@ export default function ListItemPage({
 }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
-  const { createItemListing, updateItem, items = [] } = useRentora();
+  const { createItemListing, updateItem, fetchListingContact, items = [] } = useRentora();
 
   const isEditMode = Boolean(itemToEdit && itemToEdit.id);
 
@@ -43,7 +48,6 @@ export default function ListItemPage({
   const [pricePerDay, setPricePerDay] = useState('');
   const [deposit, setDeposit] = useState('');
   const [location, setLocation] = useState('');
-  const [phoneContact, setPhoneContact] = useState('');
   const [instantBook, setInstantBook] = useState(true);
   const [images, setImages] = useState([]);
   const [imageUrlInput, setImageUrlInput] = useState('');
@@ -52,8 +56,17 @@ export default function ListItemPage({
   const [errorMessage, setErrorMessage] = useState('');
   const [successNotice, setSuccessNotice] = useState(false);
 
+  // Private Contact & Coordination State
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [preferredContactMethod, setPreferredContactMethod] = useState('phone');
+  const [contactHours, setContactHours] = useState('');
+  const [coordinationNotes, setCoordinationNotes] = useState('');
+
   // Synchronize state when entering Edit mode or changing itemToEdit
   useEffect(() => {
+    let active = true;
     if (itemToEdit) {
       setTitle(itemToEdit.title || '');
       setCategory(itemToEdit.category || 'tools');
@@ -61,9 +74,28 @@ export default function ListItemPage({
       setPricePerDay(itemToEdit.pricePerDay !== undefined ? String(itemToEdit.pricePerDay) : '');
       setDeposit(itemToEdit.deposit !== undefined ? String(itemToEdit.deposit) : '');
       setLocation(itemToEdit.location || '');
-      setPhoneContact(itemToEdit.phoneContact || '');
       setInstantBook(itemToEdit.instantBooking ?? itemToEdit.deliveryAvailable ?? true);
       setImages(Array.isArray(itemToEdit.images) ? [...itemToEdit.images] : (itemToEdit.images ? [itemToEdit.images] : []));
+
+      if (itemToEdit.contactInfo) {
+        setContactName(itemToEdit.contactInfo.contactName || '');
+        setContactPhone(itemToEdit.contactInfo.contactPhone || '');
+        setWhatsapp(itemToEdit.contactInfo.whatsapp || '');
+        setPreferredContactMethod(itemToEdit.contactInfo.preferredContactMethod || 'phone');
+        setContactHours(itemToEdit.contactInfo.contactHours || '');
+        setCoordinationNotes(itemToEdit.contactInfo.coordinationNotes || '');
+      } else if (itemToEdit.id && fetchListingContact) {
+        fetchListingContact(itemToEdit.id).then(c => {
+          if (active && c) {
+            setContactName(c.contactName || '');
+            setContactPhone(c.contactPhone || '');
+            setWhatsapp(c.whatsapp || '');
+            setPreferredContactMethod(c.preferredContactMethod || 'phone');
+            setContactHours(c.contactHours || '');
+            setCoordinationNotes(c.coordinationNotes || '');
+          }
+        }).catch(() => {});
+      }
     } else {
       setTitle('');
       setCategory('tools');
@@ -71,12 +103,18 @@ export default function ListItemPage({
       setPricePerDay('');
       setDeposit('');
       setLocation('');
-      setPhoneContact(currentUser?.phoneMasked || '');
+      setContactName(currentUser?.displayName || currentUser?.username || '');
+      setContactPhone(currentUser?.phoneMasked || '');
+      setWhatsapp('');
+      setPreferredContactMethod('phone');
+      setContactHours('۰۹:۰۰ الی ۲۱:۰۰');
+      setCoordinationNotes('');
       setInstantBook(true);
       setImages([]);
     }
     setErrorMessage('');
     setSuccessNotice(false);
+    return () => { active = false; };
   }, [itemToEdit, currentUser]);
 
   const categories = [
@@ -216,10 +254,19 @@ export default function ListItemPage({
     setIsSubmitting(true);
 
     try {
+      const contactData = {
+        contactName: contactName.trim(),
+        contactPhone: contactPhone.trim(),
+        whatsapp: whatsapp.trim(),
+        preferredContactMethod,
+        contactHours: contactHours.trim(),
+        coordinationNotes: coordinationNotes.trim()
+      };
+
       if (isEditMode) {
         // Edit Mode
-        const finalImages = images.length > 0 
-          ? images 
+        const finalImages = images.length > 0
+          ? images
           : [presetImages[category]?.[0] || presetImages.tools[0]];
 
         const updatedItem = await updateItem(itemToEdit.id, {
@@ -230,7 +277,7 @@ export default function ListItemPage({
           deposit: parseFloat(deposit) || 0,
           location: location.trim(),
           city: location.split('،')?.[0]?.trim() || location.trim(),
-          phoneContact: phoneContact.trim(),
+          contactInfo: contactData,
           instantBooking: Boolean(instantBook),
           deliveryAvailable: Boolean(instantBook),
           images: finalImages
@@ -238,7 +285,7 @@ export default function ListItemPage({
 
         setSuccessNotice(true);
         if (onItemUpdated) {
-          onItemUpdated(updatedItem || { ...itemToEdit, title, category, description, pricePerDay: parseFloat(pricePerDay), deposit: parseFloat(deposit) || 0, location, images: finalImages });
+          onItemUpdated(updatedItem || { ...itemToEdit, title, category, description, pricePerDay: parseFloat(pricePerDay), deposit: parseFloat(deposit) || 0, location, contactInfo: contactData, images: finalImages });
         }
 
         setTimeout(() => {
@@ -253,7 +300,7 @@ export default function ListItemPage({
           pricePerDay: parseFloat(pricePerDay),
           deposit: parseFloat(deposit) || 0,
           location: location.trim(),
-          phoneContact: phoneContact.trim(),
+          contactInfo: contactData,
           instantBook: Boolean(instantBook),
           images: images
         });
@@ -274,7 +321,7 @@ export default function ListItemPage({
 
   return (
     <div className="max-w-xl mx-auto space-y-4 pb-20 select-none animate-fadeIn">
-      
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -294,8 +341,8 @@ export default function ListItemPage({
           </div>
           <div>
             <h1 className="text-base font-bold text-slate-900 dark:text-white">
-              {isEditMode 
-                ? l('ویرایش آگهی', 'Edit Listing', 'تعديل الإعلان', '编辑物品') 
+              {isEditMode
+                ? l('ویرایش آگهی', 'Edit Listing', 'تعديل الإعلان', '编辑物品')
                 : t('listItemTitle')}
             </h1>
             <p className="text-[11px] text-slate-400">
@@ -329,7 +376,7 @@ export default function ListItemPage({
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="p-4 sm:p-5 rounded-2xl rentora-card space-y-4">
-        
+
         {/* Title */}
         <div>
           <label className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('fieldItemTitle')} *</label>
@@ -473,8 +520,8 @@ export default function ListItemPage({
           {/* Images Grid */}
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
             {images.map((img, idx) => (
-              <div 
-                key={idx} 
+              <div
+                key={idx}
                 className="group relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shadow-2xs"
               >
                 <img src={img} alt="" className="w-full h-full object-cover" />
@@ -547,6 +594,132 @@ export default function ListItemPage({
               ))}
             </div>
           )}
+        </div>
+
+        {/* Private Contact & Coordination Details Section */}
+        <div className="p-4 rounded-xl rentora-card space-y-3.5 border border-[#534AB7]/30 bg-gradient-to-b from-white to-[#EEEDFE]/15 dark:from-[#121124] dark:to-[#181630]">
+          <div className="flex items-start gap-2.5">
+            <div className="p-2 rounded-xl bg-[#EEEDFE] dark:bg-[#26215C] text-[#534AB7] dark:text-[#AFA9EC] shrink-0 mt-0.5">
+              <Lock className="w-4 h-4 stroke-[2]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
+                  {l('اطلاعات تماس و هماهنگی (محرمانه پس از رزرو)', 'Contact & Coordination (Private)', 'بيانات التواصل والتنسيق (خاصة بعد الحجز)', '联系与交接信息（预订后解锁）')}
+                </h3>
+                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-[#0F6E56]/15 text-[#0F6E56] dark:text-[#48D2A8]">
+                  Private
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                {l(
+                  '🔒 این اطلاعات در آگهی عمومی نمایش داده نمی‌شود و تنها پس از پرداخت قطعی کارمزد توسط مستأجر برای وی فعال می‌گردد.',
+                  '🔒 Private details are hidden publicly and only unlocked for the renter after confirmed booking fee payment.',
+                  '🔒 هذه البيانات سرية ولن تظهر للعامة، وتتاح فقط للمستأجر بعد تأكيد دفع عمولة الحجز.',
+                  '🔒 此信息对外隐藏，仅在租客成功支付平台服务费后对其解锁显示。'
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            {/* Contact Name */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                {l('نام رابط / شخص پاسخگو', 'Contact Name / Person', 'اسم جهة الاتصال', '联系人姓名')}
+              </label>
+              <input
+                type="text"
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+                placeholder={currentUser?.displayName || currentUser?.username || 'مثال: علی رضایی'}
+                className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#534AB7]"
+              />
+            </div>
+
+            {/* Contact Phone */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                {l('شماره تلفن مستقیم', 'Contact Phone Number', 'رقم الهاتف المباشر', '联系电话')}
+              </label>
+              <div className="relative">
+                <input
+                  type="tel"
+                  dir="ltr"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  placeholder="09123456789"
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#534AB7]"
+                />
+                <Phone className="w-3.5 h-3.5 text-slate-400 absolute top-3 right-3 rtl:right-auto rtl:left-3" />
+              </div>
+            </div>
+
+            {/* WhatsApp */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                {l('واتساپ (اختیاری)', 'WhatsApp (Optional)', 'واتساب (اختياري)', 'WhatsApp（选填）')}
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  dir="ltr"
+                  value={whatsapp}
+                  onChange={(e) => setWhatsapp(e.target.value)}
+                  placeholder="09123456789 / wa.me/..."
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#534AB7]"
+                />
+                <MessageCircle className="w-3.5 h-3.5 text-slate-400 absolute top-3 right-3 rtl:right-auto rtl:left-3" />
+              </div>
+            </div>
+
+            {/* Preferred Contact Method */}
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                {l('روش ترجیحی ارتباط', 'Preferred Contact Method', 'طريقة التواصل المفضلة', '首选沟通方式')}
+              </label>
+              <select
+                value={preferredContactMethod}
+                onChange={(e) => setPreferredContactMethod(e.target.value)}
+                className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#534AB7]"
+              >
+                <option value="phone">{l('تماس تلفنی', 'Phone Call', 'اتصال هاتفي', '电话通话')}</option>
+                <option value="whatsapp">{l('پیام در واتساپ', 'WhatsApp Message', 'واتساب', 'WhatsApp')}</option>
+                <option value="chat">{l('چت درون‌برنامه رنتورا', 'Rentora In-App Chat', 'دردشة رنتورا', '应用内聊天')}</option>
+                <option value="both">{l('تماس تلفنی و واتساپ', 'Phone & WhatsApp', 'هاتف وواتساب', '电话与WhatsApp均可')}</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Contact Hours */}
+          <div>
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 mb-1">
+              <Clock className="w-3.5 h-3.5 text-[#534AB7]" />
+              <span>{l('ساعات پاسخگویی و تماس', 'Contact Hours', 'أوقات الاتصال المتاحة', '接听时间段')}</span>
+            </label>
+            <input
+              type="text"
+              value={contactHours}
+              onChange={(e) => setContactHours(e.target.value)}
+              placeholder="مثال: همه‌روزه از ۹ صبح الی ۹ شب"
+              className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#534AB7]"
+            />
+          </div>
+
+          {/* Coordination Notes */}
+          <div>
+            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 mb-1">
+              <FileText className="w-3.5 h-3.5 text-[#534AB7]" />
+              <span>{l('توضیحات و دستورالعمل هماهنگی تحویل', 'Handover & Coordination Notes', 'ملاحظات التنسيق والاستلام', '交付与交接附加说明')}</span>
+            </label>
+            <textarea
+              rows="2"
+              value={coordinationNotes}
+              onChange={(e) => setCoordinationNotes(e.target.value)}
+              placeholder={l('مثال: لطفاً ۲ ساعت قبل از مراجعه هماهنگ بفرمایید. همراه داشتن کارت شناسایی الزامی است.', 'e.g., Please call 2 hours before pickup. ID required.', 'مثال: يرجى الاتصال قبل ساعتين من الحضور. يلزم إحضار الهوية.', '例如：请提前2小时联系确认，自提时请携带有效证件。')}
+              className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#534AB7]"
+            ></textarea>
+          </div>
         </div>
 
         {/* Submit & Cancel Action Buttons */}

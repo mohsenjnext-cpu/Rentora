@@ -5,13 +5,13 @@ import { useRentora } from '../context/RentoraContext';
 import { RENTAL_STATES, RentalStateMachine } from '../services/rentalStateMachine';
 import ReviewModal from '../components/ReviewModal';
 import ReportModal from '../components/ReportModal';
-import { 
-  Clock, 
-  CheckCircle2, 
-  Star, 
-  Flag, 
-  Coins, 
-  MapPin, 
+import {
+  Clock,
+  CheckCircle2,
+  Star,
+  Flag,
+  Coins,
+  MapPin,
   AlertTriangle,
   Receipt,
   RotateCw,
@@ -22,22 +22,56 @@ import {
   ChevronUp,
   X,
   ExternalLink,
-  Info
+  Info,
+  Phone,
+  MessageCircle,
+  Lock,
+  Copy,
+  Check
 } from 'lucide-react';
 
 export default function ActivityPage({ onNavigate, onSelectItem }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
-  const { 
-    rentals = [], 
-    confirmHandoverOneTap, 
-    confirmReturnOneTap 
+  const {
+    rentals = [],
+    fetchRentalContact,
+    confirmHandoverOneTap,
+    confirmReturnOneTap
   } = useRentora();
 
   const [activeTab, setActiveTab] = useState('active'); // 'active' | 'history'
   const [selectedRentalForReview, setSelectedRentalForReview] = useState(null);
   const [selectedRentalForReport, setSelectedRentalForReport] = useState(null);
   const [selectedAgreementRental, setSelectedAgreementRental] = useState(null);
+  const [selectedContactRental, setSelectedContactRental] = useState(null);
+  const [rentalContactData, setRentalContactData] = useState(null);
+  const [isLoadingContact, setIsLoadingContact] = useState(false);
+  const [contactError, setContactError] = useState('');
+  const [copiedPhone, setCopiedPhone] = useState(false);
+
+  const handleOpenContactModal = async (rental) => {
+    setSelectedContactRental(rental);
+    setRentalContactData(null);
+    setContactError('');
+    setIsLoadingContact(true);
+    try {
+      const contact = await fetchRentalContact(rental.id);
+      setRentalContactData(contact);
+    } catch (err) {
+      setContactError(err.message || l('امکان دریافت اطلاعات تماس وجود ندارد.', 'Unable to fetch contact details.', 'تعذر الحصول على بيانات التواصل.', '无法获取联系方式。'));
+    } finally {
+      setIsLoadingContact(false);
+    }
+  };
+
+  const handleCopyPhone = (text) => {
+    try {
+      navigator.clipboard.writeText(text);
+      setCopiedPhone(true);
+      setTimeout(() => setCopiedPhone(false), 2000);
+    } catch (e) {}
+  };
   const [processingId, setProcessingId] = useState(null);
 
   if (!isAuthenticated) {
@@ -66,21 +100,21 @@ export default function ActivityPage({ onNavigate, onSelectItem }) {
   const myUsername = (currentUser?.username || '').toLowerCase().replace('@', '');
 
   // Filter rentals where current user is the renter
-  const myRentals = (rentals || []).filter(r => 
+  const myRentals = (rentals || []).filter(r =>
     r.renterUsername?.toLowerCase() === myUsername
   );
 
-  const activeRentals = myRentals.filter(r => 
-    r.status === RENTAL_STATES.CONFIRMED || 
-    r.status === RENTAL_STATES.ACTIVE || 
+  const activeRentals = myRentals.filter(r =>
+    r.status === RENTAL_STATES.CONFIRMED ||
+    r.status === RENTAL_STATES.ACTIVE ||
     r.status === RENTAL_STATES.PAYMENT_PENDING ||
     r.status === RENTAL_STATES.REQUESTED ||
     r.status === RENTAL_STATES.ACCEPTED
   );
 
-  const historyRentals = myRentals.filter(r => 
-    r.status === RENTAL_STATES.COMPLETED || 
-    r.status === RENTAL_STATES.CANCELLED || 
+  const historyRentals = myRentals.filter(r =>
+    r.status === RENTAL_STATES.COMPLETED ||
+    r.status === RENTAL_STATES.CANCELLED ||
     r.status === RENTAL_STATES.REJECTED ||
     r.status === RENTAL_STATES.DISPUTED
   );
@@ -98,7 +132,7 @@ export default function ActivityPage({ onNavigate, onSelectItem }) {
 
   return (
     <div className="max-w-2xl mx-auto space-y-4 pb-16 select-none animate-fadeIn">
-      
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -117,8 +151,8 @@ export default function ActivityPage({ onNavigate, onSelectItem }) {
           type="button"
           onClick={() => setActiveTab('active')}
           className={`flex-1 py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
-            activeTab === 'active' 
-              ? 'bg-white dark:bg-[#26215C] text-[#26215C] dark:text-white shadow-xs' 
+            activeTab === 'active'
+              ? 'bg-white dark:bg-[#26215C] text-[#26215C] dark:text-white shadow-xs'
               : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
@@ -130,8 +164,8 @@ export default function ActivityPage({ onNavigate, onSelectItem }) {
           type="button"
           onClick={() => setActiveTab('history')}
           className={`flex-1 py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
-            activeTab === 'history' 
-              ? 'bg-white dark:bg-[#26215C] text-[#26215C] dark:text-white shadow-xs' 
+            activeTab === 'history'
+              ? 'bg-white dark:bg-[#26215C] text-[#26215C] dark:text-white shadow-xs'
               : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
           }`}
         >
@@ -157,7 +191,7 @@ export default function ActivityPage({ onNavigate, onSelectItem }) {
 
               return (
                 <div key={rental.id} className="p-4 rounded-xl rentora-card space-y-3 border border-slate-150 dark:border-slate-800 shadow-2xs">
-                  
+
                   {/* Card Header */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -203,7 +237,16 @@ export default function ActivityPage({ onNavigate, onSelectItem }) {
                   </div>
 
                   {/* Actions & Agreement Button */}
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex items-center gap-2 pt-1 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenContactModal(rental)}
+                      className="px-3 py-1.5 rounded-lg border border-[#534AB7]/40 bg-[#EEEDFE]/40 dark:bg-[#26215C]/40 text-[#534AB7] dark:text-[#AFA9EC] hover:bg-[#EEEDFE] dark:hover:bg-[#26215C] text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Phone className="w-3.5 h-3.5" />
+                      <span>{l('اطلاعات تماس و هماهنگی', 'Contact & Coordination', 'بيانات التواصل والتنسيق', '联系与交接方式')}</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => setSelectedAgreementRental(rental)}
@@ -218,7 +261,7 @@ export default function ActivityPage({ onNavigate, onSelectItem }) {
                         type="button"
                         disabled={processingId === rental.id}
                         onClick={() => handleConfirmHandover(rental.id)}
-                        className="btn-primary flex-1 py-1.5 text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5"
+                        className="btn-primary flex-1 min-w-[140px] py-1.5 text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>{processingId === rental.id ? '...' : l('تایید دریافت کالا در محل تحویل', 'Confirm Handover at Pickup', 'تأكيد استلام الغرض', '现场确认已交接')}</span>
@@ -306,11 +349,11 @@ export default function ActivityPage({ onNavigate, onSelectItem }) {
 
       {/* Rental Agreement Full Modal */}
       {selectedAgreementRental && (
-        <div 
+        <div
           onClick={() => setSelectedAgreementRental(null)}
           className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-fadeIn select-none"
         >
-          <div 
+          <div
             onClick={(e) => e.stopPropagation()}
             className="bg-white dark:bg-[#151426] rounded-2xl w-full max-w-md max-h-[88vh] flex flex-col border border-slate-200 dark:border-slate-800 shadow-2xl animate-scaleIn overflow-hidden"
           >
@@ -341,7 +384,7 @@ export default function ActivityPage({ onNavigate, onSelectItem }) {
 
             {/* Agreement Body */}
             <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 text-xs">
-              
+
               <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-[#19182E] border border-slate-200 dark:border-slate-700">
                 <div>
                   <span className="text-[10px] text-slate-400 block">{l('موجر (مالک کالا):', 'Owner:', 'المؤجر:', '物主：')}</span>
@@ -421,6 +464,169 @@ export default function ActivityPage({ onNavigate, onSelectItem }) {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Contact Details Modal */}
+      {selectedContactRental && (
+        <div
+          onClick={() => setSelectedContactRental(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-fadeIn select-none"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-[#151426] rounded-2xl w-full max-w-md max-h-[88vh] flex flex-col border border-slate-200 dark:border-slate-800 shadow-2xl animate-scaleIn overflow-hidden"
+          >
+            {/* Header */}
+            <div className="p-4 border-b border-slate-150 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-[#18172E]/70">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#26215C] text-white flex items-center justify-center">
+                  <Phone className="w-4 h-4 text-[#EEEDFE]" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
+                    {l('اطلاعات تماس و هماهنگی تحویل', 'Owner Contact & Coordination', 'بيانات التواصل والتنسيق', '物主联系与交付信息')}
+                  </h3>
+                  <span className="font-mono text-[10px] text-slate-400">
+                    @{selectedContactRental.ownerUsername} • #{selectedContactRental.bookingNumber || selectedContactRental.id.substring(0, 10)}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedContactRental(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 overflow-y-auto space-y-3.5 text-xs">
+              {isLoadingContact ? (
+                <div className="py-8 text-center space-y-2">
+                  <RotateCw className="w-6 h-6 animate-spin mx-auto text-[#534AB7]" />
+                  <p className="text-slate-400">{l('در حال دریافت اطلاعات تماس امن از سرور...', 'Fetching secure contact data...', 'جارٍ تحميل بيانات التواصل...', '正在安全加载联系信息...')}</p>
+                </div>
+              ) : contactError ? (
+                <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{contactError}</span>
+                </div>
+              ) : rentalContactData ? (
+                <div className="space-y-3">
+                  {/* Verified Notice */}
+                  <div className="p-3 rounded-xl badge-trust flex items-center gap-2 border border-[#0F6E56]/30">
+                    <ShieldCheck className="w-4 h-4 text-[#0F6E56] dark:text-[#48D2A8] shrink-0" />
+                    <span className="text-[11px] text-[#0F6E56] dark:text-[#48D2A8] font-bold">
+                      {l('رزرو معتبر: اطلاعات تماس اختصاصی این آگهی فعال گردید.', 'Verified Booking: Private contact unlocked for this listing.', 'حجز مؤكد: تم تفعيل بيانات التواصل لهذا الإعلان.', '预订有效：已成功解锁该物品的专属联系与交接方式。')}
+                    </span>
+                  </div>
+
+                  {/* Contact Name */}
+                  <div className="p-3 rounded-xl rentora-card space-y-1">
+                    <span className="text-[10px] text-slate-400 block">{l('نام رابط / مالک کالا:', 'Contact Person:', 'اسم جهة الاتصال:', '联系人姓名：')}</span>
+                    <strong className="text-sm font-bold text-slate-900 dark:text-white">
+                      {rentalContactData.contactName || selectedContactRental.ownerUsername}
+                    </strong>
+                  </div>
+
+                  {/* Phone Number */}
+                  {rentalContactData.contactPhone && (
+                    <div className="p-3 rounded-xl rentora-card flex items-center justify-between gap-3">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">{l('شماره تماس مستقیم:', 'Phone Number:', 'رقم الهاتف:', '联系电话：')}</span>
+                        <strong className="text-sm font-mono font-black text-slate-900 dark:text-white" dir="ltr">
+                          {rentalContactData.contactPhone}
+                        </strong>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyPhone(rentalContactData.contactPhone)}
+                          className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1A1930] hover:border-[#534AB7] text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedPhone ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedPhone ? l('کپی شد', 'Copied', 'تم النسخ', '已复制') : l('کپی', 'Copy', 'نسخ', '复制')}</span>
+                        </button>
+                        <a
+                          href={`tel:${rentalContactData.contactPhone}`}
+                          className="btn-primary px-3 py-1.5 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Phone className="w-3.5 h-3.5" />
+                          <span>{l('تماس', 'Call', 'اتصال', '拨打')}</span>
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* WhatsApp */}
+                  {rentalContactData.whatsapp && (
+                    <div className="p-3 rounded-xl rentora-card flex items-center justify-between gap-3">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">{l('واتساپ:', 'WhatsApp:', 'واتساب:', 'WhatsApp：')}</span>
+                        <strong className="text-xs font-mono text-emerald-600 dark:text-emerald-400" dir="ltr">
+                          {rentalContactData.whatsapp}
+                        </strong>
+                      </div>
+                      <a
+                        href={rentalContactData.whatsapp.startsWith('http') ? rentalContactData.whatsapp : `https://wa.me/${rentalContactData.whatsapp.replace(/[^0-9]/g, '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer transition shadow-xs"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        <span>{l('ارسال پیام', 'Chat WhatsApp', 'مراسلة', '发消息')}</span>
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Preferred Method & Hours */}
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="p-2.5 rounded-xl rentora-card space-y-0.5">
+                      <span className="text-[10px] text-slate-400 block">{l('روش ترجیحی ارتباط:', 'Preferred Method:', 'طريقة التواصل:', '首选沟通：')}</span>
+                      <span className="font-semibold text-[#534AB7] dark:text-[#AFA9EC]">
+                        {rentalContactData.preferredContactMethod === 'whatsapp' ? l('پیام واتساپ', 'WhatsApp', 'واتساب', 'WhatsApp') :
+                         rentalContactData.preferredContactMethod === 'chat' ? l('چت درون‌برنامه', 'In-App Chat', 'دردشة رنتورا', '应用内聊天') :
+                         rentalContactData.preferredContactMethod === 'both' ? l('تماس و واتساپ', 'Phone & WhatsApp', 'هاتف وواتساب', '电话与WhatsApp') :
+                         l('تماس تلفنی', 'Phone Call', 'اتصال هاتفي', '电话通话')}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl rentora-card space-y-0.5">
+                      <span className="text-[10px] text-slate-400 block">{l('ساعات پاسخگویی:', 'Contact Hours:', 'أوقات الاتصال:', '接听时段：')}</span>
+                      <span className="font-mono font-medium text-slate-700 dark:text-slate-300">
+                        {rentalContactData.contactHours || l('همه‌روزه (توافقی)', 'Daily (Flexible)', 'يومياً', '全天（协商）')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Coordination Notes */}
+                  {rentalContactData.coordinationNotes && (
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#18172E] border border-slate-200 dark:border-slate-800 space-y-1">
+                      <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block">
+                        {l('دستورالعمل و آدرس تحویل:', 'Handover Instructions:', 'تعليمات الاستلام والتسليم:', '交接说明与地址：')}
+                      </span>
+                      <p className="text-xs text-slate-800 dark:text-slate-200 whitespace-pre-line leading-relaxed">
+                        {rentalContactData.coordinationNotes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 border-t border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-[#1A1930]/40 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedContactRental(null)}
+                className="btn-primary px-5 py-2 text-xs font-bold cursor-pointer"
+              >
+                {l('بستن', 'Close', 'إغلاق', '关闭')}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -6,10 +6,10 @@ import { getApiBaseUrl } from '../services/apiConfig';
 import { inspectMessageSafety } from '../services/contactFilterService';
 import { FinancialEngine } from '../services/financialEngine';
 import { RENTAL_STATES, RentalStateMachine } from '../services/rentalStateMachine';
-import { 
-  playNotificationChime, 
-  triggerVibration, 
-  showNativeNotification 
+import {
+  playNotificationChime,
+  triggerVibration,
+  showNativeNotification
 } from '../services/notificationService';
 
 const RentoraContext = createContext();
@@ -107,7 +107,7 @@ export function RentoraProvider({ children }) {
     if (!currentUser) throw new Error("برای ثبت آگهی ابتدا وارد حساب پای خود شوید.");
     const defaultImages = { tools: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80", cameras: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900&auto=format&fit=crop&q=80", camping: "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=900&auto=format&fit=crop&q=80", sports: "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?w=900&auto=format&fit=crop&q=80", vehicles: "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=900&auto=format&fit=crop&q=80", events: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=900&auto=format&fit=crop&q=80", home: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=900&auto=format&fit=crop&q=80" };
     const finalImage = itemData.images?.length ? itemData.images : [defaultImages[itemData.category] || defaultImages.tools];
-    const newItem = { id: "item_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7), title: itemData.title.trim(), category: itemData.category || 'tools', description: itemData.description || '', pricePerDay: parseFloat(itemData.pricePerDay), deposit: parseFloat(itemData.deposit) || 0, location: itemData.location || 'ایران', city: itemData.location?.split('،')?.[0]?.trim() || itemData.location || 'ایران', images: Array.isArray(finalImage) ? finalImage : [finalImage], ownerUid: currentUser.uid, ownerUsername: currentUser.username, ownerAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}`, ownerBio: currentUser.bio || 'کاربر شبکه پای در رنتورا', ownerKYC: currentUser?.kycStatus === 'verified' && !!currentUser?.isOfficialSdk, ownerReputation: null, rating: null, ratingCount: 0, reviewsCount: 0, phoneContact: itemData.phoneContact || currentUser.phoneMasked || '', status: "active", deliveryAvailable: !!itemData.instantBook, instantBooking: !!itemData.instantBook, createdAt: new Date().toISOString() };
+    const newItem = { id: "item_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7), title: itemData.title.trim(), category: itemData.category || 'tools', description: itemData.description || '', pricePerDay: parseFloat(itemData.pricePerDay), deposit: parseFloat(itemData.deposit) || 0, location: itemData.location || 'ایران', city: itemData.location?.split('،')?.[0]?.trim() || itemData.location || 'ایران', images: Array.isArray(finalImage) ? finalImage : [finalImage], ownerUid: currentUser.uid, ownerUsername: currentUser.username, ownerAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}`, ownerBio: currentUser.bio || 'کاربر شبکه پای در رنتورا', ownerKYC: currentUser?.kycStatus === 'verified' && !!currentUser?.isOfficialSdk, ownerReputation: null, rating: null, ratingCount: 0, reviewsCount: 0, phoneContact: itemData.phoneContact || currentUser.phoneMasked || '', contactInfo: itemData.contactInfo || null, status: "active", deliveryAvailable: !!itemData.instantBook, instantBooking: !!itemData.instantBook, createdAt: new Date().toISOString() };
     const confirmed = await cloudSyncService.broadcastNewItem(newItem);
     setItems(prev => { const updated = [confirmed || newItem, ...prev.filter(i => i.id !== newItem.id)]; cloudSyncService.saveCachedItems(updated); return updated; });
     return confirmed || newItem;
@@ -120,6 +120,42 @@ export function RentoraProvider({ children }) {
     const confirmed = await cloudSyncService.broadcastNewItem(updatedItem);
     setItems(prev => { const updated = prev.map(i => i.id === itemId ? (confirmed || updatedItem) : i); cloudSyncService.saveCachedItems(updated); return updated; });
     return confirmed || updatedItem;
+  };
+
+  const fetchRentalContact = async (rentalId) => {
+    if (!rentalId) throw new Error('شناسه رزرو برای دریافت اطلاعات تماس الزامی است.');
+    const apiBase = getApiBaseUrl();
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+      const raw = localStorage.getItem('rentora_live_v1_session');
+      const session = raw ? JSON.parse(raw) : null;
+      if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
+    } catch (_) {}
+    const res = await fetch(`${apiBase}/api/rentals/${encodeURIComponent(rentalId)}/contact`, {
+      method: 'GET',
+      headers
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || 'دسترسی به اطلاعات تماس امکان‌پذیر نیست.');
+    return data.contact;
+  };
+
+  const fetchListingContact = async (listingId) => {
+    if (!listingId) throw new Error('شناسه آگهی برای دریافت اطلاعات تماس الزامی است.');
+    const apiBase = getApiBaseUrl();
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+      const raw = localStorage.getItem('rentora_live_v1_session');
+      const session = raw ? JSON.parse(raw) : null;
+      if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
+    } catch (_) {}
+    const res = await fetch(`${apiBase}/api/listings/${encodeURIComponent(listingId)}/contact`, {
+      method: 'GET',
+      headers
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || 'دسترسی به اطلاعات تماس آگهی مجاز نیست.');
+    return data.contact;
   };
 
   const toggleItemStatus = async (itemId) => {
@@ -222,7 +258,7 @@ export function RentoraProvider({ children }) {
   const addReview = (reviewData) => { const newReview = { id: "rev_" + Date.now(), reviewerUsername: currentUser?.username || 'pioneer', createdAt: new Date().toISOString(), ...reviewData }; setReviews(prev => { const updated = [newReview, ...prev]; cloudSyncService.saveCachedReviews(updated); return updated; }); cloudSyncService.broadcastReview(newReview); return newReview; };
   const updatePlatformConfig = (newConfig) => { if (isAdmin) setPlatformConfig(prev => ({ ...prev, ...newConfig })); };
 
-  return <RentoraContext.Provider value={{ items, rentals, transactions, favorites, reviews, reports, chats, chatThreads: chats, latestNotification, clearLatestNotification: () => setLatestNotification(null), platformConfig, isRefreshing, refreshApp, purgeDatabase, toggleFavorite, calculatePricing, addItem, createItemListing: addItem, updateItem, toggleItemStatus, deleteItem, createRentalBooking, executePiPaymentForRental, confirmHandoverOneTap, confirmReturnOneTap, sendChatMessage, deleteChatThread, deleteChat: deleteChatThread, deleteChatMessage, clearAllChats, addReport, resolveReport, addReview, updatePlatformConfig }}>
+  return <RentoraContext.Provider value={{ items, rentals, transactions, favorites, reviews, reports, chats, chatThreads: chats, latestNotification, clearLatestNotification: () => setLatestNotification(null), platformConfig, isRefreshing, refreshApp, purgeDatabase, toggleFavorite, calculatePricing, addItem, createItemListing: addItem, updateItem, toggleItemStatus, deleteItem, createRentalBooking, executePiPaymentForRental, fetchRentalContact, fetchListingContact, confirmHandoverOneTap, confirmReturnOneTap, sendChatMessage, deleteChatThread, deleteChat: deleteChatThread, deleteChatMessage, clearAllChats, addReport, resolveReport, addReview, updatePlatformConfig }}>
     {children}
   </RentoraContext.Provider>;
 }

@@ -108,6 +108,17 @@ CREATE TABLE IF NOT EXISTS chats (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS listing_contacts (
+  listing_id TEXT PRIMARY KEY REFERENCES listings(id) ON DELETE CASCADE,
+  contact_name TEXT,
+  contact_phone TEXT,
+  whatsapp TEXT,
+  preferred_contact_method TEXT DEFAULT 'phone',
+  contact_hours TEXT,
+  coordination_notes TEXT,
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_listings_owner ON listings(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_listings_status ON listings(status);
 CREATE INDEX IF NOT EXISTS idx_rentals_renter ON rentals(renter_user_id);
@@ -117,3 +128,4 @@ CREATE INDEX IF NOT EXISTS idx_payment_intents_status ON payment_intents(status)
 CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
 CREATE INDEX IF NOT EXISTS idx_chats_owner_renter ON chats(owner_user_id, renter_user_id);
+CREATE INDEX IF NOT EXISTS idx_listing_contacts_listing ON listing_contacts(listing_id);

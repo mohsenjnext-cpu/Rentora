@@ -4,24 +4,24 @@ import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import BookingModal from '../components/BookingModal';
 import ReportModal from '../components/ReportModal';
-import { 
-  ArrowRight, 
-  MapPin, 
-  Star, 
-  Heart, 
-  Share2, 
-  ShieldCheck, 
-  Coins, 
-  Flag, 
-  Check, 
+import {
+  ArrowRight,
+  MapPin,
+  Star,
+  Heart,
+  Share2,
+  ShieldCheck,
+  Coins,
+  Flag,
+  Check,
   MessageSquare,
   Edit3
 } from 'lucide-react';
 
-export default function ItemDetailPage({ 
-  item, 
-  onBack, 
-  onBookingSuccess, 
+export default function ItemDetailPage({
+  item,
+  onBack,
+  onBookingSuccess,
   onOpenChat,
   onOpenPublicProfile,
   onNavigateToOwnerHub,
@@ -43,7 +43,7 @@ export default function ItemDetailPage({
   const ownerName = (item.ownerUsername || '').toLowerCase().replace('@', '').trim();
   const isOwner = Boolean(
     currentUser && (
-      (myName && ownerName && myName === ownerName) || 
+      (myName && ownerName && myName === ownerName) ||
       (item.ownerUid && currentUser.uid && item.ownerUid === currentUser.uid)
     )
   );
@@ -65,7 +65,7 @@ export default function ItemDetailPage({
 
   return (
     <div className="max-w-2xl mx-auto space-y-4 pb-24 select-none">
-      
+
       {/* 1. Top Bar: Back button, Title, Share, Favorite, Report */}
       <div className="flex items-center justify-between">
         <button
@@ -190,7 +190,7 @@ export default function ItemDetailPage({
 
       {/* 4. Owner Card */}
       <div className="p-3.5 rounded-xl rentora-card flex items-center justify-between gap-3">
-        <div 
+        <div
           onClick={() => onOpenPublicProfile && onOpenPublicProfile(item.ownerUsername)}
           className="flex items-center gap-3 cursor-pointer group"
           title={l('مشاهده پروفایل عمومی موجر', 'View Public Profile', 'عرض الملف الشخصي للمؤجر', '查看物主公开主页')}
@@ -235,6 +235,27 @@ export default function ItemDetailPage({
         </p>
       </div>
 
+      {/* Private Contact Security Notice */}
+      <div className="p-3.5 rounded-xl bg-slate-50/80 dark:bg-[#16152B]/60 border border-slate-200 dark:border-slate-800 flex items-start gap-3">
+        <div className="p-2 rounded-xl bg-[#EEEDFE] dark:bg-[#26215C] text-[#534AB7] dark:text-[#AFA9EC] shrink-0 mt-0.5">
+          <Lock className="w-4 h-4 stroke-[2]" />
+        </div>
+        <div className="space-y-0.5 min-w-0">
+          <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+            <span>{l('اطلاعات تماس و هماهنگی تحویل', 'Owner Contact & Coordination', 'بيانات التواصل والتنسيق', '物主联系与交付信息')}</span>
+            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-[#0F6E56]/15 text-[#0F6E56] dark:text-[#48D2A8]">Private</span>
+          </h4>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            {l(
+              '🔒 اطلاعات تماس و هماهنگی مالک پس از پرداخت کارمزد رزرو برای شما فعال می‌شود.',
+              '🔒 Owner contact and coordination details are unlocked after rental fee payment is confirmed.',
+              '🔒 يتم تفعيل بيانات التواصل والتنسيق مع المؤجر بعد تأكيد دفع عمولة الحجز.',
+              '🔒 物主联系与交接方式将在您完成平台费支付后正式解锁可见。'
+            )}
+          </p>
+        </div>
+      </div>
+
       {/* 6. Pricing Breakdown Card */}
       <div className="p-4 rounded-xl rentora-card space-y-2 text-xs">
         <h3 className="font-bold text-slate-900 dark:text-white pb-1.5 border-b border-slate-150 dark:border-slate-800 flex items-center justify-between">
@@ -270,7 +291,7 @@ export default function ItemDetailPage({
       {/* 7. Bottom Fixed CTA Bar */}
       <div className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-[#121124]/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 p-3 z-30">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
-          
+
           <div>
             <div className="text-[10px] text-slate-400 font-medium">{t('dailyRent')}:</div>
             <div className="text-base sm:text-lg font-black text-[#0F6E56] dark:text-[#48D2A8] font-mono">

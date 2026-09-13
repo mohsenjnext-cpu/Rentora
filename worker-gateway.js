@@ -59,9 +59,25 @@ function parseMetadata(value) {
   try { return JSON.parse(value); } catch { return {}; }
 }
 
+function sanitizeListingPublicMetadata(meta) {
+  if (!meta || typeof meta !== 'object') return {};
+  const clean = { ...meta };
+  delete clean.contactInfo;
+  delete clean.phoneContact;
+  delete clean.ownerPhone;
+  delete clean.contactPhone;
+  delete clean.whatsapp;
+  delete clean.contactHours;
+  delete clean.coordinationNotes;
+  delete clean.private_contact;
+  delete clean.contactName;
+  delete clean.preferredContactMethod;
+  return clean;
+}
+
 function listingView(row) {
   return {
-    ...parseMetadata(row.metadata), id: row.id, title: row.title, description: row.description || '',
+    ...sanitizeListingPublicMetadata(parseMetadata(row.metadata)), id: row.id, title: row.title, description: row.description || '',
     category: row.category, location: row.location, pricePerDay: row.price_per_day,
     deposit: row.deposit_amount, ownerUid: row.owner_pi_uid, ownerUsername: row.owner_username,
     ownerAvatar: row.owner_avatar, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at,
