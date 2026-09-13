@@ -164,7 +164,13 @@ export function RentoraProvider({ children }) {
 
   const transitionRentalStatus = async (rentalId, action) => {
     const apiBase = getApiBaseUrl();
-    const response = await fetch(`${apiBase}/api/sync/rental/status`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rentalId, action }) });
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+      const raw = localStorage.getItem('rentora_live_v1_session');
+      const session = raw ? JSON.parse(raw) : null;
+      if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
+    } catch (_) {}
+    const response = await fetch(`${apiBase}/api/sync/rental/status`, { method: 'POST', headers, body: JSON.stringify({ rentalId, action }) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data?.rental) return { success: false, error: data?.error || 'تغییر وضعیت رزرو ناموفق بود.' };
     const updatedRental = data.rental;
