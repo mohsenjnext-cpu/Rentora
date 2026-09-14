@@ -110,6 +110,9 @@ jobs:
       - name: Inspect Cloudflare identity
         run: npx wrangler whoami
 
+      - name: Apply D1 rental-based reviews table migration
+        run: npx wrangler d1 execute RENTORA_DB --remote --file=db/migrations/0007_rental_reviews.sql
+
       - name: Apply D1 schema
         run: npx wrangler d1 execute RENTORA_DB --remote --file=db/schema.sql
 
@@ -124,9 +127,6 @@ jobs:
 
       - name: Apply D1 secure marketplace conversations and messages tables
         run: npx wrangler d1 execute RENTORA_DB --remote --file=db/migrations/0006_secure_marketplace_chat.sql
-
-      - name: Apply D1 rental-based reviews table
-        run: npx wrangler d1 execute RENTORA_DB --remote --file=db/migrations/0007_rental_reviews.sql
 
       - name: Deploy Worker and static assets
         run: npx wrangler deploy
