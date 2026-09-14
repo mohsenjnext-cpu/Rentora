@@ -30,7 +30,7 @@ import {
   Check
 } from 'lucide-react';
 
-export default function ActivityPage({ onNavigate, onSelectItem }) {
+export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
   const {
@@ -612,6 +612,22 @@ export default function ActivityPage({ onNavigate, onSelectItem }) {
                         {rentalContactData.coordinationNotes}
                       </p>
                     </div>
+                  )}
+
+                  {/* In-App Coordination Chat Shortcut */}
+                  {onOpenChat && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetRental = selectedRentalContact;
+                        setSelectedRentalContact(null);
+                        onOpenChat(targetRental, 'rental');
+                      }}
+                      className="w-full py-2.5 px-3 rounded-xl bg-[#534AB7] hover:bg-[#433A9D] text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-xs"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      <span>{l('گفتگوی هماهنگی تحویل در رنتورا', 'In-App Handover Chat', 'محادثة التنسيق في رنتورا', '应用内交接沟通')}</span>
+                    </button>
                   )}
                 </div>
               ) : null}

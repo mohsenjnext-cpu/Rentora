@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
-import { cloudSyncService } from '../services/cloudSyncService';
 import { inspectMessageSafety, QUICK_QUESTIONS } from '../services/contactFilterService';
 import { 
   X, 
@@ -16,12 +15,19 @@ import {
   LogIn, 
   ArrowRight, 
   ArrowLeft, 
-  Trash2
+  Trash2,
+  Lock,
+  Unlock,
+  Info,
+  Calendar,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function ChatModal({ 
   itemContext, 
   initialItem,
+  rentalContext,
+  initialRental,
   isOpen, 
   onClose, 
   onBookDirectly,
@@ -31,52 +37,26 @@ export default function ChatModal({
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
   const { 
-    chats = [], 
-    sendChatMessage, 
-    deleteChatThread, 
-    deleteChatMessage, 
-    clearAllChats
+    conversations = [],
+    refreshConversations,
+    getOrCreateConversation,
+    fetchConversationMessages,
+    sendConversationMessage,
+    archiveConversation
   } = useRentora();
 
+  const [activeConvId, setActiveConvId] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [filterWarningMessage, setFilterWarningMessage] = useState('');
-  const [selectedThreadId, setSelectedThreadId] = useState(null);
-  const [selectedRecipientName, setSelectedRecipientName] = useState(null);
-  const [threadToDelete, setThreadToDelete] = useState(null);
-  const [messageToDelete, setMessageToDelete] = useState(null);
+  const [isSending, setIsSending] = useState(false);
+  const [convToDelete, setConvToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const messagesEndRef = useRef(null);
 
   const activeItem = itemContext || initialItem;
-  const itemRecipientUsername = activeItem?.ownerUsername || activeItem?.recipientUsername || null;
-  const itemTitle = activeItem?.title || '';
-
-  // Determine current active recipient
-  const activeRecipient = itemRecipientUsername || selectedRecipientName || null;
-
-  // Filter threads belonging to current user
-  const myThreads = (chats || []).filter(th => {
-    if (!currentUser?.username) return false;
-    const myName = currentUser.username.toLowerCase();
-    const u1 = (th.renterUsername || '').toLowerCase();
-    const u2 = (th.ownerUsername || '').toLowerCase();
-    return u1 === myName || u2 === myName;
-  });
-
-  // Find currently open thread dynamically from live chats state
-  const myName = (currentUser?.username || '').toLowerCase();
-  const currentThread = (chats || []).find(th => {
-    if (selectedThreadId && th.id === selectedThreadId) return true;
-    if (activeRecipient) {
-      const targetName = activeRecipient.toLowerCase();
-      const u1 = (th.renterUsername || '').toLowerCase();
-      const u2 = (th.ownerUsername || '').toLowerCase();
-      return (u1 === myName && u2 === targetName) || (u2 === myName && u1 === targetName);
-    }
-    return false;
-  }) || null;
-
-  const messagesList = currentThread?.messages || [];
+  const activeRental = rentalContext || initialRental;
 
   const scrollToBottom = (smooth = true) => {
     try {
@@ -84,36 +64,107 @@ export default function ChatModal({
     } catch (e) {}
   };
 
-  // Setup on modal open / item change
-  useEffect(() => {
-    if (!isOpen) return;
+  // Find active conversation from loaded conversations or from messages response
+  const activeConversation = conversations.find(c => c.id === activeConvId) || null;
 
-    if (activeItem) {
-      setSelectedThreadId(null);
-      setSelectedRecipientName(itemRecipientUsername);
+  // Mode resolution: is this pre-booking inquiry or post-booking coordination?
+  const isPostBooking = Boolean(
+    activeConversation?.type === 'post_booking' || 
+    activeConversation?.isPostBookingUnlocked ||
+    (activeRental && activeRental.paymentStatus === 'completed' && ['confirmed', 'active', 'completed'].includes(activeRental.status))
+  );
+
+  // Initialize or fetch conversation when modal opens or target changes
+  useEffect(() => {
+    if (!isOpen) {
+      setActiveConvId(null);
+      setMessages([]);
+      setFilterWarningMessage('');
+      return;
     }
 
-    scrollToBottom(false);
+    let isMounted = true;
 
-    // Immediate fast sync on modal open
-    cloudSyncService.fetchSharedData(true).catch(() => {});
+    async function initConversation() {
+      if (!isAuthenticated || !currentUser) {
+        return;
+      }
 
-    // Polling every 600ms while chat screen is actively open
-    const interval = setInterval(async () => {
+      setIsLoadingMessages(true);
       try {
-        await cloudSyncService.fetchSharedData(true);
-      } catch (e) {}
-    }, 600);
+        if (activeRental?.id) {
+          const res = await getOrCreateConversation({ rentalId: activeRental.id });
+          if (isMounted && res?.conversationId) {
+            setActiveConvId(res.conversationId);
+          }
+        } else if (activeItem?.id) {
+          const res = await getOrCreateConversation({ listingId: activeItem.id });
+          if (isMounted && res?.conversationId) {
+            setActiveConvId(res.conversationId);
+          }
+        } else {
+          // General chat view: load all conversations
+          const list = await refreshConversations();
+          if (isMounted && list && list.length === 1 && !activeConvId) {
+            setActiveConvId(list[0].id);
+          }
+        }
+      } catch (err) {
+        console.warn('Init conversation error:', err.message);
+      } finally {
+        if (isMounted) setIsLoadingMessages(false);
+      }
+    }
+
+    initConversation();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, activeItem?.id, activeRental?.id, isAuthenticated, currentUser]);
+
+  // Load messages whenever activeConvId changes
+  const loadMessages = useCallback(async (convId, silent = false) => {
+    if (!convId || !isAuthenticated) return;
+    if (!silent) setIsLoadingMessages(true);
+    try {
+      const data = await fetchConversationMessages(convId);
+      if (data && Array.isArray(data.messages)) {
+        setMessages(data.messages);
+      }
+    } catch (err) {
+      console.warn('Fetch messages error:', err.message);
+    } finally {
+      if (!silent) setIsLoadingMessages(false);
+    }
+  }, [fetchConversationMessages, isAuthenticated]);
+
+  useEffect(() => {
+    if (activeConvId) {
+      loadMessages(activeConvId, false);
+      scrollToBottom(false);
+    } else {
+      setMessages([]);
+    }
+  }, [activeConvId, loadMessages]);
+
+  // Fast polling for active conversation messages while modal is open
+  useEffect(() => {
+    if (!isOpen || !activeConvId || !isAuthenticated) return;
+
+    const interval = setInterval(() => {
+      loadMessages(activeConvId, true);
+    }, 1500);
 
     return () => clearInterval(interval);
-  }, [isOpen, activeItem, itemRecipientUsername]);
+  }, [isOpen, activeConvId, isAuthenticated, loadMessages]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
-    if (isOpen && messagesList.length > 0) {
+    if (isOpen && messages.length > 0) {
       scrollToBottom(true);
     }
-  }, [isOpen, messagesList.length]);
+  }, [isOpen, messages.length]);
 
   if (!isOpen) return null;
 
@@ -126,27 +177,43 @@ export default function ChatModal({
     const text = (textToSend || messageText || '').trim();
     if (!text) return;
 
-    // Strict Anti-Bypass Filter Inspection
-    const safety = inspectMessageSafety(text);
-    if (safety.isViolating) {
-      setFilterWarningMessage(safety.message || t('chatPhoneWarning'));
-      return;
+    // Strict Anti-Bypass Filter Inspection for Pre-Booking Mode
+    if (!isPostBooking) {
+      const safety = inspectMessageSafety(text);
+      if (safety.isViolating) {
+        setFilterWarningMessage(safety.message || t('chatPhoneWarning'));
+        return;
+      }
     }
 
     setFilterWarningMessage('');
     setMessageText('');
+    setIsSending(true);
 
     try {
-      await sendChatMessage({
-        recipientUsername: activeRecipient || 'pioneer',
-        itemId: activeItem?.id || currentThread?.itemId || 'general',
-        itemTitle: itemTitle || currentThread?.itemTitle || 'گفتگوی رنتورا',
-        text: text
-      });
-      setTimeout(() => scrollToBottom(true), 40);
-      setTimeout(() => scrollToBottom(true), 200);
+      let targetId = activeConvId;
+      if (!targetId) {
+        if (activeRental?.id) {
+          const res = await getOrCreateConversation({ rentalId: activeRental.id });
+          targetId = res.conversationId;
+        } else if (activeItem?.id) {
+          const res = await getOrCreateConversation({ listingId: activeItem.id });
+          targetId = res.conversationId;
+        }
+        if (targetId) setActiveConvId(targetId);
+      }
+
+      if (!targetId) throw new Error('شناسه گفتگوی معتبر یافت نشد.');
+
+      const newMsg = await sendConversationMessage(targetId, { text });
+      if (newMsg) {
+        setMessages(prev => [...prev, newMsg]);
+        setTimeout(() => scrollToBottom(true), 50);
+      }
     } catch (e) {
       setFilterWarningMessage(e.message || 'خطا در ارسال پیام.');
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -161,7 +228,13 @@ export default function ChatModal({
     else if (onBookDirectly && activeItem) onBookDirectly(activeItem);
   };
 
-  const isThreadListView = !activeItem && !selectedThreadId && !selectedRecipientName && myThreads.length > 0;
+  const isThreadListView = !activeConvId && !activeItem && !activeRental;
+
+  const otherUser = activeConversation?.otherUser || {
+    username: activeItem?.ownerUsername || 'pioneer',
+    displayName: activeItem?.ownerUsername || 'Pioneer',
+    avatar: activeItem?.ownerAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${activeItem?.ownerUsername || 'pioneer'}`
+  };
 
   return (
     <div 
@@ -188,18 +261,19 @@ export default function ChatModal({
                   {t('chatTitle')}
                 </h3>
                 <p className="text-[10px] text-slate-400">
-                  {myThreads.length} {l('گفتگوی فعال', 'active chats', 'محادثات نشطة', '个活跃会话')}
+                  {conversations.length} {l('گفتگوی فعال', 'active chats', 'محادثات نشطة', '个活跃会话')}
                 </p>
               </div>
             </div>
           ) : (
             <div className="flex items-center gap-2.5 min-w-0">
-              {!activeItem && (selectedThreadId || selectedRecipientName) && (
+              {(!activeItem && !activeRental && activeConvId) && (
                 <button
                   type="button"
                   onClick={() => {
-                    setSelectedThreadId(null);
-                    setSelectedRecipientName(null);
+                    setActiveConvId(null);
+                    setMessages([]);
+                    refreshConversations();
                   }}
                   className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800 transition cursor-pointer shrink-0"
                   title={t('btnBack')}
@@ -209,32 +283,32 @@ export default function ChatModal({
               )}
 
               <img
-                src={`https://api.dicebear.com/7.x/bottts/svg?seed=${activeRecipient || 'pioneer'}`}
+                src={otherUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${otherUser.username || 'pioneer'}`}
                 alt=""
-                className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 shrink-0"
+                className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 shrink-0 object-cover"
               />
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white font-mono truncate" dir="ltr">
-                    @{activeRecipient || 'pioneer'}
+                    @{otherUser.username}
                   </span>
-                  {activeItem?.ownerKYC && (
-                    <span className="text-[9px] badge-trust px-1.5 py-0.2 rounded font-bold flex items-center gap-0.5 shrink-0">
-                      <CheckCheck className="w-2.5 h-2.5" />
-                      KYC
+                  
+                  {/* Mode Badge: Pre-Booking vs Post-Booking */}
+                  {isPostBooking ? (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 shrink-0">
+                      <ShieldCheck className="w-2.5 h-2.5" />
+                      {l('هماهنگی رزرو', 'Coordination', 'تنسيق الحجز', '交接协调')}
+                    </span>
+                  ) : (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5 bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 shrink-0">
+                      <Lock className="w-2.5 h-2.5" />
+                      {l('پیش از رزرو', 'Pre-Booking', 'قبل الحجز', '预订咨询')}
                     </span>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => cloudSyncService.fetchSharedData(true)}
-                    className="p-1 rounded-md text-slate-400 hover:text-[#534AB7] dark:hover:text-[#AFA9EC] transition cursor-pointer"
-                    title={l('همگام‌سازی زنده', 'Live Sync', 'تزامن مباشر', '实时同步')}
-                  >
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse block"></span>
-                  </button>
                 </div>
-                <div className="text-[10px] text-slate-400 truncate max-w-[140px] sm:max-w-[200px]">
-                  {itemTitle || currentThread?.itemTitle || l('گفتگوی امن رنتورا', 'Rentora Secure Chat', 'محادثة رنتورا الآمنة', 'Rentora 安全聊天')}
+
+                <div className="text-[10px] text-slate-400 truncate max-w-[160px] sm:max-w-[220px]">
+                  {activeConversation?.listing?.title || activeItem?.title || l('گفتگوی امن رنتورا', 'Rentora Secure Chat', 'محادثة رنتورا الآمنة', 'Rentora 安全聊天')}
                 </div>
               </div>
             </div>
@@ -242,7 +316,7 @@ export default function ChatModal({
 
           {/* Action Buttons in Header */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {activeItem && (
+            {activeItem && !isPostBooking && (
               <button
                 type="button"
                 onClick={handleBookingCTA}
@@ -253,209 +327,206 @@ export default function ChatModal({
               </button>
             )}
 
-            {/* DEDICATED VISIBLE DELETE CHAT BUTTON */}
-            {!isThreadListView && (
+            {!isThreadListView && activeConvId && (
               <button
                 type="button"
-                onClick={() => {
-                  const target = currentThread || {
-                    id: selectedThreadId || activeItem?.id || activeRecipient || 'current',
-                    recipientUsername: activeRecipient,
-                    itemTitle: itemTitle || currentThread?.itemTitle
-                  };
-                  setThreadToDelete(target);
-                }}
-                className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-950/70 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                onClick={() => setConvToDelete(activeConvId)}
+                className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
                 title={t('chatDeleteBtn')}
               >
-                <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
-                <span className="text-[11px]">{t('chatDeleteBtn')}</span>
+                <Trash2 className="w-4 h-4" />
               </button>
             )}
 
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition cursor-pointer"
-              aria-label="Close"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              title={t('btnCancel')}
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Security Banner */}
-        <div className="p-2 px-3 bg-[#EEEDFE]/70 dark:bg-[#1E1B3D]/70 border-b border-[#7F77DD]/20 text-[10px] sm:text-[11px] text-[#26215C] dark:text-[#EEEDFE] flex items-center gap-2 font-medium">
-          <ShieldCheck className="w-4 h-4 text-[#534AB7] dark:text-[#AFA9EC] shrink-0" />
-          <span className="truncate">{t('chatNotice')}</span>
-        </div>
-
-        {/* Safety Warning */}
-        {filterWarningMessage && (
-          <div className="p-2.5 bg-rose-500/10 border-b border-rose-300/40 text-[11px] text-rose-700 dark:text-rose-300 flex items-start gap-2 font-semibold animate-fadeIn">
-            <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-            <span className="leading-relaxed">{filterWarningMessage}</span>
+        {/* ========================================================= */}
+        {/* MODE BANNER & ANTI-BYPASS NOTICE                          */}
+        {/* ========================================================= */}
+        {!isThreadListView && (
+          <div>
+            {isPostBooking ? (
+              <div className="bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 border-b border-emerald-200 dark:border-emerald-800/60 flex items-start gap-2 text-[11px] text-emerald-900 dark:text-emerald-200">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                <span className="leading-snug">
+                  {l('رزرو شما تایید شده است. می‌توانید آزادانه درباره نشانی دقیق، زمان تحویل و هماهنگی‌های لازم گفتگو کنید.', 'Booking is confirmed! You can freely coordinate pickup location, exact timing, and instructions.', 'تم تأكيد الحجز! يمكنك التنسيق بحرية حول العنوان وموعد الاستلام.', '订单已确认！您可以在此直接沟通准确交接地址与时间。')}
+                </span>
+              </div>
+            ) : (
+              <div className="bg-amber-50 dark:bg-amber-950/40 px-3 py-2 border-b border-amber-200 dark:border-amber-800/60 flex items-start gap-2 text-[11px] text-amber-900 dark:text-amber-200">
+                <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <span className="leading-snug">
+                  {l('گفتگوی اولیه درباره آگهی: تبادل اطلاعات تماس، آیدی یا شماره تلفن تا پیش از تایید رزرو مسدود است.', 'Pre-Booking Chat: Exchanging contact info or phone numbers is strictly prohibited before confirmed booking.', 'محادثة أولية: يُمنع تبادل أرقام الهواتف أو الروابط قبل تأكيد الحجز.', '预订前咨询：在订单支付确认前，禁止交换联系电话及外部社交账号。')}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
         {/* ========================================================= */}
-        {/* VIEW 1: THREAD LIST VIEW                                  */}
+        {/* FILTER VIOLATION WARNING BANNER                           */}
+        {/* ========================================================= */}
+        {filterWarningMessage && (
+          <div className="bg-rose-50 dark:bg-rose-950/50 p-2.5 border-b border-rose-200 dark:border-rose-900/60 flex items-start gap-2 text-rose-700 dark:text-rose-300 text-xs animate-shake">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
+            <div className="flex-1 text-[11px] leading-relaxed">
+              {filterWarningMessage}
+            </div>
+            <button
+              type="button"
+              onClick={() => setFilterWarningMessage('')}
+              className="text-rose-400 hover:text-rose-700 p-0.5"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* BODY: CONVERSATION LIST VIEW                              */}
         {/* ========================================================= */}
         {isThreadListView ? (
-          <div className="flex-1 p-3 overflow-y-auto space-y-2">
-            <div className="flex items-center justify-between pb-1 px-1">
-              <span className="text-[11px] text-slate-500 font-bold">
-                {l('لیست گفتگوهای شما', 'Your conversation list', 'قائمة محادثاتك', '您的会话列表')}
-              </span>
-              {myThreads.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setThreadToDelete('ALL_CHATS')}
-                  className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>{l('حذف همه گفتگوها', 'Delete all chats', 'حذف جميع المحادثات', '清除全部会话')}</span>
-                </button>
-              )}
-            </div>
-
-            {myThreads.map(th => {
-              const otherUser = (th.renterUsername || '').toLowerCase() === myName
-                ? th.ownerUsername 
-                : th.renterUsername;
-              const lastMsg = th.messages?.[th.messages.length - 1];
-
-              return (
-                <div
-                  key={th.id}
-                  onClick={() => {
-                    setSelectedThreadId(th.id);
-                    setSelectedRecipientName(otherUser);
-                  }}
-                  className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#18172E] hover:border-[#534AB7] transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs group"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <img
-                      src={`https://api.dicebear.com/7.x/bottts/svg?seed=${otherUser || 'pioneer'}`}
-                      alt=""
-                      className="w-10 h-10 rounded-xl bg-slate-150 dark:bg-slate-700 border border-slate-200 dark:border-slate-700 shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs text-slate-900 dark:text-white font-mono" dir="ltr">
-                          @{otherUser}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[180px] sm:max-w-[240px]">
-                        {lastMsg?.text || th.itemTitle || 'پیام جدید'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Actions on Card: Timestamp + Red Delete Button */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className="text-right">
-                      <span className="text-[9px] text-slate-400 block font-mono">
-                        {lastMsg?.timestamp || ''}
-                      </span>
-                      <span className="text-[10px] text-[#534AB7] dark:text-[#AFA9EC] font-semibold truncate max-w-[90px] block">
-                        {th.itemTitle}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setThreadToDelete(th);
-                      }}
-                      className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-950/70 text-rose-600 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-2xs"
-                      title={t('chatDeleteBtn')}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>{t('btnDelete')}</span>
-                    </button>
-                  </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {conversations.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400 space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-[#1E1D33] flex items-center justify-center text-slate-400">
+                  <MessageSquare className="w-7 h-7" />
                 </div>
-              );
-            })}
+                <p className="text-xs font-medium">
+                  {l('هنوز هیچ گفتگویی ثبت نشده است.', 'No conversations yet.', 'لا توجد محادثات بعد.', '暂无任何会话记录。')}
+                </p>
+                <p className="text-[11px] text-slate-500 max-w-xs">
+                  {l('با کلیک روی دکمه گفتگو در صفحه هر کالا، می‌توانید با صاحب کالا پیام رد و بدل کنید.', 'Click chat on any listing to start a conversation with the owner.', 'اضغط على زر المحادثة في صفحة أي غرض لبدء التواصل.', '在物品详情页点击沟通按钮即可向物主发起咨询。')}
+                </p>
+              </div>
+            ) : (
+              conversations.map(conv => {
+                const partner = conv.otherUser || { username: 'pioneer', displayName: 'Pioneer' };
+                const isPaid = conv.type === 'post_booking' || conv.isPostBookingUnlocked;
+                return (
+                  <div
+                    key={conv.id}
+                    onClick={() => setActiveConvId(conv.id)}
+                    className="p-3 rounded-xl bg-slate-50 dark:bg-[#1A1930] hover:bg-[#EEEDFE]/40 dark:hover:bg-[#26215C]/40 border border-slate-200 dark:border-slate-800 transition cursor-pointer flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={partner.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${partner.username || 'pioneer'}`}
+                        alt=""
+                        className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-700 object-cover shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-xs text-slate-900 dark:text-white font-mono" dir="ltr">
+                            @{partner.username}
+                          </span>
+                          {isPaid ? (
+                            <span className="text-[8px] px-1 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold">
+                              {l('رزرو قطعی', 'Paid Booking', 'حجز مؤكد', '已付款')}
+                            </span>
+                          ) : (
+                            <span className="text-[8px] px-1 py-0.2 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 font-medium">
+                              {l('استعلام اولیه', 'Inquiry', 'استفسار', '咨询')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                          {conv.listing?.title || l('کالای رنتورا', 'Rentora Item', 'غرض رنتورا', '物品')}
+                        </p>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate mt-0.5">
+                          {conv.lastMessageText || l('شروع گفتگو...', 'Start conversation...', 'بدء المحادثة...', '开始沟通...')}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className="text-[9px] text-slate-400 font-mono">
+                        {conv.lastMessageAt ? new Date(conv.lastMessageAt).toLocaleDateString([], { month: 'short', day: 'numeric' }) : ''}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         ) : (
           /* ========================================================= */
-          /* VIEW 2: ACTIVE CONVERSATION MESSAGES                      */
+          /* BODY: ACTIVE CONVERSATION MESSAGES                        */
           /* ========================================================= */
-          <div className="flex-1 p-3.5 sm:p-4 overflow-y-auto space-y-3 bg-slate-50/40 dark:bg-[#121124]/40 text-xs">
-            
-            {/* Clear messages banner if conversation has messages */}
-            {messagesList.length > 0 && (
-              <div className="flex items-center justify-between px-3 py-1.5 mb-2 bg-slate-100 dark:bg-[#191830] rounded-xl border border-slate-200/70 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-300">
-                <span className="font-medium">
-                  {messagesList.length} {l('پیام ثبت‌شده در این گفتگو', 'messages in this chat', 'رسائل في هذه المحادثة', '条聊天记录')}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const target = currentThread || {
-                      id: selectedThreadId || activeItem?.id || activeRecipient || 'current',
-                      recipientUsername: activeRecipient,
-                      itemTitle: itemTitle || currentThread?.itemTitle
-                    };
-                    setThreadToDelete(target);
-                  }}
-                  className="text-rose-600 dark:text-rose-400 hover:text-rose-700 font-bold flex items-center gap-1 cursor-pointer"
-                >
-                  <Trash2 className="w-3 h-3" />
-                  <span>{l('حذف کامل این گفتگو', 'Delete conversation', 'حذف المحادثة', '清空本段会话')}</span>
-                </button>
+          <div className="flex-1 overflow-y-auto p-3.5 space-y-3 bg-slate-50/50 dark:bg-[#121124]/50">
+            {isLoadingMessages ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#534AB7]"></div>
               </div>
-            )}
-
-            {messagesList.length === 0 ? (
-              <div className="py-12 text-center space-y-3">
-                <div className="w-12 h-12 mx-auto rounded-2xl bg-[#EEEDFE] dark:bg-[#26215C] text-[#534AB7] dark:text-white flex items-center justify-center shadow-xs">
+            ) : messages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400 space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-[#EEEDFE] dark:bg-[#26215C] text-[#534AB7] dark:text-[#AFA9EC] flex items-center justify-center">
                   <Sparkles className="w-6 h-6" />
                 </div>
                 <div>
                   <h4 className="font-bold text-xs text-slate-800 dark:text-slate-200">
-                    {l('شروع گفتگو با کاربر', 'Start conversation', 'ابدأ المحادثة مع المستخدم', '与对方开启会话')}
+                    {isPostBooking 
+                      ? l('هماهنگی تحویل کالا', 'Pickup & Handover Coordination', 'تنسيق التسليم', '交接协调')
+                      : l('پرسش درباره وضعیت و شرایط کالا', 'Ask about condition & availability', 'استفسر عن الحالة والتسليم', '咨询设备状态与租借事宜')}
                   </h4>
-                  <p className="text-[11px] text-slate-400 mt-1 max-w-xs mx-auto">
-                    {l('سوالات خود را درباره نحوه تحویل، سلامت کالا و زمان‌بندی بپرسید.', 'Ask questions regarding handover, item condition and scheduling.', 'اطرح استفساراتك حول الاستلام وحالة الغرض والمواعيد.', '您可以就交接方式、物品状况及时间安排向对方提问。')}
+                  <p className="text-[11px] text-slate-400 mt-1 max-w-xs">
+                    {isPostBooking
+                      ? l('رزرو شما تایید شده است. می‌توانید درباره زمان و محل تحویل کالا پیام ارسال کنید.', 'Your booking is confirmed. Send a message to coordinate pickup location and time.', 'تم تأكيد الحجز. يمكنك التنسيق بشأن الموعد والمكان.', '您的订单已确认，请在此沟通设备交接时间与地点。')
+                      : l('برای شروع، سوال خود را بنویسید یا از گزینه‌های آماده زیر استفاده کنید.', 'Type your inquiry below or tap a quick question chip.', 'اكتب استفسارك أو اختر من الأسئلة الجاهزة.', '请在下方输入您的疑问或点击快捷短语快速咨询。')}
                   </p>
                 </div>
               </div>
             ) : (
-              messagesList.map((msg, idx) => {
-                const isMe = (msg.senderUsername || '').toLowerCase() === myName;
+              messages.map((msg, idx) => {
+                const isMe = (msg.senderUsername || '').toLowerCase() === (currentUser?.username || '').toLowerCase();
+                const isSystem = msg.messageType === 'system' || msg.messageType === 'handover_notice' || msg.messageType === 'status_update';
+
+                if (isSystem) {
+                  return (
+                    <div key={msg.id || idx} className="flex justify-center my-2">
+                      <div className="bg-slate-200/70 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 text-[10px] px-3 py-1 rounded-full border border-slate-300 dark:border-slate-700 font-mono flex items-center gap-1.5">
+                        <Info className="w-3 h-3 text-[#534AB7] dark:text-[#AFA9EC]" />
+                        <span>{msg.text}</span>
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={msg.id || idx}
-                    className={`flex flex-col group ${isMe ? 'items-end' : 'items-start'}`}
+                    className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                   >
-                    <div className={`flex items-center gap-1.5 max-w-[90%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                    <div className="flex items-end gap-1.5 max-w-[85%]">
+                      {!isMe && (
+                        <img
+                          src={msg.senderAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${msg.senderUsername || 'pioneer'}`}
+                          alt=""
+                          className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-slate-700 object-cover shrink-0 mb-1"
+                        />
+                      )}
                       <div
-                        className={`p-2.5 rounded-2xl text-xs leading-relaxed ${
+                        className={`p-3 rounded-2xl text-xs leading-relaxed break-words ${
                           isMe
-                            ? 'bg-[#26215C] dark:bg-[#534AB7] text-white rounded-br-xs shadow-xs'
-                            : 'bg-white dark:bg-[#1E1D33] text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-bl-xs shadow-2xs'
+                            ? 'bg-[#534AB7] text-white rounded-br-xs'
+                            : 'bg-white dark:bg-[#1E1D33] text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700/80 rounded-bl-xs'
                         }`}
                       >
                         {msg.text}
                       </div>
-
-                      {/* Delete Individual Message Button */}
-                      <button
-                        type="button"
-                        onClick={() => setMessageToDelete(msg)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer shrink-0"
-                        title={l('حذف این پیام', 'Delete message', 'حذف الرسالة', '删除此消息')}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
                     </div>
 
                     <span className="text-[9px] text-slate-400 mt-0.5 px-1 font-mono">
-                      {msg.timestamp || 'هم‌اکنون'}
+                      {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                     </span>
                   </div>
                 );
@@ -482,8 +553,8 @@ export default function ChatModal({
           </div>
         )}
 
-        {/* Quick Question Chips */}
-        {!isThreadListView && isAuthenticated && (
+        {/* Quick Question Chips (Pre-booking mode) */}
+        {!isThreadListView && isAuthenticated && !isPostBooking && (
           <div className="p-2 border-t border-slate-150 dark:border-slate-800 bg-white dark:bg-[#151426] flex items-center gap-1.5 overflow-x-auto scrollbar-none">
             {QUICK_QUESTIONS.map(q => {
               const localizedQ = (lang === 'fa' ? q.fa : (lang === 'ar' ? q.ar : (lang === 'zh' ? q.zh : q.en)));
@@ -513,17 +584,21 @@ export default function ChatModal({
             <input
               type="text"
               value={messageText}
-              disabled={!isAuthenticated}
+              disabled={!isAuthenticated || isSending}
               onChange={(e) => {
                 setMessageText(e.target.value);
                 if (filterWarningMessage) setFilterWarningMessage('');
               }}
-              placeholder={isAuthenticated ? t('chatInputPlaceholder') : l('جهت ارسال پیام وارد شوید...', 'Sign in to chat...', 'سجل الدخول للمراسلة...', '登录后即可输入消息...')}
+              placeholder={isAuthenticated 
+                ? (isPostBooking 
+                    ? l('پیام هماهنگی تحویل کالا، آدرس یا زمان...', 'Coordination message regarding pickup...', 'اكتب رسالة التنسيق...', '输入关于交接时间与地址的沟通...')
+                    : t('chatInputPlaceholder')) 
+                : l('جهت ارسال پیام وارد شوید...', 'Sign in to chat...', 'سجل الدخول للمراسلة...', '登录后即可输入消息...')}
               className="flex-1 p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#121124] text-slate-900 dark:text-white focus:outline-none focus:border-[#534AB7] disabled:opacity-60"
             />
             <button
               type="submit"
-              disabled={!isAuthenticated || !messageText.trim()}
+              disabled={!isAuthenticated || !messageText.trim() || isSending}
               className="btn-primary p-2.5 rounded-xl cursor-pointer disabled:opacity-40 shrink-0"
               title={t('chatSendBtn')}
             >
@@ -533,11 +608,11 @@ export default function ChatModal({
         )}
 
         {/* ========================================================= */}
-        {/* CONFIRMATION DIALOG: DELETE ENTIRE CONVERSATION            */}
+        {/* CONFIRMATION DIALOG: ARCHIVE / DELETE CONVERSATION         */}
         {/* ========================================================= */}
-        {threadToDelete && (
+        {convToDelete && (
           <div 
-            onClick={() => !isDeleting && setThreadToDelete(null)}
+            onClick={() => !isDeleting && setConvToDelete(null)}
             className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn"
           >
             <div 
@@ -549,16 +624,10 @@ export default function ChatModal({
               </div>
               <div>
                 <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                  {threadToDelete === 'ALL_CHATS' 
-                    ? l('حذف تمامی گفتگوها', 'Delete All Conversations', 'حذف جميع المحادثات', '清除所有会话')
-                    : t('chatDeleteConfirmTitle')
-                  }
+                  {t('chatDeleteConfirmTitle')}
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
-                  {threadToDelete === 'ALL_CHATS'
-                    ? l('آیا از حذف تمام گفتگوها و پیام‌ها اطمینان دارید؟ این عمل غیرقابل بازگشت است.', 'Are you sure you want to delete all chat threads? This cannot be undone.', 'هل أنت متأكد من حذف جميع المحادثات والرسائل؟ لا يمكن التراجع عن هذا الإجراء.', '您确定要清空所有聊天记录吗？此操作不可恢复。')
-                    : t('chatDeleteConfirmDesc')
-                  }
+                  {t('chatDeleteConfirmDesc')}
                 </p>
               </div>
               <div className="flex items-center gap-2 pt-2">
@@ -568,16 +637,11 @@ export default function ChatModal({
                   onClick={async () => {
                     setIsDeleting(true);
                     try {
-                      if (threadToDelete === 'ALL_CHATS') {
-                        await clearAllChats();
-                        setSelectedThreadId(null);
-                        setSelectedRecipientName(null);
-                      } else {
-                        await deleteChatThread(threadToDelete);
-                        setSelectedThreadId(null);
-                        setSelectedRecipientName(null);
-                      }
-                      setThreadToDelete(null);
+                      await archiveConversation(convToDelete);
+                      setConvToDelete(null);
+                      setActiveConvId(null);
+                      setMessages([]);
+                      await refreshConversations();
                     } finally {
                       setIsDeleting(false);
                     }
@@ -590,55 +654,8 @@ export default function ChatModal({
                 <button
                   type="button"
                   disabled={isDeleting}
-                  onClick={() => setThreadToDelete(null)}
+                  onClick={() => setConvToDelete(null)}
                   className="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
-                >
-                  {t('btnCancel')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================= */}
-        {/* CONFIRMATION DIALOG: DELETE INDIVIDUAL MESSAGE            */}
-        {/* ========================================================= */}
-        {messageToDelete && (
-          <div 
-            onClick={() => setMessageToDelete(null)}
-            className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn"
-          >
-            <div 
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white dark:bg-[#1A1930] rounded-2xl p-5 max-w-sm w-full border border-slate-200 dark:border-slate-700 shadow-2xl space-y-3 animate-scaleIn text-center"
-            >
-              <div className="w-10 h-10 mx-auto rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="font-bold text-xs text-slate-900 dark:text-white">
-                  {l('حذف این پیام؟', 'Delete this message?', 'حذف هذه الرسالة؟', '删除此条消息？')}
-                </h4>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 px-2 bg-slate-50 dark:bg-[#141324] py-1.5 rounded-lg border border-slate-200 dark:border-slate-800">
-                  "{messageToDelete.text}"
-                </p>
-              </div>
-              <div className="flex items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await deleteChatMessage(messageToDelete.id);
-                    setMessageToDelete(null);
-                  }}
-                  className="flex-1 py-2 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1 shadow-xs"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>{t('btnDelete')}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMessageToDelete(null)}
-                  className="flex-1 py-2 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   {t('btnCancel')}
                 </button>

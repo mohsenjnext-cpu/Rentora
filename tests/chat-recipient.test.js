@@ -17,7 +17,8 @@ function createMockEnv(initialData = {}) {
     transactions: initialData.transactions || [],
     reviews: initialData.reviews || [],
     reports: initialData.reports || [],
-    chats: initialData.chats || [],
+    conversations: initialData.conversations || [],
+    messages: initialData.messages || [],
   };
 
   const mockDb = {
@@ -26,14 +27,20 @@ function createMockEnv(initialData = {}) {
         bind(...params) {
           return {
             async first() {
-              if (query.includes('username')) {
-                return dbData.users.find(u => u.username?.toLowerCase() === String(params[0]).toLowerCase()) || null;
-              }
-              if (query.includes('pi_uid')) {
+              if (query.includes('FROM users WHERE pi_uid = ?1') || query.includes('FROM users WHERE pi_uid=?1')) {
                 return dbData.users.find(u => u.pi_uid === params[0]) || null;
               }
-              if (query.includes('FROM chats WHERE id')) {
-                return dbData.chats.find(c => c.id === params[0]) || null;
+              if (query.includes('FROM users WHERE id=?1')) {
+                return dbData.users.find(u => u.id === params[0]) || null;
+              }
+              if (query.includes('FROM listings WHERE id=?1')) {
+                return dbData.listings.find(l => l.id === params[0] && l.status !== 'deleted') || null;
+              }
+              if (query.includes('FROM conversations') && query.includes('WHERE listing_id = ?1 AND renter_user_id = ?2 AND type = ?3')) {
+                return dbData.conversations.find(c => c.listing_id === params[0] && c.renter_user_id === params[1] && c.type === params[2]) || null;
+              }
+              if (query.includes('FROM conversations WHERE id=?1')) {
+                return dbData.conversations.find(c => c.id === params[0]) || null;
               }
               return null;
             },
@@ -41,8 +48,18 @@ function createMockEnv(initialData = {}) {
               return { results: [] };
             },
             async run() {
-              if (query.includes('INSERT INTO chats')) {
-                dbData.chats.push({ id: params[0], owner_user_id: params[1], renter_user_id: params[2], rental_id: params[3], metadata: params[4] });
+              if (query.includes('INSERT INTO conversations')) {
+                dbData.conversations.push({
+                  id: params[0],
+                  listing_id: params[1],
+                  rental_id: params[2],
+                  owner_user_id: params[3],
+                  renter_user_id: params[4],
+                  type: params[5],
+                  status: 'active',
+                  created_at: params[6],
+                  updated_at: params[6]
+                });
                 return { meta: { changes: 1 } };
               }
               return { meta: { changes: 1 } };
@@ -66,83 +83,45 @@ function createMockEnv(initialData = {}) {
   };
 }
 
-test('Chat recipient resolution: Owner sending message correctly routes to Renter', async () => {
+test('Conversation creation: Renter starting conversation for listing correctly routes to Owner', async () => {
   const owner = { id: 'usr_owner', pi_uid: 'uid_owner', username: 'avina60', status: 'active', role: 'user' };
   const renter = { id: 'usr_renter', pi_uid: 'uid_renter', username: 'john_doe', status: 'active', role: 'user' };
-  const { env, kvStore, dbData } = createMockEnv({ users: [owner, renter] });
-
-  const token = 'token_owner';
-  kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: owner.pi_uid, username: owner.username, role: owner.role }));
-
-  const chatPayload = {
-    id: 'chat_123',
-    ownerUsername: 'avina60',
-    renterUsername: 'john_doe',
-    messages: [{ id: 'msg_1', senderUsername: 'avina60', text: 'Hello John' }]
-  };
-
-  const res = await gateway.fetch(new Request('https://rentora.example/api/sync/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(chatPayload)
-  }), env);
-
-  assert.equal(res.status, 200);
-  const json = await res.json();
-  assert.equal(json.success, true);
-  assert.equal(dbData.chats.length, 1);
-  assert.equal(dbData.chats[0].owner_user_id, 'usr_owner');
-  assert.equal(dbData.chats[0].renter_user_id, 'usr_renter');
-});
-
-test('Chat recipient resolution: Renter sending message correctly routes to Owner', async () => {
-  const owner = { id: 'usr_owner', pi_uid: 'uid_owner', username: 'avina60', status: 'active', role: 'user' };
-  const renter = { id: 'usr_renter', pi_uid: 'uid_renter', username: 'john_doe', status: 'active', role: 'user' };
-  const { env, kvStore, dbData } = createMockEnv({ users: [owner, renter] });
+  const listing = { id: 'item_123', owner_user_id: 'usr_owner', title: 'Drill', status: 'active', price_per_day: 5 };
+  const { env, kvStore, dbData } = createMockEnv({ users: [owner, renter], listings: [listing] });
 
   const token = 'token_renter';
   kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: renter.pi_uid, username: renter.username, role: renter.role }));
 
-  const chatPayload = {
-    id: 'chat_456',
-    ownerUsername: 'avina60',
-    renterUsername: 'john_doe',
-    messages: [{ id: 'msg_2', senderUsername: 'john_doe', text: 'Hi, is this drill available?' }]
-  };
-
-  const res = await gateway.fetch(new Request('https://rentora.example/api/sync/chat', {
+  const res = await gateway.fetch(new Request('https://rentora.example/api/conversations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(chatPayload)
+    body: JSON.stringify({ listingId: 'item_123' })
   }), env);
 
-  assert.equal(res.status, 200);
+  assert.equal(res.status, 201);
   const json = await res.json();
   assert.equal(json.success, true);
-  assert.equal(dbData.chats.length, 1);
+  assert.equal(dbData.conversations.length, 1);
+  assert.equal(dbData.conversations[0].owner_user_id, 'usr_owner');
+  assert.equal(dbData.conversations[0].renter_user_id, 'usr_renter');
+  assert.equal(dbData.conversations[0].type, 'pre_booking');
 });
 
-test('Chat recipient resolution: Self-chat is rejected with 400', async () => {
+test('Conversation creation: Self-conversation is rejected with 400', async () => {
   const owner = { id: 'usr_owner', pi_uid: 'uid_owner', username: 'avina60', status: 'active', role: 'user' };
-  const { env, kvStore } = createMockEnv({ users: [owner] });
+  const listing = { id: 'item_mine', owner_user_id: 'usr_owner', title: 'Drill', status: 'active', price_per_day: 5 };
+  const { env, kvStore } = createMockEnv({ users: [owner], listings: [listing] });
 
   const token = 'token_owner';
   kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: owner.pi_uid, username: owner.username, role: owner.role }));
 
-  const selfChatPayload = {
-    id: 'chat_self',
-    ownerUsername: 'avina60',
-    renterUsername: 'avina60',
-    messages: [{ id: 'msg_self', senderUsername: 'avina60', text: 'Chatting with myself' }]
-  };
-
-  const res = await gateway.fetch(new Request('https://rentora.example/api/sync/chat', {
+  const res = await gateway.fetch(new Request('https://rentora.example/api/conversations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(selfChatPayload)
+    body: JSON.stringify({ listingId: 'item_mine' })
   }), env);
 
   assert.equal(res.status, 400);
   const json = await res.json();
-  assert.equal(json.error, 'Chat recipient cannot be self');
+  assert.equal(json.error, 'Self-conversation is not allowed');
 });

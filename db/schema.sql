@@ -99,13 +99,29 @@ CREATE TABLE IF NOT EXISTS reports (
   updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS chats (
+CREATE TABLE IF NOT EXISTS conversations (
   id TEXT PRIMARY KEY,
+  listing_id TEXT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+  rental_id TEXT REFERENCES rentals(id) ON DELETE SET NULL,
   owner_user_id TEXT NOT NULL REFERENCES users(id),
   renter_user_id TEXT NOT NULL REFERENCES users(id),
-  rental_id TEXT REFERENCES rentals(id),
-  metadata TEXT,
-  updated_at TEXT NOT NULL
+  type TEXT NOT NULL DEFAULT 'pre_booking' CHECK (type IN ('pre_booking', 'post_booking')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'blocked')),
+  last_message_text TEXT,
+  last_message_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(listing_id, renter_user_id, type)
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  sender_user_id TEXT NOT NULL REFERENCES users(id),
+  message_text TEXT NOT NULL,
+  message_type TEXT NOT NULL DEFAULT 'text' CHECK (message_type IN ('text', 'system', 'handover_notice', 'status_update')),
+  moderation_status TEXT NOT NULL DEFAULT 'approved' CHECK (moderation_status IN ('approved', 'flagged', 'blocked')),
+  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS listing_contacts (
@@ -127,5 +143,8 @@ CREATE INDEX IF NOT EXISTS idx_payment_intents_user ON payment_intents(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_intents_status ON payment_intents(status);
 CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
-CREATE INDEX IF NOT EXISTS idx_chats_owner_renter ON chats(owner_user_id, renter_user_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_participants ON conversations(owner_user_id, renter_user_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_listing ON conversations(listing_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_rental ON conversations(rental_id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_listing_contacts_listing ON listing_contacts(listing_id);

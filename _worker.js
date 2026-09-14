@@ -94,6 +94,82 @@ function sanitizeListingPublicMetadata(meta) {
   delete clean.preferredContactMethod;
   return clean;
 }
+
+/**
+ * Authoritative Server-Side Anti-Bypass & Contact Information Filter
+ * Protects pre-booking conversations against off-platform payment bypass attempts.
+ */
+function detectBypassAttempt(rawText) {
+  if (!rawText || typeof rawText !== 'string') return { isBlocked: false };
+
+  // Convert Persian & Arabic digits to ASCII 0-9
+  const persianDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+  const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+  let normalized = rawText.toLowerCase();
+  for (let i = 0; i < 10; i++) {
+    normalized = normalized.replaceAll(persianDigits[i], String(i));
+    normalized = normalized.replaceAll(arabicDigits[i], String(i));
+  }
+
+  // Remove zero-width spaces, directional marks, and invisible joiners
+  normalized = normalized.replace(/[\u200B-\u200D\uFEFF\u00AD\u200E\u200F\u00A0]/g, ' ');
+  const stripped = normalized.replace(/[\s\-_.,،;:\\/()[\]{}|+*#~`!?"'<>@$^&=]/g, '');
+
+  // 1. URLs, web protocols, domains
+  if (/(https?:\/\/|www\.)[^\s]+|[a-z0-9.-]+\.(com|ir|org|net|io|me|app|co|xyz|info|biz|site|online)\b/i.test(normalized)) {
+    return { isBlocked: true, reason: 'urls_blocked' };
+  }
+
+  // 2. Email addresses
+  if (/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(normalized) || /\b(gmail|yahoo|hotmail|outlook|chmail)\b/i.test(normalized)) {
+    return { isBlocked: true, reason: 'email_blocked' };
+  }
+
+  // 3. Messengers and social handles
+  const messengerKeywords = [
+    'telegram', 'tg', 't.me', 'whatsapp', 'wa.me', 'instagram', 'insta', 'rubika', 'eitaa', 'bale', 'soroush', 'gap',
+    'تلگرام', 'تلگ', 'واتساپ', 'واتس‌اپ', 'واتس اپ', 'واتسپ', 'واتس‌آپ', 'اینستاگرام', 'اینستا', 'روبیکا', 'ایتا', 'بله', 'سروش', 'شاد', 'گپ'
+  ];
+  for (const kw of messengerKeywords) {
+    if (normalized.includes(kw) || stripped.includes(kw.replace(/\s+/g, ''))) {
+      return { isBlocked: true, reason: 'messenger_blocked' };
+    }
+  }
+
+  // 4. @ handles or mentions
+  if (/@\w{3,}/.test(normalized)) {
+    return { isBlocked: true, reason: 'handle_blocked' };
+  }
+
+  // 5. Phone numbers (stripping common separators)
+  const digitsOnly = normalized.replace(/[^0-9]/g, '');
+  if (digitsOnly.length >= 7) {
+    // Iranian Mobile (09..., 989..., 9...)
+    if (/09[0-9]{9}/.test(digitsOnly) || /989[0-9]{9}/.test(digitsOnly) || /9[0-9]{9}/.test(digitsOnly)) {
+      return { isBlocked: true, reason: 'phone_blocked' };
+    }
+    // General 7-15 digit sequences
+    if (/(\+?[0-9]{7,15})/.test(digitsOnly)) {
+      return { isBlocked: true, reason: 'phone_blocked' };
+    }
+  }
+
+  // 6. Spelled-out number words in Persian
+  const persianNumberWordsRegex = /(صفر|نه|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نهصد|دویست|سیصد|چهارصد|پانصد|شصت|هفتاد|هشتاد|نود)/g;
+  const wordMatches = normalized.match(persianNumberWordsRegex);
+  if (wordMatches && wordMatches.length >= 2) {
+    return { isBlocked: true, reason: 'spelled_numbers_blocked' };
+  }
+
+  // 7. Contact intent & direct payment bypass phrases
+  const bypassIntentRegex = /(شماره\s*(تماس|من|تلفن|همراه|بدم|بده|بفرست)|زنگ\s*(بزن|بزنید|بزنین)|تماس\s*(بگیر|بگیرید|بگیریم)|پیامک\s*بده|اس\s*ام\s*اس|کارت\s*به\s*کارت|بیرون\s*از\s*برنامه|خارج\s*از\s*برنامه|بدون\s*کارمزد|مستقیم\s*واریز|call\s*me|phone\s*number|contact\s*me|text\s*me)/i;
+  if (bypassIntentRegex.test(normalized) || bypassIntentRegex.test(stripped)) {
+    return { isBlocked: true, reason: 'bypass_intent_blocked' };
+  }
+
+  return { isBlocked: false };
+}
+
 async function piFetch(env, path, options = {}) { if (!env?.PI_API_KEY) throw new Error('Pi server API key is not configured'); const base = String(env.PI_API_URL || 'https://api.minepi.com/v2').replace(/\/$/, ''); const headers = new Headers(options.headers || {}); headers.set('Authorization', `Key ${env.PI_API_KEY}`); if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json'); return fetch(`${base}${path}`, { ...options, headers }); }
 async function verifyPiAccessToken(env, accessToken) { if (!accessToken || !env?.PI_API_KEY) throw new Error('Pi authentication is unavailable'); const base = String(env.PI_API_URL || 'https://api.minepi.com/v2').replace(/\/$/, ''); const response = await fetch(`${base}/me`, { headers: { Authorization: `Bearer ${accessToken}` } }); const data = await response.json().catch(() => ({})); if (!response.ok || !data?.uid || !data?.username) throw new Error('Pi authentication rejected'); return data; }
 async function createSession(env, user) { const token = randomToken('sess'); const hash = await sha256(token); await env.RENTORA_KV.put(`session:${hash}`, JSON.stringify({ uid: user.pi_uid, username: user.username, role: user.role }), { expirationTtl: SESSION_TTL }); return token; }
@@ -105,7 +181,7 @@ function userView(row) { const meta = parseMetadata(row.metadata); return { ...m
 function listingView(row) { const meta = sanitizeListingPublicMetadata(parseMetadata(row.metadata)); return { ...meta, id: row.id, title: row.title, description: row.description || '', category: row.category, location: row.location, pricePerDay: row.price_per_day, deposit: row.deposit_amount, ownerUid: row.owner_pi_uid, ownerUsername: row.owner_username, ownerAvatar: row.owner_avatar, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at }; }
 function rentalView(row) { const meta = parseMetadata(row.metadata); return { ...meta, id: row.id, itemId: row.listing_id, renterUid: row.renter_pi_uid, renterUsername: row.renter_username, ownerUid: row.owner_pi_uid, ownerUsername: row.owner_username, startDate: row.start_date, endDate: row.end_date, pricePerDay: row.price_per_day, rentalTotal: row.rental_amount, baseAmount: row.rental_amount, deposit: row.deposit_amount, securityDeposit: row.deposit_amount, rentoraFee: row.platform_fee, totalPlatformFee: row.platform_fee, totalAmount: row.total_amount, status: row.status, paymentStatus: row.payment_status, createdAt: row.created_at, updatedAt: row.updated_at }; }
 function reviewView(row) { const meta = parseMetadata(row.metadata); return { ...meta, id: row.id, rentalId: row.rental_id, authorUid: row.author_pi_uid, authorUsername: row.author_username, targetUid: row.target_pi_uid, targetUsername: row.target_username, rating: row.rating, body: row.body, createdAt: row.created_at }; }
-async function listAll(env, auth) { const [items, rentals, transactions, users, reviews] = await Promise.all([env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).all(), env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id ORDER BY r.created_at DESC`).all(), env.RENTORA_DB.prepare(`SELECT t.*, u.pi_uid user_pi_uid FROM transactions t JOIN users u ON u.id=t.user_id ORDER BY t.created_at DESC`).all(), env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all(), env.RENTORA_DB.prepare(`SELECT r.*, au.pi_uid author_pi_uid, au.username author_username, tu.pi_uid target_pi_uid, tu.username target_username FROM reviews r JOIN users au ON au.id=r.author_user_id JOIN users tu ON tu.id=r.target_user_id ORDER BY r.created_at DESC`).all()]); const out = { items: (items.results || []).map(listingView), rentals: (rentals.results || []).map(rentalView), transactions: transactions.results || [], users: (users.results || []).map(userView), reviews: (reviews.results || []).map(reviewView), reports: [], chats: [], timestamp: now() }; if (auth?.user && isAdmin(auth.user.pi_uid, env) && auth.user.role === 'admin') { const reports = await env.RENTORA_DB.prepare(`SELECT r.*, u.username reporter_username, u.pi_uid reporter_pi_uid FROM reports r JOIN users u ON u.id=r.reporter_user_id ORDER BY r.created_at DESC`).all(); out.reports = reports.results || []; } if (auth?.user) { const chats = await env.RENTORA_DB.prepare(`SELECT c.*, ou.username owner_username, ru.username renter_username FROM chats c JOIN users ou ON ou.id=c.owner_user_id JOIN users ru ON ru.id=c.renter_user_id WHERE c.owner_user_id=?1 OR c.renter_user_id=?1 ORDER BY c.updated_at DESC`).bind(auth.user.id).all(); out.chats = (chats.results || []).map(c => ({ ...parseMetadata(c.metadata), id: c.id, ownerUsername: c.owner_username, renterUsername: c.renter_username, updatedAt: c.updated_at })); } return out; }
+async function listAll(env, auth) { const [items, rentals, transactions, users, reviews] = await Promise.all([env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).all(), env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id ORDER BY r.created_at DESC`).all(), env.RENTORA_DB.prepare(`SELECT t.*, u.pi_uid user_pi_uid FROM transactions t JOIN users u ON u.id=t.user_id ORDER BY t.created_at DESC`).all(), env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all(), env.RENTORA_DB.prepare(`SELECT r.*, au.pi_uid author_pi_uid, au.username author_username, tu.pi_uid target_pi_uid, tu.username target_username FROM reviews r JOIN users au ON au.id=r.author_user_id JOIN users tu ON tu.id=r.target_user_id ORDER BY r.created_at DESC`).all()]); const out = { items: (items.results || []).map(listingView), rentals: (rentals.results || []).map(rentalView), transactions: transactions.results || [], users: (users.results || []).map(userView), reviews: (reviews.results || []).map(reviewView), reports: [], chats: [], timestamp: now() }; if (auth?.user && isAdmin(auth.user.pi_uid, env) && auth.user.role === 'admin') { const reports = await env.RENTORA_DB.prepare(`SELECT r.*, u.username reporter_username, u.pi_uid reporter_pi_uid FROM reports r JOIN users u ON u.id=r.reporter_user_id ORDER BY r.created_at DESC`).all(); out.reports = reports.results || []; } return out; }
 function validatePiPayment(payment, intent, user) {
   const identifier = String(payment?.identifier || payment?.id || '');
   if (!identifier) throw Object.assign(new Error('Pi payment identifier is missing'), { status: 409 });
@@ -391,6 +467,341 @@ export default {
           }
         }), { status: 200, headers });
       }
+
+      // =========================================================================
+      // SECURE MARKETPLACE CONVERSATIONS & MESSAGING (ONE UNIFIED CHAT SYSTEM)
+      // =========================================================================
+      if (method === 'GET' && path === '/api/conversations') {
+        const { user } = await requireUser(request, env);
+        const rows = await env.RENTORA_DB.prepare(`
+          SELECT
+            c.id,
+            c.listing_id,
+            c.rental_id,
+            c.owner_user_id,
+            c.renter_user_id,
+            c.type,
+            c.status,
+            c.last_message_text,
+            c.last_message_at,
+            c.created_at,
+            c.updated_at,
+            l.title AS listing_title,
+            l.price_per_day,
+            l.location AS listing_location,
+            ou.pi_uid AS owner_pi_uid,
+            ou.username AS owner_username,
+            ou.display_name AS owner_display_name,
+            ou.avatar_url AS owner_avatar,
+            ru.pi_uid AS renter_pi_uid,
+            ru.username AS renter_username,
+            ru.display_name AS renter_display_name,
+            ru.avatar_url AS renter_avatar,
+            r.status AS rental_status,
+            r.payment_status AS rental_payment_status,
+            r.rental_amount,
+            r.platform_fee,
+            r.start_date,
+            r.end_date
+          FROM conversations c
+          JOIN listings l ON l.id = c.listing_id
+          JOIN users ou ON ou.id = c.owner_user_id
+          JOIN users ru ON ru.id = c.renter_user_id
+          LEFT JOIN rentals r ON r.id = c.rental_id
+          WHERE (c.owner_user_id = ?1 OR c.renter_user_id = ?1)
+            AND c.status != 'archived'
+          ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
+        `).bind(user.id).all();
+
+        const conversations = (rows.results || []).map(row => {
+          const isOwner = row.owner_user_id === user.id;
+          const isPaid = row.rental_payment_status === 'completed' && ['confirmed', 'active', 'completed'].includes(row.rental_status);
+          return {
+            id: row.id,
+            listingId: row.listing_id,
+            rentalId: row.rental_id || null,
+            type: isPaid ? 'post_booking' : (row.type || 'pre_booking'),
+            status: row.status,
+            isPostBookingUnlocked: isPaid,
+            listing: {
+              id: row.listing_id,
+              title: row.listing_title,
+              pricePerDay: row.price_per_day,
+              location: row.listing_location
+            },
+            otherUser: isOwner ? {
+              id: row.renter_user_id,
+              uid: row.renter_pi_uid,
+              username: row.renter_username,
+              displayName: row.renter_display_name,
+              avatar: row.renter_avatar,
+              role: 'renter'
+            } : {
+              id: row.owner_user_id,
+              uid: row.owner_pi_uid,
+              username: row.owner_username,
+              displayName: row.owner_display_name,
+              avatar: row.owner_avatar,
+              role: 'owner'
+            },
+            rental: row.rental_id ? {
+              id: row.rental_id,
+              status: row.rental_status,
+              paymentStatus: row.rental_payment_status,
+              startDate: row.start_date,
+              endDate: row.end_date
+            } : null,
+            lastMessageText: row.last_message_text || '',
+            lastMessageAt: row.last_message_at || row.created_at,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at
+          };
+        });
+
+        const headers = {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'private, no-store, no-cache, must-revalidate, max-age=0',
+          'Pragma': 'no-cache',
+          'X-Content-Type-Options': 'nosniff',
+          'Referrer-Policy': 'no-referrer',
+          'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+        };
+        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+        return new Response(JSON.stringify({ success: true, conversations }), { status: 200, headers });
+      }
+
+      if (method === 'POST' && path === '/api/conversations') {
+        const { user } = await requireUser(request, env);
+        const body = await readJson(request);
+        const listingId = String(body?.listingId || '').trim();
+        const rentalId = body?.rentalId ? String(body.rentalId).trim() : null;
+
+        let targetListingId = listingId;
+        let targetOwnerId = null;
+        let targetRenterId = user.id;
+        let convType = 'pre_booking';
+
+        if (rentalId) {
+          const rental = await env.RENTORA_DB.prepare(`
+            SELECT r.*, l.id AS listing_id, l.owner_user_id
+            FROM rentals r
+            JOIN listings l ON l.id = r.listing_id
+            WHERE r.id = ?1
+            LIMIT 1
+          `).bind(rentalId).first();
+
+          if (!rental) return errorResponse('Rental not found', 404, env);
+          const isRenter = (rental.renter_user_id === user.id);
+          const isOwner = (rental.owner_user_id === user.id);
+          const isAdminUser = isAdmin(user.pi_uid, env) && user.role === 'admin';
+          if (!isRenter && !isOwner && !isAdminUser) return errorResponse('Access denied to rental conversation', 403, env);
+
+          targetListingId = rental.listing_id;
+          targetOwnerId = rental.owner_user_id;
+          targetRenterId = rental.renter_user_id;
+          const isPaid = (rental.payment_status === 'completed' && ['confirmed', 'active', 'completed'].includes(rental.status));
+          convType = isPaid ? 'post_booking' : 'pre_booking';
+        } else {
+          if (!targetListingId) return errorResponse('listingId is required', 400, env);
+          const listing = await env.RENTORA_DB.prepare('SELECT * FROM listings WHERE id=?1 AND status != "deleted" LIMIT 1').bind(targetListingId).first();
+          if (!listing) return errorResponse('Listing not found', 404, env);
+          if (listing.owner_user_id === user.id) return errorResponse('Self-conversation is not allowed', 400, env);
+          targetOwnerId = listing.owner_user_id;
+          targetRenterId = user.id;
+          convType = 'pre_booking';
+        }
+
+        let existing = await env.RENTORA_DB.prepare(`
+          SELECT * FROM conversations
+          WHERE listing_id = ?1 AND renter_user_id = ?2 AND type = ?3
+          LIMIT 1
+        `).bind(targetListingId, targetRenterId, convType).first();
+
+        if (existing) {
+          if (rentalId && !existing.rental_id) {
+            await env.RENTORA_DB.prepare('UPDATE conversations SET rental_id=?1, updated_at=?2 WHERE id=?3').bind(rentalId, now(), existing.id).run();
+          }
+          return jsonResponse({ success: true, conversationId: existing.id, conversation: existing }, 200, env);
+        }
+
+        const convId = `conv_${crypto.randomUUID()}`;
+        await env.RENTORA_DB.prepare(`
+          INSERT INTO conversations(id, listing_id, rental_id, owner_user_id, renter_user_id, type, status, created_at, updated_at)
+          VALUES(?1, ?2, ?3, ?4, ?5, ?6, 'active', ?7, ?7)
+        `).bind(convId, targetListingId, rentalId, targetOwnerId, targetRenterId, convType, now()).run();
+
+        const created = await env.RENTORA_DB.prepare('SELECT * FROM conversations WHERE id=?1').bind(convId).first();
+        return jsonResponse({ success: true, conversationId: convId, conversation: created }, 201, env);
+      }
+
+      if (method === 'GET' && path.startsWith('/api/conversations/') && path.endsWith('/messages')) {
+        const convId = path.slice('/api/conversations/'.length, -'/messages'.length).trim();
+        if (!convId) return errorResponse('Missing conversation ID', 400, env);
+        const { user } = await requireUser(request, env);
+
+        const conv = await env.RENTORA_DB.prepare(`
+          SELECT c.*, r.status AS rental_status, r.payment_status AS rental_payment_status
+          FROM conversations c
+          LEFT JOIN rentals r ON r.id = c.rental_id
+          WHERE c.id = ?1
+          LIMIT 1
+        `).bind(convId).first();
+
+        if (!conv) return errorResponse('Conversation not found', 404, env);
+        const isParticipant = (conv.owner_user_id === user.id || conv.renter_user_id === user.id);
+        const isAdminUser = isAdmin(user.pi_uid, env) && user.role === 'admin';
+        if (!isParticipant && !isAdminUser) return errorResponse('Access denied to conversation', 403, env);
+
+        const rows = await env.RENTORA_DB.prepare(`
+          SELECT
+            m.id,
+            m.conversation_id,
+            m.sender_user_id,
+            m.message_text,
+            m.message_type,
+            m.moderation_status,
+            m.created_at,
+            u.pi_uid AS sender_pi_uid,
+            u.username AS sender_username,
+            u.display_name AS sender_display_name,
+            u.avatar_url AS sender_avatar
+          FROM messages m
+          JOIN users u ON u.id = m.sender_user_id
+          WHERE m.conversation_id = ?1
+          ORDER BY m.created_at ASC
+        `).bind(convId).all();
+
+        const isPaid = conv.rental_payment_status === 'completed' && ['confirmed', 'active', 'completed'].includes(conv.rental_status);
+        const type = isPaid ? 'post_booking' : (conv.type || 'pre_booking');
+
+        const headers = {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'private, no-store, no-cache, must-revalidate, max-age=0',
+          'Pragma': 'no-cache',
+          'X-Content-Type-Options': 'nosniff',
+          'Referrer-Policy': 'no-referrer',
+          'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+        };
+        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+
+        return new Response(JSON.stringify({
+          success: true,
+          conversationId: convId,
+          type,
+          isPostBookingUnlocked: isPaid,
+          messages: (rows.results || []).map(m => ({
+            id: m.id,
+            conversationId: m.conversation_id,
+            senderUid: m.sender_pi_uid,
+            senderUsername: m.sender_username,
+            senderDisplayName: m.sender_display_name,
+            senderAvatar: m.sender_avatar,
+            text: m.message_text,
+            messageType: m.message_type,
+            createdAt: m.created_at
+          }))
+        }), { status: 200, headers });
+      }
+
+      if (method === 'POST' && path.startsWith('/api/conversations/') && path.endsWith('/messages')) {
+        const convId = path.slice('/api/conversations/'.length, -'/messages'.length).trim();
+        if (!convId) return errorResponse('Missing conversation ID', 400, env);
+        const { user } = await requireUser(request, env);
+        const body = await readJson(request);
+        const rawText = String(body?.text || '').trim();
+        if (!rawText) return errorResponse('Message text cannot be empty', 400, env);
+        if (rawText.length > 2000) return errorResponse('Message is too long (max 2000 characters)', 400, env);
+
+        const conv = await env.RENTORA_DB.prepare(`
+          SELECT c.*, r.status AS rental_status, r.payment_status AS rental_payment_status
+          FROM conversations c
+          LEFT JOIN rentals r ON r.id = c.rental_id
+          WHERE c.id = ?1
+          LIMIT 1
+        `).bind(convId).first();
+
+        if (!conv) return errorResponse('Conversation not found', 404, env);
+        const isParticipant = (conv.owner_user_id === user.id || conv.renter_user_id === user.id);
+        const isAdminUser = isAdmin(user.pi_uid, env) && user.role === 'admin';
+        if (!isParticipant && !isAdminUser) return errorResponse('Access denied to send message in this conversation', 403, env);
+
+        const isPaid = conv.rental_payment_status === 'completed' && ['confirmed', 'active', 'completed'].includes(conv.rental_status);
+        const isPreBooking = !isPaid || conv.type === 'pre_booking';
+
+        // Authoritative Anti-Bypass Filter Inspection
+        if (isPreBooking) {
+          const bypassCheck = detectBypassAttempt(rawText);
+          if (bypassCheck.isBlocked) {
+            return errorResponse(
+              'برای امنیت کاربران و حفظ خدمات Rentora، تبادل اطلاعات تماس قبل از رزرو مجاز نیست.',
+              400,
+              env,
+              { code: 'CONTACT_INFO_BLOCKED', policy: 'pre_booking_anti_bypass' }
+            );
+          }
+        }
+
+        const msgId = `msg_${crypto.randomUUID()}`;
+        const msgType = String(body?.messageType || 'text').trim().toLowerCase();
+        const allowedTypes = ['text', 'system', 'handover_notice', 'status_update'];
+        const finalType = allowedTypes.includes(msgType) ? msgType : 'text';
+
+        await env.RENTORA_DB.prepare(`
+          INSERT INTO messages(id, conversation_id, sender_user_id, message_text, message_type, moderation_status, created_at)
+          VALUES(?1, ?2, ?3, ?4, ?5, 'approved', ?6)
+        `).bind(msgId, convId, user.id, rawText, finalType, now()).run();
+
+        await env.RENTORA_DB.prepare(`
+          UPDATE conversations
+          SET last_message_text=?1, last_message_at=?2, updated_at=?2
+          WHERE id=?3
+        `).bind(rawText.slice(0, 100), now(), convId).run();
+
+        const headers = {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'private, no-store, no-cache, must-revalidate, max-age=0',
+          'Pragma': 'no-cache',
+          'X-Content-Type-Options': 'nosniff',
+          'Referrer-Policy': 'no-referrer',
+          'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+        };
+        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+
+        return new Response(JSON.stringify({
+          success: true,
+          message: {
+            id: msgId,
+            conversationId: convId,
+            senderUid: user.pi_uid,
+            senderUsername: user.username,
+            senderDisplayName: user.display_name,
+            senderAvatar: user.avatar_url,
+            text: rawText,
+            messageType: finalType,
+            createdAt: now()
+          }
+        }), { status: 201, headers });
+      }
+
+      if (method === 'POST' && path.startsWith('/api/conversations/') && path.endsWith('/archive')) {
+        const convId = path.slice('/api/conversations/'.length, -'/archive'.length).trim();
+        if (!convId) return errorResponse('Missing conversation ID', 400, env);
+        const { user } = await requireUser(request, env);
+
+        const conv = await env.RENTORA_DB.prepare('SELECT * FROM conversations WHERE id=?1 LIMIT 1').bind(convId).first();
+        if (!conv) return errorResponse('Conversation not found', 404, env);
+        if (conv.owner_user_id !== user.id && conv.renter_user_id !== user.id && !isAdmin(user.pi_uid, env)) {
+          return errorResponse('Access denied', 403, env);
+        }
+        await env.RENTORA_DB.prepare('UPDATE conversations SET status="archived", updated_at=?1 WHERE id=?2').bind(now(), convId).run();
+        return jsonResponse({ success: true, archived: true, id: convId }, 200, env);
+      }
+
+      // Legacy chat endpoints permanently disabled and removed
+      if (method === 'POST' && (path === '/api/sync/chat' || path === '/api/sync/chat/delete' || path === '/api/sync/chat-delete')) {
+        return errorResponse('Legacy chat endpoints have been permanently deprecated. Please use /api/conversations', 410, env);
+      }
+
       if (method === 'POST' && path === '/api/sync/rental') { const { user } = await requireUser(request, env); const rental = await readJson(request); if (!rental?.id || !rental.itemId || !rental.startDate || !rental.endDate) return errorResponse('Invalid rental', 400, env); const listing = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.id=?1 AND l.status='active' LIMIT 1`).bind(rental.itemId).first(); if (!listing) return errorResponse('Listing not found', 404, env); if (listing.owner_user_id === user.id) return errorResponse('Owner cannot rent own listing', 409, env); const start = new Date(`${rental.startDate}T00:00:00Z`); const end = new Date(`${rental.endDate}T00:00:00Z`); const days = Math.max(1, Math.ceil((end - start) / 86400000)); const rentalAmount = Number(listing.price_per_day) * days; const deposit = Number(listing.deposit_amount); const fee = Math.max(0.0001, rentalAmount * Number(listing.platform_fee_rate || env.PLATFORM_FEE_RATE || 0.05)); const total = fee; const existing = await env.RENTORA_DB.prepare('SELECT id FROM rentals WHERE id=?1').bind(rental.id).first(); const metadata = JSON.stringify({ ...rental, id: rental.id, itemId: listing.id, ownerUid: listing.owner_pi_uid, ownerUsername: listing.owner_username, renterUid: user.pi_uid, renterUsername: user.username, daysCount: days, pricePerDay: listing.price_per_day, rentalTotal: rentalAmount, baseAmount: rentalAmount, deposit, securityDeposit: deposit, rentoraFee: fee, totalPlatformFee: fee, paymentDueToRentora: fee }); if (existing) { const own = await env.RENTORA_DB.prepare('SELECT renter_user_id FROM rentals WHERE id=?1').bind(rental.id).first(); if (!own || own.renter_user_id !== user.id) return errorResponse('Rental ownership denied', 403, env); await env.RENTORA_DB.prepare(`UPDATE rentals SET start_date=?1,end_date=?2,rental_amount=?3,deposit_amount=?4,platform_fee=?5,total_amount=?6,metadata=?7,updated_at=?8 WHERE id=?9`).bind(rental.startDate, rental.endDate, rentalAmount, deposit, fee, total, metadata, now(), rental.id).run(); } else { await env.RENTORA_DB.prepare(`INSERT INTO rentals(id,listing_id,renter_user_id,start_date,end_date,rental_amount,deposit_amount,platform_fee,total_amount,status,payment_status,metadata,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,'pending_payment','unpaid',?10,?11,?11)`).bind(rental.id, listing.id, user.id, rental.startDate, rental.endDate, rentalAmount, deposit, fee, total, metadata, now()).run(); } const saved = await env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.id=?1`).bind(rental.id).first(); return jsonResponse({ success: true, rental: rentalView(saved) }, 200, env); }
       if (method === 'POST' && path === '/api/sync/rental/status') { const { user } = await requireUser(request, env); const body = await readJson(request); const rentalId = String(body?.rentalId || '').trim(); const action = String(body?.action || '').trim().toLowerCase(); if (!rentalId || !['handover','return'].includes(action)) return errorResponse('rentalId and a valid action are required', 400, env); const rental = await env.RENTORA_DB.prepare(`SELECT r.*, l.owner_user_id, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.id=?1 LIMIT 1`).bind(rentalId).first(); if (!rental) return errorResponse('Rental not found', 404, env); if (rental.renter_user_id !== user.id && rental.owner_user_id !== user.id) return errorResponse('Rental access denied', 403, env); const meta = parseMetadata(rental.metadata); const targetStatus = action === 'handover' ? 'active' : 'completed'; const expectedStatus = action === 'handover' ? 'confirmed' : 'active'; const flag = action === 'handover' ? 'isHandoverConfirmed' : 'isReturnConfirmed'; const timestampKey = action === 'handover' ? 'handoverTimestamp' : 'returnTimestamp'; if (rental.status === targetStatus && meta[flag]) return jsonResponse({ success: true, idempotent: true, rental: rentalView(rental) }, 200, env); if (rental.status !== expectedStatus) return errorResponse(`Invalid rental transition from ${rental.status || 'unknown'}`, 409, env); const updatedMeta = { ...meta, [flag]: true, [timestampKey]: now() }; const updatedAt = now(); const claim = await env.RENTORA_DB.prepare(`UPDATE rentals SET status=?1,metadata=?2,updated_at=?3 WHERE id=?4 AND status=?5`).bind(targetStatus, JSON.stringify(updatedMeta), updatedAt, rentalId, expectedStatus).run(); if (!Number(claim?.meta?.changes || 0)) return errorResponse('Rental transition was concurrently changed', 409, env); const saved = await env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.id=?1`).bind(rentalId).first(); return jsonResponse({ success: true, rental: rentalView(saved) }, 200, env); }
       if (method === 'POST' && path === '/api/sync/review') { const { user } = await requireUser(request, env); const review = await readJson(request); const rental = review?.rentalId ? await env.RENTORA_DB.prepare('SELECT * FROM rentals WHERE id=?1').bind(review.rentalId).first() : null; if (!rental || rental.renter_user_id !== user.id || rental.status !== 'completed') return errorResponse('Review is not allowed for this rental', 403, env); if (!review.targetUid) return errorResponse('targetUid is required', 400, env); const target = await env.RENTORA_DB.prepare('SELECT id FROM users WHERE pi_uid=?1').bind(review.targetUid).first(); if (!target) return errorResponse('Review target not found', 404, env); const id = review.id || `rev_${crypto.randomUUID()}`; await env.RENTORA_DB.prepare(`INSERT INTO reviews(id,rental_id,author_user_id,target_user_id,rating,body,metadata,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(rental_id,author_user_id) DO UPDATE SET rating=excluded.rating,body=excluded.body,metadata=excluded.metadata`).bind(id, rental.id, user.id, target.id, Number(review.rating), review.body || '', JSON.stringify(review), now()).run(); return jsonResponse({ success: true, review }, 200, env); }
@@ -548,31 +959,7 @@ export default {
 
         return errorResponse('Image not found', 404, env);
       }
-      if (method === 'POST' && path === '/api/sync/chat') {
-        const { user } = await requireUser(request, env);
-        const body = await readJson(request);
-        if (!body?.id) return errorResponse('Invalid chat payload', 400, env);
-        const ownerName = cleanUsername(body.ownerUsername);
-        const renterName = cleanUsername(body.renterUsername);
-        const currentName = cleanUsername(user.username);
-        let recipient = '';
-        if (ownerName && ownerName !== currentName) recipient = ownerName;
-        else if (renterName && renterName !== currentName) recipient = renterName;
-        else if (body.recipientUsername && cleanUsername(body.recipientUsername) !== currentName) recipient = cleanUsername(body.recipientUsername);
-        if (!recipient || recipient === currentName) return errorResponse('Chat recipient cannot be self', 400, env);
-        const target = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE username=?1 LIMIT 1').bind(recipient).first();
-        if (!target) return errorResponse('Chat recipient not found', 404, env);
-        const ownerId = ownerName === currentName ? user.id : target.id;
-        const renterId = renterName === currentName ? user.id : target.id;
-        const existing = await env.RENTORA_DB.prepare('SELECT * FROM chats WHERE id=?1').bind(body.id).first();
-        const metadata = JSON.stringify({ ...body, ownerUsername: body.ownerUsername || target.username, renterUsername: body.renterUsername || user.username });
-        if (existing && existing.owner_user_id !== user.id && existing.renter_user_id !== user.id) return errorResponse('Chat access denied', 403, env);
-        if (existing) await env.RENTORA_DB.prepare('UPDATE chats SET metadata=?1,updated_at=?2 WHERE id=?3').bind(metadata, now(), body.id).run();
-        else await env.RENTORA_DB.prepare('INSERT INTO chats(id,owner_user_id,renter_user_id,rental_id,metadata,updated_at) VALUES(?1,?2,?3,?4,?5,?6)').bind(body.id, ownerId, renterId, body.rentalId || null, metadata, now()).run();
-        return jsonResponse({ success: true, chat: body }, 200, env);
-      }
-      if (method === 'POST' && (path === '/api/sync/chat/delete' || path === '/api/sync/chat-delete')) { const { user } = await requireUser(request, env); const body = await readJson(request); if (!body.id && !body.threadId) return errorResponse('Missing chat thread ID', 400, env); const id = body.id || body.threadId; await env.RENTORA_DB.prepare('DELETE FROM chats WHERE id=?1 AND (owner_user_id=?2 OR renter_user_id=?2)').bind(id, user.id).run(); return jsonResponse({ success: true, deletedThreadId: id }, 200, env); }
-      if (method === 'POST' && path === '/api/sync/purge') { const { user } = await requireAdmin(request, env); await env.RENTORA_DB.batch([env.RENTORA_DB.prepare('DELETE FROM transactions'), env.RENTORA_DB.prepare('DELETE FROM payment_intents'), env.RENTORA_DB.prepare('DELETE FROM rentals'), env.RENTORA_DB.prepare('DELETE FROM reviews'), env.RENTORA_DB.prepare('DELETE FROM listings'), env.RENTORA_DB.prepare('DELETE FROM chats'), env.RENTORA_DB.prepare('DELETE FROM reports'), env.RENTORA_DB.prepare('DELETE FROM listing_contacts')]); return jsonResponse({ success: true, purged: true, by: user.pi_uid }, 200, env); }
+      if (method === 'POST' && path === '/api/sync/purge') { const { user } = await requireAdmin(request, env); await env.RENTORA_DB.batch([env.RENTORA_DB.prepare('DELETE FROM transactions'), env.RENTORA_DB.prepare('DELETE FROM payment_intents'), env.RENTORA_DB.prepare('DELETE FROM rentals'), env.RENTORA_DB.prepare('DELETE FROM reviews'), env.RENTORA_DB.prepare('DELETE FROM listings'), env.RENTORA_DB.prepare('DELETE FROM messages'), env.RENTORA_DB.prepare('DELETE FROM conversations'), env.RENTORA_DB.prepare('DELETE FROM reports'), env.RENTORA_DB.prepare('DELETE FROM listing_contacts')]); return jsonResponse({ success: true, purged: true, by: user.pi_uid }, 200, env); }
       if (env?.ASSETS && typeof env.ASSETS.fetch === 'function') return env.ASSETS.fetch(request);
       return errorResponse('Route Not Found', 404, env);
     } catch (err) { console.error('Rentora worker error', err); const status = Number(err?.status) || (String(err?.message || '').includes('body too large') ? 413 : 500); return errorResponse(status === 500 ? 'Server error' : err.message, status, env); }

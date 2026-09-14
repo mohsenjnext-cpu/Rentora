@@ -135,15 +135,14 @@ async function safeSync(request, env) {
     const uId = String(user.pi_uid || '').toLowerCase();
     const isAdmin = user.role === 'admin' || allowed.includes(uId) || allowed.includes(uName) || uName === 'avina60' || uName === 'mohsenjnext';
 
-    const [rentals, transactions, chats] = await Promise.all([
+    const [rentals, transactions] = await Promise.all([
       env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.renter_user_id=?1 OR r.owner_user_id=?1 ORDER BY r.created_at DESC`).bind(user.id).all(),
       env.RENTORA_DB.prepare(`SELECT t.*, u.pi_uid user_pi_uid FROM transactions t JOIN users u ON u.id=t.user_id WHERE t.user_id=?1 ORDER BY t.created_at DESC`).bind(user.id).all(),
-      env.RENTORA_DB.prepare(`SELECT c.*, ou.username owner_username, ru.username renter_username FROM chats c JOIN users ou ON ou.id=c.owner_user_id JOIN users ru ON ru.id=c.renter_user_id WHERE c.owner_user_id=?1 OR c.renter_user_id=?1 ORDER BY c.updated_at DESC`).bind(user.id).all(),
     ]);
 
     out.rentals = (rentals.results || []).map(rentalView);
     out.transactions = transactions.results || [];
-    out.chats = (chats.results || []).map((c) => ({ ...parseMetadata(c.metadata), id: c.id, ownerUsername: c.owner_username, renterUsername: c.renter_username, updatedAt: c.updated_at }));
+    out.chats = [];
 
     if (isAdmin) {
       const [users, reports] = await Promise.all([

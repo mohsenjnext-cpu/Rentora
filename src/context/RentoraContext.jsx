@@ -27,67 +27,105 @@ export function RentoraProvider({ children }) {
   const [transactions, setTransactions] = useState(() => { try { const saved = localStorage.getItem(STORAGE_PREFIX + 'transactions_v8'); return saved ? JSON.parse(saved) : []; } catch (e) { return []; } });
   const [reviews, setReviews] = useState(() => cloudSyncService.getCachedReviews());
   const [reports, setReports] = useState(() => { try { const saved = localStorage.getItem(STORAGE_PREFIX + 'reports_v8'); return saved ? JSON.parse(saved) : []; } catch (e) { return []; } });
-  const [chats, setChats] = useState(() => cloudSyncService.getCachedChats());
+  const [conversations, setConversations] = useState([]);
   const [latestNotification, setLatestNotification] = useState(null);
   const knownMsgIdsRef = useRef(new Set());
   const isInitialLoadDoneRef = useRef(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    const cached = cloudSyncService.getCachedChats();
-    cached.forEach(c => (c.messages || []).forEach(m => { if (m.id) knownMsgIdsRef.current.add(m.id); }));
-    setTimeout(() => { isInitialLoadDoneRef.current = true; }, 1200);
-  }, []);
+  // Load conversations from server when authenticated
+  const refreshConversations = useCallback(async () => {
+    if (!currentUser) {
+      setConversations([]);
+      return [];
+    }
+    try {
+      const list = await cloudSyncService.fetchConversations();
+      setConversations(list);
 
-  const handleIncomingChats = useCallback((newChatsList) => {
-    if (!Array.isArray(newChatsList)) return;
-    setChats([...newChatsList]);
-    const myName = (currentUser?.username || '').toLowerCase();
-    newChatsList.forEach(c => (c.messages || []).forEach(m => {
-      if (m && m.id && !knownMsgIdsRef.current.has(m.id)) {
-        knownMsgIdsRef.current.add(m.id);
-        const sender = (m.senderUsername || '').toLowerCase();
-        if (isInitialLoadDoneRef.current && sender && (sender !== myName || !myName)) {
-          const notif = { id: m.id, senderUsername: m.senderUsername, text: m.text, itemTitle: c.itemTitle || 'گفتگوی رنتورا', itemId: c.itemId, threadId: c.id, recipientUsername: m.senderUsername };
-          setLatestNotification(notif); playNotificationChime(); triggerVibration(); showNativeNotification(`Rentora - @${m.senderUsername}`, m.text);
+      // Check for incoming new messages to trigger chime / notifications
+      const myName = (currentUser?.username || '').toLowerCase();
+      list.forEach(c => {
+        if (c.lastMessageText && c.lastMessageAt && c.otherUser) {
+          const msgKey = `${c.id}_${c.lastMessageAt}`;
+          if (!knownMsgIdsRef.current.has(msgKey)) {
+            knownMsgIdsRef.current.add(msgKey);
+            const sender = (c.otherUser?.username || '').toLowerCase();
+            if (isInitialLoadDoneRef.current && sender && sender !== myName) {
+              const notif = {
+                id: msgKey,
+                senderUsername: c.otherUser.username,
+                text: c.lastMessageText,
+                itemTitle: c.listing?.title || 'گفتگوی رنتورا',
+                itemId: c.listingId,
+                threadId: c.id,
+                recipientUsername: c.otherUser.username
+              };
+              setLatestNotification(notif);
+              playNotificationChime();
+              triggerVibration();
+              showNativeNotification(`Rentora - @${c.otherUser.username}`, c.lastMessageText);
+            }
+          }
         }
-      }
-    }));
+      });
+      return list;
+    } catch (e) {
+      return [];
+    }
   }, [currentUser]);
+
+  useEffect(() => {
+    refreshConversations().finally(() => {
+      setTimeout(() => { isInitialLoadDoneRef.current = true; }, 1200);
+    });
+  }, [refreshConversations]);
 
   useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'config_v9', JSON.stringify(platformConfig)); } catch (e) {} }, [platformConfig]);
   useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'favorites_v8', JSON.stringify(favorites)); } catch (e) {} }, [favorites]);
   useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'transactions_v8', JSON.stringify(transactions)); } catch (e) {} }, [transactions]);
   useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'reports_v8', JSON.stringify(reports)); } catch (e) {} }, [reports]);
-  useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'chats_v2', JSON.stringify(chats)); cloudSyncService.saveCachedChats(chats); } catch (e) {} }, [chats]);
 
   useEffect(() => {
     const unsubscribe = cloudSyncService.subscribe((event, data) => {
-      if (event === 'CHAT_DELETED' && data?.threadId) setChats(prev => prev.filter(c => c.id !== data.threadId));
-      else if ((event === 'CHAT_POLL_SYNC' || event === 'CHAT_SYNC') && data?.chats) handleIncomingChats(data.chats);
-      else if (data) {
+      if (data) {
         if (Array.isArray(data.items)) setItems(prev => JSON.stringify(prev) === JSON.stringify(data.items) ? prev : data.items);
         if (Array.isArray(data.rentals)) setRentals(prev => JSON.stringify(prev) === JSON.stringify(data.rentals) ? prev : data.rentals);
         if (Array.isArray(data.reviews)) setReviews(prev => JSON.stringify(prev) === JSON.stringify(data.reviews) ? prev : data.reviews);
-        if (Array.isArray(data.chats)) handleIncomingChats(data.chats);
       }
     });
     return () => unsubscribe();
-  }, [handleIncomingChats]);
+  }, []);
 
+  // Background polling for conversations and marketplace data
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const pollInterval = setInterval(async () => { try { const result = await cloudSyncService.fetchSharedData(true); if (result && Array.isArray(result.chats)) handleIncomingChats(result.chats); } catch (e) {} }, 1500);
+    const pollInterval = setInterval(() => {
+      if (currentUser) {
+        refreshConversations().catch(() => {});
+      }
+    }, 4000);
     return () => clearInterval(pollInterval);
-  }, [handleIncomingChats]);
+  }, [currentUser, refreshConversations]);
 
   const toggleFavorite = (itemId) => setFavorites(prev => prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]);
 
   const refreshApp = async () => {
     setIsRefreshing(true);
-    try { const data = await cloudSyncService.fetchSharedData(); if (data) { if (Array.isArray(data.items)) setItems(data.items); if (Array.isArray(data.rentals)) setRentals(data.rentals); if (Array.isArray(data.reviews)) setReviews(data.reviews); if (Array.isArray(data.chats)) setChats(data.chats); } return { success: true }; }
-    catch (e) { return { success: false, error: e.message }; }
-    finally { setTimeout(() => setIsRefreshing(false), 500); }
+    try {
+      const data = await cloudSyncService.fetchSharedData();
+      if (data) {
+        if (Array.isArray(data.items)) setItems(data.items);
+        if (Array.isArray(data.rentals)) setRentals(data.rentals);
+        if (Array.isArray(data.reviews)) setReviews(data.reviews);
+      }
+      if (currentUser) await refreshConversations();
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
   };
 
   const purgeDatabase = () => {
@@ -97,19 +135,71 @@ export function RentoraProvider({ children }) {
 
   const calculatePricing = (arg1, arg2 = 1) => {
     let dailyRate = 0, securityDeposit = 0, startDate = null, endDate = null, daysCount = 1;
-    if (arg1 && typeof arg1 === 'object') { dailyRate = arg1.dailyRate !== undefined ? arg1.dailyRate : (arg1.pricePerDay !== undefined ? arg1.pricePerDay : 0); securityDeposit = arg1.securityDeposit !== undefined ? arg1.securityDeposit : (arg1.deposit !== undefined ? arg1.deposit : 0); startDate = arg1.startDate; endDate = arg1.endDate; daysCount = arg1.daysCount; }
-    else { dailyRate = parseFloat(arg1) || 0; daysCount = parseInt(arg2, 10) || 1; }
+    if (arg1 && typeof arg1 === 'object') {
+      dailyRate = arg1.dailyRate !== undefined ? arg1.dailyRate : (arg1.pricePerDay !== undefined ? arg1.pricePerDay : 0);
+      securityDeposit = arg1.securityDeposit !== undefined ? arg1.securityDeposit : (arg1.deposit !== undefined ? arg1.deposit : 0);
+      startDate = arg1.startDate;
+      endDate = arg1.endDate;
+      daysCount = arg1.daysCount;
+    } else {
+      dailyRate = parseFloat(arg1) || 0;
+      daysCount = parseInt(arg2, 10) || 1;
+    }
     const configuredFeePercentage = platformConfig?.platformFeePercentage !== undefined ? platformConfig.platformFeePercentage : 5;
-    return FinancialEngine.calculateBookingFinancials({ dailyRate, startDate, endDate, daysCount, securityDeposit, platformFeePercentage: configuredFeePercentage });
+    return FinancialEngine.calculateBookingFinancials({
+      dailyRate,
+      startDate,
+      endDate,
+      daysCount,
+      securityDeposit,
+      platformFeePercentage: configuredFeePercentage
+    });
   };
 
   const addItem = async (itemData) => {
     if (!currentUser) throw new Error("برای ثبت آگهی ابتدا وارد حساب پای خود شوید.");
-    const defaultImages = { tools: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80", cameras: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900&auto=format&fit=crop&q=80", camping: "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=900&auto=format&fit=crop&q=80", sports: "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?w=900&auto=format&fit=crop&q=80", vehicles: "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=900&auto=format&fit=crop&q=80", events: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=900&auto=format&fit=crop&q=80", home: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=900&auto=format&fit=crop&q=80" };
+    const defaultImages = {
+      tools: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80",
+      cameras: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900&auto=format&fit=crop&q=80",
+      camping: "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=900&auto=format&fit=crop&q=80",
+      sports: "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?w=900&auto=format&fit=crop&q=80",
+      vehicles: "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=900&auto=format&fit=crop&q=80",
+      events: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=900&auto=format&fit=crop&q=80",
+      home: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=900&auto=format&fit=crop&q=80"
+    };
     const finalImage = itemData.images?.length ? itemData.images : [defaultImages[itemData.category] || defaultImages.tools];
-    const newItem = { id: "item_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7), title: itemData.title.trim(), category: itemData.category || 'tools', description: itemData.description || '', pricePerDay: parseFloat(itemData.pricePerDay), deposit: parseFloat(itemData.deposit) || 0, location: itemData.location || 'ایران', city: itemData.location?.split('،')?.[0]?.trim() || itemData.location || 'ایران', images: Array.isArray(finalImage) ? finalImage : [finalImage], ownerUid: currentUser.uid, ownerUsername: currentUser.username, ownerAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}`, ownerBio: currentUser.bio || 'کاربر شبکه پای در رنتورا', ownerKYC: currentUser?.kycStatus === 'verified' && !!currentUser?.isOfficialSdk, ownerReputation: null, rating: null, ratingCount: 0, reviewsCount: 0, phoneContact: itemData.phoneContact || currentUser.phoneMasked || '', contactInfo: itemData.contactInfo || null, status: "active", deliveryAvailable: !!itemData.instantBook, instantBooking: !!itemData.instantBook, createdAt: new Date().toISOString() };
+    const newItem = {
+      id: "item_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+      title: itemData.title.trim(),
+      category: itemData.category || 'tools',
+      description: itemData.description || '',
+      pricePerDay: parseFloat(itemData.pricePerDay),
+      deposit: parseFloat(itemData.deposit) || 0,
+      location: itemData.location || 'ایران',
+      city: itemData.location?.split('،')?.[0]?.trim() || itemData.location || 'ایران',
+      images: Array.isArray(finalImage) ? finalImage : [finalImage],
+      ownerUid: currentUser.uid,
+      ownerUsername: currentUser.username,
+      ownerAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}`,
+      ownerBio: currentUser.bio || 'کاربر شبکه پای در رنتورا',
+      ownerKYC: currentUser?.kycStatus === 'verified' && !!currentUser?.isOfficialSdk,
+      ownerReputation: null,
+      rating: null,
+      ratingCount: 0,
+      reviewsCount: 0,
+      phoneContact: itemData.phoneContact || currentUser.phoneMasked || '',
+      contactInfo: itemData.contactInfo || null,
+      status: "active",
+      deliveryAvailable: !!itemData.instantBook,
+      instantBooking: !!itemData.instantBook,
+      createdAt: new Date().toISOString()
+    };
     const confirmed = await cloudSyncService.broadcastNewItem(newItem);
-    setItems(prev => { const updated = [confirmed || newItem, ...prev.filter(i => i.id !== newItem.id)]; cloudSyncService.saveCachedItems(updated); return updated; });
+    setItems(prev => {
+      const updated = [confirmed || newItem, ...prev.filter(i => i.id !== newItem.id)];
+      cloudSyncService.saveCachedItems(updated);
+      return updated;
+    });
     return confirmed || newItem;
   };
 
@@ -118,8 +208,31 @@ export function RentoraProvider({ children }) {
     if (!current) return null;
     const updatedItem = { ...current, ...fields, updatedAt: new Date().toISOString() };
     const confirmed = await cloudSyncService.broadcastNewItem(updatedItem);
-    setItems(prev => { const updated = prev.map(i => i.id === itemId ? (confirmed || updatedItem) : i); cloudSyncService.saveCachedItems(updated); return updated; });
+    setItems(prev => {
+      const updated = prev.map(i => i.id === itemId ? (confirmed || updatedItem) : i);
+      cloudSyncService.saveCachedItems(updated);
+      return updated;
+    });
     return confirmed || updatedItem;
+  };
+
+  const toggleItemStatus = (itemId) => {
+    const current = items.find(i => i.id === itemId);
+    if (!current) return;
+    const newStatus = current.status === "active" ? "paused" : "active";
+    updateItem(itemId, { status: newStatus });
+  };
+
+  const deleteItem = async (itemId) => {
+    const current = items.find(i => i.id === itemId);
+    if (!current) return;
+    const deletedItem = { ...current, status: 'deleted', updatedAt: new Date().toISOString() };
+    await cloudSyncService.broadcastNewItem(deletedItem);
+    setItems(prev => {
+      const updated = prev.filter(i => i.id !== itemId);
+      cloudSyncService.saveCachedItems(updated);
+      return updated;
+    });
   };
 
   const fetchRentalContact = async (rentalId) => {
@@ -154,46 +267,121 @@ export function RentoraProvider({ children }) {
       headers
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error || 'دسترسی به اطلاعات تماس آگهی مجاز نیست.');
+    if (!res.ok) throw new Error(data?.error || 'دسترسی به اطلاعات تماس آگهی امکان‌پذیر نیست.');
     return data.contact;
   };
 
-  const toggleItemStatus = async (itemId) => {
-    const item = items.find(i => i.id === itemId);
-    if (!item) return null;
-    const nextStatus = (item.status || 'active') === 'active' ? 'paused' : 'active';
-    return updateItem(itemId, { status: nextStatus });
-  };
+  const createRentalBooking = (item, bookingData) => {
+    if (!currentUser) throw new Error("برای ثبت رزرو ابتدا وارد حساب پای خود شوید.");
+    if (currentUser.username && item.ownerUsername && currentUser.username.toLowerCase() === item.ownerUsername.toLowerCase()) {
+      throw new Error("شما نمی‌توانید کالای متعلق به خودتان را اجاره کنید.");
+    }
+    const { startDate, endDate, deliveryRequired, deliveryAddress } = bookingData;
+    const financials = calculatePricing({
+      dailyRate: item.pricePerDay,
+      startDate,
+      endDate,
+      securityDeposit: item.deposit || 0
+    });
 
-  const deleteItem = async (itemId) => {
-    const item = items.find(i => i.id === itemId);
-    if (!item) return { success: false, error: 'آگهی یافت نشد.' };
-    await cloudSyncService.broadcastNewItem({ ...item, status: 'deleted' });
-    setItems(prev => { const updated = prev.filter(i => i.id !== itemId); cloudSyncService.saveCachedItems(updated); return updated; });
-    return { success: true };
-  };
+    const bookingNumber = 'RN-' + Math.floor(100000 + Math.random() * 900000);
+    const agreementId = 'AGR-' + Math.floor(100000 + Math.random() * 900000);
 
-  const createRentalBooking = async (bookingData) => {
-    if (!currentUser) throw new Error("لطفاً ابتدا وارد حساب پای خود شوید.");
-    const item = bookingData.item || items.find(i => i.id === bookingData.itemId);
-    if (!item) throw new Error("کالای مورد نظر یافت نشد.");
-    const myName = (currentUser.username || '').toLowerCase().replace('@', '').trim();
-    const ownerName = (item.ownerUsername || '').toLowerCase().replace('@', '').trim();
-    if ((myName && ownerName && myName === ownerName) || (item.ownerUid && currentUser.uid && item.ownerUid === currentUser.uid)) throw new Error("شما مالک این کالا هستید و نمی‌توانید آگهی خود را اجاره کنید.");
-    const startDate = bookingData.startDate, endDate = bookingData.endDate;
-    let daysCount = bookingData.daysCount || (startDate && endDate ? FinancialEngine.calculateDays(startDate, endDate) : 1);
-    daysCount = Math.max(1, parseInt(daysCount, 10) || 1);
-    const financials = calculatePricing({ pricePerDay: item.pricePerDay, dailyRate: item.pricePerDay, startDate, endDate, daysCount, securityDeposit: item.deposit || 0 });
-    const agreementId = `RNT-${Math.floor(10000 + Math.random() * 90000)}`;
-    return { id: "rnt_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6), bookingNumber: agreementId, itemId: item.id, itemTitle: item.title, itemImage: item.images?.[0] || '', itemCategory: item.category, ownerUsername: item.ownerUsername, ownerUid: item.ownerUid, renterUsername: currentUser.username, renterUid: currentUser.uid, startDate, endDate, daysCount: financials.daysCount, pricePerDay: financials.dailyRate, rentalTotal: financials.rentalTotal, baseAmount: financials.rentalTotal, deposit: financials.deposit, securityDeposit: financials.deposit, totalRentalObligation: financials.totalRentalObligation, ownerDirectRentalAmount: financials.ownerDirectRentalAmount, ownerDirectDeposit: financials.ownerDirectDeposit, ownerDirectPayAtPickup: financials.ownerDirectRentalAmount, rentoraFee: financials.rentoraFee, totalPlatformFee: financials.rentoraFee, renterCommissionShare: financials.rentoraFee, paymentDueToRentora: financials.rentoraFee, ownerCommissionShare: 0, renterCommissionPaid: false, status: RENTAL_STATES.PAYMENT_PENDING, paymentStatus: "pending", settlementType: "direct_p2p_with_pi_platform_fee", isEscrowApplied: false, rentalAgreement: { agreementId, itemTitle: item.title, ownerUsername: item.ownerUsername, renterUsername: currentUser.username, rentalPeriodDays: financials.daysCount, startDate, endDate, rentalTotal: financials.rentalTotal, deposit: financials.deposit, rentoraFee: financials.rentoraFee, piFeePaymentStatus: "Pending Pi Payment", rentalPaymentMethod: "Direct P2P", depositPaymentMethod: "Direct P2P", terms: "Direct P2P settlement — rental fee and deposit are not processed or held by Rentora." }, isHandoverConfirmed: false, isReturnConfirmed: false, notes: bookingData.notes || '', createdAt: new Date().toISOString() };
+    return {
+      id: "rental_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+      bookingNumber,
+      itemId: item.id,
+      itemTitle: item.title,
+      itemCategory: item.category,
+      itemImage: Array.isArray(item.images) ? item.images[0] : item.images,
+      itemLocation: item.location,
+      renterUid: currentUser.uid,
+      renterUsername: currentUser.username,
+      renterAvatar: currentUser.avatar,
+      ownerUid: item.ownerUid,
+      ownerUsername: item.ownerUsername,
+      ownerAvatar: item.ownerAvatar,
+      startDate,
+      endDate,
+      daysCount: financials.daysCount,
+      pricePerDay: financials.dailyRate,
+      rentalTotal: financials.rentalTotal,
+      baseAmount: financials.rentalTotal,
+      deposit: financials.deposit,
+      securityDeposit: financials.deposit,
+      rentoraFee: financials.rentoraFee,
+      totalPlatformFee: financials.rentoraFee,
+      platformFeeRate: financials.platformFeeRate,
+      totalAmount: financials.rentoraFee,
+      paymentDueToRentora: financials.rentoraFee,
+      deliveryRequired: !!deliveryRequired,
+      deliveryAddress: deliveryAddress || '',
+      paymentIntentId: null,
+      piPaymentId: null,
+      piTxRef: null,
+      ownerCommissionShare: 0,
+      renterCommissionShare: 0,
+      renterCommissionPaid: false,
+      status: RENTAL_STATES.PAYMENT_PENDING,
+      paymentStatus: "pending",
+      settlementType: "direct_p2p_with_pi_platform_fee",
+      isEscrowApplied: false,
+      rentalAgreement: {
+        agreementId,
+        itemTitle: item.title,
+        ownerUsername: item.ownerUsername,
+        renterUsername: currentUser.username,
+        rentalPeriodDays: financials.daysCount,
+        startDate,
+        endDate,
+        rentalTotal: financials.rentalTotal,
+        deposit: financials.deposit,
+        rentoraFee: financials.rentoraFee,
+        piFeePaymentStatus: "Pending Pi Payment",
+        rentalPaymentMethod: "Direct P2P",
+        depositPaymentMethod: "Direct P2P",
+        terms: "Direct P2P settlement — rental fee and deposit are not processed or held by Rentora."
+      },
+      isHandoverConfirmed: false,
+      isReturnConfirmed: false,
+      notes: bookingData.notes || '',
+      createdAt: new Date().toISOString()
+    };
   };
 
   const executePiPaymentForRental = async (rentalId, draftRental) => {
     if (!draftRental) throw new Error("اطلاعات رزرو نامعتبر است.");
-    const paymentResult = await piService.createPayment({ paymentData: { amount: draftRental.rentoraFee, memo: `Rentora Fee #${draftRental.bookingNumber || draftRental.id.substring(0, 10)}`, metadata: { type: 'rentora_platform_fee', rentalId: draftRental.id, bookingNumber: draftRental.bookingNumber, itemId: draftRental.itemId, renterUid: draftRental.renterUid, ownerUid: draftRental.ownerUid, feeAmount: draftRental.rentoraFee } }, paymentIntentId: draftRental.paymentIntentId });
+    const paymentResult = await piService.createPayment({
+      paymentData: {
+        amount: draftRental.rentoraFee,
+        memo: `Rentora Fee #${draftRental.bookingNumber || draftRental.id.substring(0, 10)}`,
+        metadata: {
+          type: 'rentora_platform_fee',
+          rentalId: draftRental.id,
+          bookingNumber: draftRental.bookingNumber,
+          itemId: draftRental.itemId,
+          renterUid: draftRental.renterUid,
+          ownerUid: draftRental.ownerUid,
+          feeAmount: draftRental.rentoraFee
+        }
+      },
+      paymentIntentId: draftRental.paymentIntentId
+    });
     const txid = paymentResult.txid, paymentId = paymentResult.paymentId;
-    const confirmedRental = { ...draftRental, status: RENTAL_STATES.CONFIRMED, renterCommissionPaid: true, paymentStatus: "paid_confirmed", piPaymentId: paymentId, piTxRef: txid, paidAt: new Date().toISOString() };
-    setRentals(prev => { const updated = [confirmedRental, ...prev.filter(r => r.id !== confirmedRental.id)]; cloudSyncService.saveCachedRentals(updated); return updated; });
+    const confirmedRental = {
+      ...draftRental,
+      status: RENTAL_STATES.CONFIRMED,
+      renterCommissionPaid: true,
+      paymentStatus: "paid_confirmed",
+      piPaymentId: paymentId,
+      piTxRef: txid,
+      paidAt: new Date().toISOString()
+    };
+    setRentals(prev => {
+      const updated = [confirmedRental, ...prev.filter(r => r.id !== confirmedRental.id)];
+      cloudSyncService.saveCachedRentals(updated);
+      return updated;
+    });
     await cloudSyncService.broadcastNewRental(confirmedRental);
     return paymentResult;
   };
@@ -206,11 +394,19 @@ export function RentoraProvider({ children }) {
       const session = raw ? JSON.parse(raw) : null;
       if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
     } catch (_) {}
-    const response = await fetch(`${apiBase}/api/sync/rental/status`, { method: 'POST', headers, body: JSON.stringify({ rentalId, action }) });
+    const response = await fetch(`${apiBase}/api/sync/rental/status`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ rentalId, action })
+    });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data?.rental) return { success: false, error: data?.error || 'تغییر وضعیت رزرو ناموفق بود.' };
     const updatedRental = data.rental;
-    setRentals(prev => { const updated = prev.map(r => r.id === rentalId ? updatedRental : r); cloudSyncService.saveCachedRentals(updated); return updated; });
+    setRentals(prev => {
+      const updated = prev.map(r => r.id === rentalId ? updatedRental : r);
+      cloudSyncService.saveCachedRentals(updated);
+      return updated;
+    });
     cloudSyncService.notifySubscribers('RENTAL_STATUS_UPDATED', { rental: updatedRental });
     return { success: true, rental: updatedRental, idempotent: !!data.idempotent };
   };
@@ -218,49 +414,147 @@ export function RentoraProvider({ children }) {
   const confirmHandoverOneTap = async (rentalId) => transitionRentalStatus(rentalId, 'handover');
   const confirmReturnOneTap = async (rentalId) => transitionRentalStatus(rentalId, 'return');
 
+  // =========================================================================
+  // SECURE CONVERSATION & MESSAGING WRAPPERS
+  // =========================================================================
+
+  const getOrCreateConversation = async ({ listingId, rentalId }) => {
+    return cloudSyncService.getOrCreateConversation({ listingId, rentalId });
+  };
+
+  const fetchConversationMessages = async (conversationId) => {
+    return cloudSyncService.fetchConversationMessages(conversationId);
+  };
+
+  const sendConversationMessage = async (conversationId, { text, messageType }) => {
+    const safety = inspectMessageSafety(text);
+    if (safety.isViolating) throw new Error(safety.message);
+    const msg = await cloudSyncService.sendConversationMessage(conversationId, { text, messageType });
+    await refreshConversations();
+    return msg;
+  };
+
+  const archiveConversation = async (conversationId) => {
+    const success = await cloudSyncService.archiveConversation(conversationId);
+    if (success) {
+      setConversations(prev => prev.filter(c => c.id !== conversationId));
+    }
+    return success;
+  };
+
+  // Backward compatibility alias for any existing caller
   const sendChatMessage = async (arg1, arg2) => {
     if (!currentUser) return;
-    let targetChatId = null, messageText = '', recipientUsername = null, itemId = null, itemTitle = 'گفتگوی رنتورا';
-    if (typeof arg1 === 'object' && arg1 !== null) { messageText = (arg1.text || '').trim(); recipientUsername = arg1.recipientUsername; itemId = arg1.itemId; itemTitle = arg1.itemTitle || itemTitle; } else { targetChatId = arg1; messageText = String(arg2 || '').trim(); }
-    if (!messageText) return;
-    const safety = inspectMessageSafety(messageText); if (safety.isViolating) throw new Error(safety.message);
-    const now = new Date().toISOString();
-    const newMsg = { id: "msg_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6), senderUsername: currentUser.username, senderUid: currentUser.uid || 'usr', text: messageText, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), read: true };
-    const currentChats = cloudSyncService.getCachedChats(); const myName = (currentUser.username || '').toLowerCase(); const targetName = (recipientUsername || '').toLowerCase(); let targetThreadToBroadcast = null, matched = false;
-    const updated = currentChats.map(c => { if (targetChatId && c.id === targetChatId) { matched = true; const uThread = { ...c, lastMessageAt: now, messages: [...(c.messages || []), newMsg] }; targetThreadToBroadcast = uThread; return uThread; } if (recipientUsername) { const u1 = (c.ownerUsername || '').toLowerCase(), u2 = (c.renterUsername || '').toLowerCase(); if ((u1 === targetName && u2 === myName) || (u2 === targetName && u1 === myName)) { matched = true; const uThread = { ...c, lastMessageAt: now, messages: [...(c.messages || []), newMsg] }; targetThreadToBroadcast = uThread; return uThread; } } return c; });
-    if (!matched) { const newChat = { id: targetChatId || ("chat_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6)), itemId: itemId || 'general', itemTitle, ownerUsername: recipientUsername || 'pioneer', renterUsername: currentUser.username, messages: [newMsg], lastMessageAt: now, unreadCount: 0 }; targetThreadToBroadcast = newChat; updated.unshift(newChat); }
-    setChats([...updated]); cloudSyncService.saveCachedChats(updated);
-    if (targetThreadToBroadcast) { cloudSyncService.notifySubscribers('CHAT_SYNC', { chats: updated, chat: targetThreadToBroadcast }); cloudSyncService.notifySubscribers('CHAT_POLL_SYNC', { chats: updated }); await cloudSyncService.broadcastChatMessage(targetThreadToBroadcast); }
-    return newMsg;
+    let text = '', listingId = null, rentalId = null;
+    if (typeof arg1 === 'object' && arg1 !== null) {
+      text = (arg1.text || '').trim();
+      listingId = arg1.itemId || arg1.listingId;
+      rentalId = arg1.rentalId || null;
+    } else {
+      listingId = arg1;
+      text = String(arg2 || '').trim();
+    }
+    if (!text) return;
+    const safety = inspectMessageSafety(text);
+    if (safety.isViolating) throw new Error(safety.message);
+
+    const convRes = await getOrCreateConversation({ listingId, rentalId });
+    if (!convRes?.conversationId) throw new Error('خطا در یافتن گفتگو');
+    return sendConversationMessage(convRes.conversationId, { text });
   };
 
   const deleteChatThread = async (target) => {
-    if (!target) return { success: false };
-    const targetId = typeof target === 'object' ? target.id : target; const targetRecipient = typeof target === 'object' ? (target.recipientUsername || target.ownerUsername || target.renterUsername) : (typeof target === 'string' ? target : null);
-    const currentChats = cloudSyncService.getCachedChats();
-    const updated = currentChats.filter(c => { if (targetId && c.id === targetId) return false; if (targetRecipient) { const u1 = (c.ownerUsername || '').toLowerCase(), u2 = (c.renterUsername || '').toLowerCase(), tr = targetRecipient.toLowerCase(); if (u1 === tr || u2 === tr || c.id?.toLowerCase() === tr) return false; } return true; });
-    setChats([...updated]); cloudSyncService.saveCachedChats(updated); cloudSyncService.notifySubscribers('CHAT_DELETED', { chats: updated, threadId: targetId }); cloudSyncService.notifySubscribers('CHAT_POLL_SYNC', { chats: updated });
-    try { if (targetId) await cloudSyncService.deleteChatThread(targetId); return { success: true }; } catch (e) { return { success: false, error: e.message }; }
+    const convId = typeof target === 'object' ? target.id : target;
+    if (!convId) return { success: false };
+    const ok = await archiveConversation(convId);
+    return { success: ok };
   };
 
-  const deleteChatMessage = async (messageId) => {
-    if (!messageId) return { success: false };
-    const currentChats = cloudSyncService.getCachedChats(); let targetThreadToBroadcast = null;
-    const updated = currentChats.map(c => { if ((c.messages || []).some(m => m.id === messageId)) { const uThread = { ...c, messages: (c.messages || []).filter(m => m.id !== messageId) }; targetThreadToBroadcast = uThread; return uThread; } return c; });
-    setChats([...updated]); cloudSyncService.saveCachedChats(updated);
-    if (targetThreadToBroadcast) { cloudSyncService.notifySubscribers('CHAT_SYNC', { chats: updated, chat: targetThreadToBroadcast }); cloudSyncService.notifySubscribers('CHAT_POLL_SYNC', { chats: updated }); await cloudSyncService.broadcastChatMessage(targetThreadToBroadcast); }
+  const clearAllChats = async () => {
+    for (const c of conversations) {
+      if (c.id) {
+        try { await archiveConversation(c.id); } catch (_) {}
+      }
+    }
+    setConversations([]);
     return { success: true };
   };
 
-  const clearAllChats = async () => { const prevChats = [...chats]; setChats([]); cloudSyncService.saveCachedChats([]); cloudSyncService.notifySubscribers('CHAT_DELETED', { chats: [], threadId: 'ALL' }); cloudSyncService.notifySubscribers('CHAT_POLL_SYNC', { chats: [] }); for (const c of prevChats) if (c.id) { try { await cloudSyncService.deleteChatThread(c.id); } catch (e) {} } return { success: true }; };
-  const addReport = (reportData) => { const newReport = { id: "rep_" + Date.now(), reporterUsername: currentUser?.username || 'anonymous', createdAt: new Date().toISOString(), ...reportData }; setReports(prev => [newReport, ...prev]); return newReport; };
-  const resolveReport = (reportId) => setReports(prev => prev.filter(r => r.id !== reportId));
-  const addReview = (reviewData) => { const newReview = { id: "rev_" + Date.now(), reviewerUsername: currentUser?.username || 'pioneer', createdAt: new Date().toISOString(), ...reviewData }; setReviews(prev => { const updated = [newReview, ...prev]; cloudSyncService.saveCachedReviews(updated); return updated; }); cloudSyncService.broadcastReview(newReview); return newReview; };
-  const updatePlatformConfig = (newConfig) => { if (isAdmin) setPlatformConfig(prev => ({ ...prev, ...newConfig })); };
+  const addReport = (reportData) => {
+    const newReport = { id: "rep_" + Date.now(), reporterUsername: currentUser?.username || 'anonymous', createdAt: new Date().toISOString(), ...reportData };
+    setReports(prev => [newReport, ...prev]);
+    return newReport;
+  };
 
-  return <RentoraContext.Provider value={{ items, rentals, transactions, favorites, reviews, reports, chats, chatThreads: chats, latestNotification, clearLatestNotification: () => setLatestNotification(null), platformConfig, isRefreshing, refreshApp, purgeDatabase, toggleFavorite, calculatePricing, addItem, createItemListing: addItem, updateItem, toggleItemStatus, deleteItem, createRentalBooking, executePiPaymentForRental, fetchRentalContact, fetchListingContact, confirmHandoverOneTap, confirmReturnOneTap, sendChatMessage, deleteChatThread, deleteChat: deleteChatThread, deleteChatMessage, clearAllChats, addReport, resolveReport, addReview, updatePlatformConfig }}>
-    {children}
-  </RentoraContext.Provider>;
+  const resolveReport = (reportId) => setReports(prev => prev.filter(r => r.id !== reportId));
+
+  const addReview = (reviewData) => {
+    const newReview = { id: "rev_" + Date.now(), reviewerUsername: currentUser?.username || 'pioneer', createdAt: new Date().toISOString(), ...reviewData };
+    setReviews(prev => {
+      const updated = [newReview, ...prev];
+      cloudSyncService.saveCachedReviews(updated);
+      return updated;
+    });
+    cloudSyncService.broadcastReview(newReview);
+    return newReview;
+  };
+
+  const updatePlatformConfig = (newConfig) => {
+    if (isAdmin) setPlatformConfig(prev => ({ ...prev, ...newConfig }));
+  };
+
+  return (
+    <RentoraContext.Provider value={{
+      items,
+      rentals,
+      transactions,
+      favorites,
+      reviews,
+      reports,
+      conversations,
+      chats: conversations,
+      chatThreads: conversations,
+      refreshConversations,
+      getOrCreateConversation,
+      fetchConversationMessages,
+      sendConversationMessage,
+      archiveConversation,
+      latestNotification,
+      clearLatestNotification: () => setLatestNotification(null),
+      platformConfig,
+      isRefreshing,
+      refreshApp,
+      purgeDatabase,
+      toggleFavorite,
+      calculatePricing,
+      addItem,
+      createItemListing: addItem,
+      updateItem,
+      toggleItemStatus,
+      deleteItem,
+      createRentalBooking,
+      executePiPaymentForRental,
+      fetchRentalContact,
+      fetchListingContact,
+      confirmHandoverOneTap,
+      confirmReturnOneTap,
+      sendChatMessage,
+      deleteChatThread,
+      deleteChat: deleteChatThread,
+      deleteChatMessage: () => {},
+      clearAllChats,
+      addReport,
+      resolveReport,
+      addReview,
+      updatePlatformConfig
+    }}>
+      {children}
+    </RentoraContext.Provider>
+  );
 }
 
-export function useRentora() { const context = useContext(RentoraContext); if (!context) throw new Error('useRentora must be used within a RentoraProvider'); return context; }
+export function useRentora() {
+  const context = useContext(RentoraContext);
+  if (!context) throw new Error('useRentora must be used within a RentoraProvider');
+  return context;
+}

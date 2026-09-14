@@ -55,6 +55,7 @@ function MainApp() {
   // In-App Chat Modal State
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const [chatTargetItem, setChatTargetItem] = useState(null);
+  const [chatTargetRental, setChatTargetRental] = useState(null);
 
   // Smooth scroll to top only on tab transition
   useEffect(() => {
@@ -124,8 +125,14 @@ function MainApp() {
     setIsSupportModalOpen(true);
   };
 
-  const handleOpenChat = (item = null) => {
-    setChatTargetItem(item);
+  const handleOpenChat = (target = null, type = 'item') => {
+    if (type === 'rental' || (target && target.bookingNumber)) {
+      setChatTargetRental(target);
+      setChatTargetItem(null);
+    } else {
+      setChatTargetItem(target);
+      setChatTargetRental(null);
+    }
     setIsChatModalOpen(true);
   };
 
@@ -218,6 +225,7 @@ function MainApp() {
             onNavigate={handleNavigate}
             onSelectItem={handleSelectItem}
             onOpenPublicProfile={handleOpenPublicProfile}
+            onOpenChat={handleOpenChat}
           />
         )}
 
@@ -311,8 +319,10 @@ function MainApp() {
         onClose={() => {
           setIsChatModalOpen(false);
           setChatTargetItem(null);
+          setChatTargetRental(null);
         }}
         initialItem={chatTargetItem}
+        initialRental={chatTargetRental}
         onDirectRent={(item) => {
           setIsChatModalOpen(false);
           handleRentItem(item);

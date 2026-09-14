@@ -8,7 +8,6 @@ const STORAGE_ITEMS_KEY = 'rentora_live_v1_items';
 const STORAGE_RENTALS_KEY = 'rentora_live_v1_rentals';
 const STORAGE_USERS_KEY = 'rentora_live_v1_users_dir';
 const STORAGE_REVIEWS_KEY = 'rentora_live_v1_reviews';
-const STORAGE_CHATS_KEY = 'rentora_live_v1_chats';
 const STORAGE_USER_KEY = 'rentora_live_v1_session';
 
 export class CloudSyncService {
@@ -32,7 +31,6 @@ export class CloudSyncService {
       }
 
       // Android Emulator & Mobile App Focus / Visibility Handlers:
-      // When switching back from emulator or background tab, trigger immediate instant sync
       try {
         document.addEventListener('visibilitychange', () => {
           if (!document.hidden) {
@@ -73,35 +71,6 @@ export class CloudSyncService {
       const updated = [data, ...reviews.filter(r => r.id !== data.id)];
       this.saveCachedReviews(updated);
       this.notifySubscribers('REVIEW_SYNC', { reviews: updated, review: data });
-    } else if (type === 'CHAT_UPDATE' && data) {
-      const chats = this.getCachedChats();
-      const p1 = (data.ownerUsername || '').toLowerCase();
-      const p2 = (data.renterUsername || '').toLowerCase();
-
-      const existingIdx = chats.findIndex(c => {
-        if (c.id === data.id) return true;
-        const u1 = (c.ownerUsername || '').toLowerCase();
-        const u2 = (c.renterUsername || '').toLowerCase();
-        if (p1 && p2 && u1 && u2) {
-          return (u1 === p1 && u2 === p2) || (u1 === p2 && u2 === p1);
-        }
-        return false;
-      });
-
-      let updated;
-      if (existingIdx !== -1) {
-        updated = [...chats];
-        updated[existingIdx] = data;
-      } else {
-        updated = [data, ...chats];
-      }
-      this.saveCachedChats(updated);
-      this.notifySubscribers('CHAT_SYNC', { chats: updated, chat: data });
-    } else if (type === 'CHAT_DELETED' && data && data.id) {
-      const chats = this.getCachedChats();
-      const updated = chats.filter(c => c.id !== data.id);
-      this.saveCachedChats(updated);
-      this.notifySubscribers('CHAT_DELETED', { chats: updated, threadId: data.id });
     }
   }
 
@@ -175,7 +144,6 @@ export class CloudSyncService {
   async broadcastUserProfile(userObj) {
     if (!userObj || !userObj.username) return false;
     
-    // 1. Remote Cloudflare backend
     const apiBase = getApiBaseUrl();
     if (apiBase) {
       const res = await fetch(`${apiBase}/api/sync/user`, {
@@ -190,12 +158,10 @@ export class CloudSyncService {
       if (data.user) userObj = data.user;
     }
 
-    // 2. Save to local cache
     const cachedUsers = this.getCachedUsers();
     const updatedUsers = [userObj, ...cachedUsers.filter(u => u.username?.toLowerCase() !== userObj.username?.toLowerCase())];
     this.saveCachedUsers(updatedUsers);
 
-    // 3. Broadcast via BroadcastChannel
     try {
       this.broadcastChannel?.postMessage({ type: 'USER_PROFILE', data: userObj });
     } catch (e) {}
@@ -206,7 +172,6 @@ export class CloudSyncService {
   async broadcastNewItem(item) {
     if (!item || !item.id) throw new Error('Invalid item payload');
 
-    // 1. Broadcast to Cloudflare Backend
     const apiBase = getApiBaseUrl();
     if (apiBase) {
       const res = await fetch(`${apiBase}/api/sync/item`, {
@@ -221,12 +186,10 @@ export class CloudSyncService {
       if (data.item) item = data.item;
     }
 
-    // 2. Save to local cache on success
     const cached = this.getCachedItems();
     const updated = [item, ...cached.filter(i => i.id !== item.id)];
     this.saveCachedItems(updated);
 
-    // 3. Broadcast via BroadcastChannel
     try {
       this.broadcastChannel?.postMessage({ type: 'NEW_ITEM', data: item });
     } catch (e) {}
@@ -288,105 +251,110 @@ export class CloudSyncService {
     this.saveCachedReviews(updated);
 
     try {
-      this.broadcastChannel?.postMessage({ type: 'REVIEW_ADDED', data: review });
+      this.broadcastChannel?.postMessage({ type: 'REVIEW_SYNC', data: review });
     } catch (e) {}
 
     return review;
   }
 
-  async broadcastChatMessage(chatThread) {
-    if (!chatThread || !chatThread.id) throw new Error('Invalid chat payload');
+  // =========================================================================
+  // SECURE CONVERSATION & MESSAGING API CLIENT
+  // =========================================================================
 
+  async fetchConversations() {
     const apiBase = getApiBaseUrl();
-    if (apiBase) {
-      const res = await fetch(`${apiBase}/api/sync/chat?_t=${Date.now()}`, {
-        method: 'POST',
-        headers: {
-          ...this.getAuthHeaders(),
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        },
-        body: JSON.stringify(chatThread),
-        cache: 'no-store'
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.success !== true) {
-        throw new Error(data?.error || 'خطا در ارسال پیام به سرور');
-      }
-    }
+    if (!apiBase) return [];
 
-    const cached = this.getCachedChats();
-    const p1 = (chatThread.ownerUsername || '').toLowerCase();
-    const p2 = (chatThread.renterUsername || '').toLowerCase();
-
-    const existingIdx = cached.findIndex(c => {
-      if (c.id === chatThread.id) return true;
-      const u1 = (c.ownerUsername || '').toLowerCase();
-      const u2 = (c.renterUsername || '').toLowerCase();
-      if (p1 && p2 && u1 && u2) {
-        return (u1 === p1 && u2 === p2) || (u1 === p2 && u2 === p1);
-      }
-      return false;
+    const res = await fetch(`${apiBase}/api/conversations?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      },
+      cache: 'no-store'
     });
 
-    let updated;
-    if (existingIdx !== -1) {
-      updated = [...cached];
-      updated[existingIdx] = chatThread;
-    } else {
-      updated = [chatThread, ...cached];
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data?.error || 'خطا در دریافت لیست گفتگوها');
     }
-    this.saveCachedChats(updated);
-
-    try {
-      this.broadcastChannel?.postMessage({ type: 'CHAT_UPDATE', data: chatThread });
-    } catch (e) {}
-
-    return chatThread;
+    return data.conversations || [];
   }
 
-  async deleteChatThread(threadId) {
-    if (!threadId) return false;
-
+  async getOrCreateConversation({ listingId, rentalId }) {
     const apiBase = getApiBaseUrl();
-    if (apiBase) {
-      const res = await fetch(`${apiBase}/api/sync/chat/delete?_t=${Date.now()}`, {
-        method: 'POST',
-        headers: {
-          ...this.getAuthHeaders(),
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        },
-        body: JSON.stringify({ id: threadId }),
-        cache: 'no-store'
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.success !== true) {
-        throw new Error(data?.error || 'خطا در حذف گفتگو از سرور');
-      }
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/conversations`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ listingId, rentalId })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data?.error || 'خطا در ایجاد گفتگو');
     }
-
-    const cached = this.getCachedChats();
-    const updated = cached.filter(c => c.id !== threadId);
-    this.saveCachedChats(updated);
-
-    try {
-      this.broadcastChannel?.postMessage({ type: 'CHAT_DELETED', data: { id: threadId } });
-    } catch (e) {}
-
-    return true;
+    return data;
   }
 
-  /**
-   * Fast polling specifically for chat messages while chat window is active
-   */
-  async pollChatsFast() {
-    try {
-      const data = await this.fetchSharedData(true);
-      return data && Array.isArray(data.chats) ? data.chats : this.getCachedChats();
-    } catch (e) {
-      return this.getCachedChats();
+  async fetchConversationMessages(conversationId) {
+    if (!conversationId) throw new Error('conversationId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) return { messages: [] };
+
+    const res = await fetch(`${apiBase}/api/conversations/${encodeURIComponent(conversationId)}/messages?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      },
+      cache: 'no-store'
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data?.error || 'خطا در دریافت پیام‌ها');
     }
+    return data;
+  }
+
+  async sendConversationMessage(conversationId, { text, messageType = 'text' }) {
+    if (!conversationId) throw new Error('conversationId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/conversations/${encodeURIComponent(conversationId)}/messages`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ text, messageType })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در ارسال پیام');
+      err.code = data?.code;
+      err.status = res.status;
+      throw err;
+    }
+    return data.message;
+  }
+
+  async archiveConversation(conversationId) {
+    if (!conversationId) return false;
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) return false;
+
+    const res = await fetch(`${apiBase}/api/conversations/${encodeURIComponent(conversationId)}/archive`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({})
+    });
+
+    const data = await res.json().catch(() => ({}));
+    return res.ok && data.success === true;
   }
 
   async fetchSharedData(forceNotify = false) {
@@ -394,7 +362,6 @@ export class CloudSyncService {
     const localRentals = this.getCachedRentals();
     const localUsers = this.getCachedUsers();
     const localReviews = this.getCachedReviews();
-    const localChats = this.getCachedChats();
 
     const apiBase = getApiBaseUrl();
     if (!apiBase) {
@@ -403,7 +370,6 @@ export class CloudSyncService {
         rentals: localRentals,
         users: localUsers,
         reviews: localReviews,
-        chats: localChats,
         transactions: []
       };
     }
@@ -463,58 +429,19 @@ export class CloudSyncService {
         const mergedReviews = Array.from(mergedReviewsMap.values());
         this.saveCachedReviews(mergedReviews);
 
-        // 5. Merge chats (Cross-Phone Real-Time Chat sync)
-        const remoteChats = Array.isArray(data.chats) ? data.chats : [];
-        const mergedChats = [...localChats];
-
-        remoteChats.forEach(rc => {
-          const rP1 = (rc.ownerUsername || '').toLowerCase();
-          const rP2 = (rc.renterUsername || '').toLowerCase();
-
-          const localIdx = mergedChats.findIndex(lc => {
-            if (lc.id === rc.id) return true;
-            const lP1 = (lc.ownerUsername || '').toLowerCase();
-            const lP2 = (lc.renterUsername || '').toLowerCase();
-            if (rP1 && rP2 && lP1 && lP2) {
-              return (lP1 === rP1 && lP2 === rP2) || (lP1 === rP2 && lP2 === rP1);
-            }
-            return false;
-          });
-
-          if (localIdx === -1) {
-            mergedChats.unshift(rc);
-          } else {
-            const local = mergedChats[localIdx];
-            const combinedMap = new Map();
-            (local.messages || []).forEach(m => combinedMap.set(m.id || (m.text + '_' + m.timestamp), m));
-            (rc.messages || []).forEach(m => combinedMap.set(m.id || (m.text + '_' + m.timestamp), m));
-            mergedChats[localIdx] = {
-              ...local,
-              ...rc,
-              messages: Array.from(combinedMap.values()),
-              lastMessageAt: rc.lastMessageAt || local.lastMessageAt
-            };
-          }
-        });
-        this.saveCachedChats(mergedChats);
-
-        const totalMsgs = mergedChats.reduce((sum, c) => sum + (c.messages?.length || 0), 0);
-        const latestMsgTs = mergedChats.map(c => c.lastMessageAt || '').sort().reverse()[0] || '';
-        const currentHash = `${mergedItems.length}_${mergedRentals.length}_${mergedUsers.length}_${mergedReviews.length}_${mergedChats.length}_${totalMsgs}_${latestMsgTs}`;
+        const currentHash = `${mergedItems.length}_${mergedRentals.length}_${mergedUsers.length}_${mergedReviews.length}`;
 
         const result = {
           items: mergedItems,
           rentals: mergedRentals,
           users: mergedUsers,
           reviews: mergedReviews,
-          chats: mergedChats,
           transactions: data.transactions || []
         };
 
         if (currentHash !== this.lastSyncedHash || forceNotify) {
           this.lastSyncedHash = currentHash;
           this.notifySubscribers('DATA_SYNC', result);
-          this.notifySubscribers('CHAT_POLL_SYNC', { chats: [...mergedChats] });
         }
 
         return result;
@@ -528,7 +455,6 @@ export class CloudSyncService {
       rentals: localRentals,
       users: localUsers,
       reviews: localReviews,
-      chats: localChats,
       transactions: []
     };
   }
@@ -624,25 +550,6 @@ export class CloudSyncService {
   saveCachedReviews(reviews) {
     try {
       localStorage.setItem(STORAGE_REVIEWS_KEY, JSON.stringify(reviews || []));
-    } catch (e) {}
-  }
-
-  getCachedChats() {
-    try {
-      const saved = localStorage.getItem(STORAGE_CHATS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  saveCachedChats(chats) {
-    try {
-      localStorage.setItem(STORAGE_CHATS_KEY, JSON.stringify(chats || []));
     } catch (e) {}
   }
 
