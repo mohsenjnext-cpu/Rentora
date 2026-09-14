@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
@@ -37,7 +37,7 @@ const AVATAR_PRESETS = [
 export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProfile }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen, logout, updateProfile, updateUserProfile } = usePiAuth();
-  const { items = [], rentals = [], reviews = [] } = useRentora();
+  const { items = [], rentals = [], fetchUserReviews } = useRentora();
 
   const [isEditing, setIsEditing] = useState(false);
   const [displayName, setDisplayName] = useState(currentUser?.displayName || currentUser?.username || '');
@@ -45,8 +45,20 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
   const [avatar, setAvatar] = useState(currentUser?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser?.username || 'pioneer'}`);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [userReviewsData, setUserReviewsData] = useState(null);
 
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!currentUser?.username) return;
+    let isMounted = true;
+    fetchUserReviews(currentUser.username)
+      .then(data => {
+        if (isMounted && data) setUserReviewsData(data);
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, [currentUser?.username]);
 
   if (!isAuthenticated) {
     return (
@@ -79,7 +91,7 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
   );
 
   // Dynamic reputation calculation
-  const repSummary = getUserReputationSummary(currentUser?.username, rentals, reviews);
+  const repSummary = getUserReputationSummary(currentUser?.username, userReviewsData || rentals);
 
   // Handle image upload from device gallery / camera
   const handleImageFileChange = (e) => {

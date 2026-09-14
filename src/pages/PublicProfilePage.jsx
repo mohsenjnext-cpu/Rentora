@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
@@ -23,9 +23,22 @@ export default function PublicProfilePage({
 }) {
   const { lang, dir, t, l } = useLanguage();
   const { users = [] } = usePiAuth();
-  const { items = [], rentals = [], reviews = [] } = useRentora();
+  const { items = [], rentals = [], fetchUserReviews } = useRentora();
+
+  const [userReviewsData, setUserReviewsData] = useState(null);
 
   const targetUsername = username || 'pioneer';
+
+  useEffect(() => {
+    if (!targetUsername) return;
+    let isMounted = true;
+    fetchUserReviews(targetUsername)
+      .then(data => {
+        if (isMounted && data) setUserReviewsData(data);
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, [targetUsername]);
 
   const targetUser = users.find(u => u.username?.toLowerCase() === targetUsername.toLowerCase());
 
@@ -36,7 +49,7 @@ export default function PublicProfilePage({
   );
 
   // Dynamic reputation
-  const repSummary = getUserReputationSummary(targetUsername, rentals, reviews);
+  const repSummary = getUserReputationSummary(targetUsername, userReviewsData || rentals);
 
   return (
     <div className="max-w-2xl mx-auto space-y-4 pb-16 select-none animate-fadeIn">

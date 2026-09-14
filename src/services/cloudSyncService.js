@@ -7,7 +7,6 @@ import { getApiBaseUrl } from './apiConfig.js';
 const STORAGE_ITEMS_KEY = 'rentora_live_v1_items';
 const STORAGE_RENTALS_KEY = 'rentora_live_v1_rentals';
 const STORAGE_USERS_KEY = 'rentora_live_v1_users_dir';
-const STORAGE_REVIEWS_KEY = 'rentora_live_v1_reviews';
 const STORAGE_USER_KEY = 'rentora_live_v1_session';
 
 export class CloudSyncService {
@@ -66,11 +65,6 @@ export class CloudSyncService {
       const updated = [data, ...rentals.filter(r => r.id !== data.id)];
       this.saveCachedRentals(updated);
       this.notifySubscribers('RENTAL_SYNC', { rentals: updated, rental: data });
-    } else if (type === 'REVIEW_ADDED' && data) {
-      const reviews = this.getCachedReviews();
-      const updated = [data, ...reviews.filter(r => r.id !== data.id)];
-      this.saveCachedReviews(updated);
-      this.notifySubscribers('REVIEW_SYNC', { reviews: updated, review: data });
     }
   }
 
@@ -229,32 +223,98 @@ export class CloudSyncService {
     return this.broadcastNewRental(rental);
   }
 
-  async broadcastReview(review) {
-    if (!review || !review.id) throw new Error('Invalid review payload');
+  // =========================================================================
+  // AUTHORITATIVE RENTAL REVIEWS API CLIENT
+  // =========================================================================
 
+  async fetchRentalReviewStatus(rentalId) {
+    if (!rentalId) throw new Error('rentalId is required');
     const apiBase = getApiBaseUrl();
-    if (apiBase) {
-      const res = await fetch(`${apiBase}/api/sync/review`, {
-        method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify(review)
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.success !== true) {
-        throw new Error(data?.error || 'خطا در ثبت نظر در سرور');
-      }
-      if (data.review) review = data.review;
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/rentals/${encodeURIComponent(rentalId)}/review-status?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      },
+      cache: 'no-store'
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در دریافت وضعیت نظرسنجی');
+      err.status = res.status;
+      throw err;
     }
+    return data;
+  }
 
-    const cached = this.getCachedReviews();
-    const updated = [review, ...cached.filter(r => r.id !== review.id)];
-    this.saveCachedReviews(updated);
+  async submitRentalReview(rentalId, { rating, reviewText }) {
+    if (!rentalId) throw new Error('rentalId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
 
-    try {
-      this.broadcastChannel?.postMessage({ type: 'REVIEW_SYNC', data: review });
-    } catch (e) {}
+    const res = await fetch(`${apiBase}/api/rentals/${encodeURIComponent(rentalId)}/reviews`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ rating, reviewText })
+    });
 
-    return review;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در ثبت امتیاز و نظر');
+      err.status = res.status;
+      throw err;
+    }
+    return data.review;
+  }
+
+  async fetchUserReviews(userId) {
+    if (!userId) throw new Error('userId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) return { stats: { totalReviews: 0, averageRating: null, isNew: true }, reviews: [] };
+
+    const res = await fetch(`${apiBase}/api/users/${encodeURIComponent(userId)}/reviews?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      },
+      cache: 'no-store'
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در دریافت نظرات کاربر');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  async fetchListingReviews(listingId) {
+    if (!listingId) throw new Error('listingId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) return { stats: { totalReviews: 0, averageRating: null, isNew: true }, reviews: [] };
+
+    const res = await fetch(`${apiBase}/api/listings/${encodeURIComponent(listingId)}/reviews?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      },
+      cache: 'no-store'
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در دریافت نظرات آگهی');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
   }
 
   // =========================================================================
@@ -361,7 +421,6 @@ export class CloudSyncService {
     const localItems = this.getCachedItems();
     const localRentals = this.getCachedRentals();
     const localUsers = this.getCachedUsers();
-    const localReviews = this.getCachedReviews();
 
     const apiBase = getApiBaseUrl();
     if (!apiBase) {
@@ -369,7 +428,7 @@ export class CloudSyncService {
         items: localItems,
         rentals: localRentals,
         users: localUsers,
-        reviews: localReviews,
+        reviews: [],
         transactions: []
       };
     }
@@ -421,21 +480,13 @@ export class CloudSyncService {
         const mergedUsers = Array.from(mergedUsersMap.values());
         this.saveCachedUsers(mergedUsers);
 
-        // 4. Merge reviews
-        const remoteReviews = Array.isArray(data.reviews) ? data.reviews : [];
-        const mergedReviewsMap = new Map();
-        localReviews.forEach(r => mergedReviewsMap.set(r.id, r));
-        remoteReviews.forEach(r => mergedReviewsMap.set(r.id, r));
-        const mergedReviews = Array.from(mergedReviewsMap.values());
-        this.saveCachedReviews(mergedReviews);
-
-        const currentHash = `${mergedItems.length}_${mergedRentals.length}_${mergedUsers.length}_${mergedReviews.length}`;
+        const currentHash = `${mergedItems.length}_${mergedRentals.length}_${mergedUsers.length}`;
 
         const result = {
           items: mergedItems,
           rentals: mergedRentals,
           users: mergedUsers,
-          reviews: mergedReviews,
+          reviews: [],
           transactions: data.transactions || []
         };
 
@@ -454,7 +505,7 @@ export class CloudSyncService {
       items: localItems,
       rentals: localRentals,
       users: localUsers,
-      reviews: localReviews,
+      reviews: [],
       transactions: []
     };
   }
@@ -531,25 +582,6 @@ export class CloudSyncService {
   saveCachedUsers(users) {
     try {
       localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users || []));
-    } catch (e) {}
-  }
-
-  getCachedReviews() {
-    try {
-      const saved = localStorage.getItem(STORAGE_REVIEWS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  saveCachedReviews(reviews) {
-    try {
-      localStorage.setItem(STORAGE_REVIEWS_KEY, JSON.stringify(reviews || []));
     } catch (e) {}
   }
 

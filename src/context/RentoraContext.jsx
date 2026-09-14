@@ -25,7 +25,6 @@ export function RentoraProvider({ children }) {
   const [favorites, setFavorites] = useState(() => { try { const saved = localStorage.getItem(STORAGE_PREFIX + 'favorites_v8'); return saved ? JSON.parse(saved) : []; } catch (e) { return []; } });
   const [rentals, setRentals] = useState(() => cloudSyncService.getCachedRentals());
   const [transactions, setTransactions] = useState(() => { try { const saved = localStorage.getItem(STORAGE_PREFIX + 'transactions_v8'); return saved ? JSON.parse(saved) : []; } catch (e) { return []; } });
-  const [reviews, setReviews] = useState(() => cloudSyncService.getCachedReviews());
   const [reports, setReports] = useState(() => { try { const saved = localStorage.getItem(STORAGE_PREFIX + 'reports_v8'); return saved ? JSON.parse(saved) : []; } catch (e) { return []; } });
   const [conversations, setConversations] = useState([]);
   const [latestNotification, setLatestNotification] = useState(null);
@@ -91,7 +90,6 @@ export function RentoraProvider({ children }) {
       if (data) {
         if (Array.isArray(data.items)) setItems(prev => JSON.stringify(prev) === JSON.stringify(data.items) ? prev : data.items);
         if (Array.isArray(data.rentals)) setRentals(prev => JSON.stringify(prev) === JSON.stringify(data.rentals) ? prev : data.rentals);
-        if (Array.isArray(data.reviews)) setReviews(prev => JSON.stringify(prev) === JSON.stringify(data.reviews) ? prev : data.reviews);
       }
     });
     return () => unsubscribe();
@@ -117,7 +115,6 @@ export function RentoraProvider({ children }) {
       if (data) {
         if (Array.isArray(data.items)) setItems(data.items);
         if (Array.isArray(data.rentals)) setRentals(data.rentals);
-        if (Array.isArray(data.reviews)) setReviews(data.reviews);
       }
       if (currentUser) await refreshConversations();
       return { success: true };
@@ -488,15 +485,24 @@ export function RentoraProvider({ children }) {
 
   const resolveReport = (reportId) => setReports(prev => prev.filter(r => r.id !== reportId));
 
-  const addReview = (reviewData) => {
-    const newReview = { id: "rev_" + Date.now(), reviewerUsername: currentUser?.username || 'pioneer', createdAt: new Date().toISOString(), ...reviewData };
-    setReviews(prev => {
-      const updated = [newReview, ...prev];
-      cloudSyncService.saveCachedReviews(updated);
-      return updated;
-    });
-    cloudSyncService.broadcastReview(newReview);
-    return newReview;
+  // =========================================================================
+  // AUTHORITATIVE RENTAL REVIEWS WRAPPERS
+  // =========================================================================
+
+  const fetchRentalReviewStatus = async (rentalId) => {
+    return cloudSyncService.fetchRentalReviewStatus(rentalId);
+  };
+
+  const submitRentalReview = async (rentalId, payload) => {
+    return cloudSyncService.submitRentalReview(rentalId, payload);
+  };
+
+  const fetchUserReviews = async (userId) => {
+    return cloudSyncService.fetchUserReviews(userId);
+  };
+
+  const fetchListingReviews = async (listingId) => {
+    return cloudSyncService.fetchListingReviews(listingId);
   };
 
   const updatePlatformConfig = (newConfig) => {
@@ -509,7 +515,6 @@ export function RentoraProvider({ children }) {
       rentals,
       transactions,
       favorites,
-      reviews,
       reports,
       conversations,
       chats: conversations,
@@ -545,7 +550,10 @@ export function RentoraProvider({ children }) {
       clearAllChats,
       addReport,
       resolveReport,
-      addReview,
+      fetchRentalReviewStatus,
+      submitRentalReview,
+      fetchUserReviews,
+      fetchListingReviews,
       updatePlatformConfig
     }}>
       {children}

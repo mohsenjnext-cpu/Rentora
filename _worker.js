@@ -180,8 +180,31 @@ function parseMetadata(value) { if (!value) return {}; try { return JSON.parse(v
 function userView(row) { const meta = parseMetadata(row.metadata); return { ...meta, id: row.id, uid: row.pi_uid, piUid: row.pi_uid, username: row.username, displayName: row.display_name, avatar: row.avatar_url, role: row.role, status: row.status, kycStatus: meta.kycStatus === 'verified' ? 'verified' : 'unverified', isOfficialSdk: true, joinedDate: row.created_at.slice(0, 10) }; }
 function listingView(row) { const meta = sanitizeListingPublicMetadata(parseMetadata(row.metadata)); return { ...meta, id: row.id, title: row.title, description: row.description || '', category: row.category, location: row.location, pricePerDay: row.price_per_day, deposit: row.deposit_amount, ownerUid: row.owner_pi_uid, ownerUsername: row.owner_username, ownerAvatar: row.owner_avatar, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at }; }
 function rentalView(row) { const meta = parseMetadata(row.metadata); return { ...meta, id: row.id, itemId: row.listing_id, renterUid: row.renter_pi_uid, renterUsername: row.renter_username, ownerUid: row.owner_pi_uid, ownerUsername: row.owner_username, startDate: row.start_date, endDate: row.end_date, pricePerDay: row.price_per_day, rentalTotal: row.rental_amount, baseAmount: row.rental_amount, deposit: row.deposit_amount, securityDeposit: row.deposit_amount, rentoraFee: row.platform_fee, totalPlatformFee: row.platform_fee, totalAmount: row.total_amount, status: row.status, paymentStatus: row.payment_status, createdAt: row.created_at, updatedAt: row.updated_at }; }
-function reviewView(row) { const meta = parseMetadata(row.metadata); return { ...meta, id: row.id, rentalId: row.rental_id, authorUid: row.author_pi_uid, authorUsername: row.author_username, targetUid: row.target_pi_uid, targetUsername: row.target_username, rating: row.rating, body: row.body, createdAt: row.created_at }; }
-async function listAll(env, auth) { const [items, rentals, transactions, users, reviews] = await Promise.all([env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).all(), env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id ORDER BY r.created_at DESC`).all(), env.RENTORA_DB.prepare(`SELECT t.*, u.pi_uid user_pi_uid FROM transactions t JOIN users u ON u.id=t.user_id ORDER BY t.created_at DESC`).all(), env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all(), env.RENTORA_DB.prepare(`SELECT r.*, au.pi_uid author_pi_uid, au.username author_username, tu.pi_uid target_pi_uid, tu.username target_username FROM reviews r JOIN users au ON au.id=r.author_user_id JOIN users tu ON tu.id=r.target_user_id ORDER BY r.created_at DESC`).all()]); const out = { items: (items.results || []).map(listingView), rentals: (rentals.results || []).map(rentalView), transactions: transactions.results || [], users: (users.results || []).map(userView), reviews: (reviews.results || []).map(reviewView), reports: [], chats: [], timestamp: now() }; if (auth?.user && isAdmin(auth.user.pi_uid, env) && auth.user.role === 'admin') { const reports = await env.RENTORA_DB.prepare(`SELECT r.*, u.username reporter_username, u.pi_uid reporter_pi_uid FROM reports r JOIN users u ON u.id=r.reporter_user_id ORDER BY r.created_at DESC`).all(); out.reports = reports.results || []; } return out; }
+
+async function listAll(env, auth) {
+  const [items, rentals, transactions, users] = await Promise.all([
+    env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).all(),
+    env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id ORDER BY r.created_at DESC`).all(),
+    env.RENTORA_DB.prepare(`SELECT t.*, u.pi_uid user_pi_uid FROM transactions t JOIN users u ON u.id=t.user_id ORDER BY t.created_at DESC`).all(),
+    env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all()
+  ]);
+  const out = {
+    items: (items.results || []).map(listingView),
+    rentals: (rentals.results || []).map(rentalView),
+    transactions: transactions.results || [],
+    users: (users.results || []).map(userView),
+    reviews: [],
+    reports: [],
+    chats: [],
+    timestamp: now()
+  };
+  if (auth?.user && isAdmin(auth.user.pi_uid, env) && auth.user.role === 'admin') {
+    const reports = await env.RENTORA_DB.prepare(`SELECT r.*, u.username reporter_username, u.pi_uid reporter_pi_uid FROM reports r JOIN users u ON u.id=r.reporter_user_id ORDER BY r.created_at DESC`).all();
+    out.reports = reports.results || [];
+  }
+  return out;
+}
+
 function validatePiPayment(payment, intent, user) {
   const identifier = String(payment?.identifier || payment?.id || '');
   if (!identifier) throw Object.assign(new Error('Pi payment identifier is missing'), { status: 409 });
@@ -802,9 +825,325 @@ export default {
         return errorResponse('Legacy chat endpoints have been permanently deprecated. Please use /api/conversations', 410, env);
       }
 
+      // =========================================================================
+      // AUTHORITATIVE RENTAL-BASED RATING & REVIEW SYSTEM
+      // =========================================================================
+      if (method === 'GET' && path.startsWith('/api/rentals/') && path.endsWith('/review-status')) {
+        const rentalId = path.slice('/api/rentals/'.length, -'/review-status'.length).trim();
+        if (!rentalId) return errorResponse('Missing rental ID', 400, env);
+        const { user } = await requireUser(request, env);
+
+        const rental = await env.RENTORA_DB.prepare(`
+          SELECT r.*, l.id AS listing_id, l.title AS listing_title, l.owner_user_id,
+                 ru.username AS renter_username, ru.display_name AS renter_display_name, ru.avatar_url AS renter_avatar,
+                 ou.username AS owner_username, ou.display_name AS owner_display_name, ou.avatar_url AS owner_avatar
+          FROM rentals r
+          JOIN listings l ON l.id = r.listing_id
+          JOIN users ru ON ru.id = r.renter_user_id
+          JOIN users ou ON ou.id = l.owner_user_id
+          WHERE r.id = ?1
+          LIMIT 1
+        `).bind(rentalId).first();
+
+        if (!rental) return errorResponse('Rental not found', 404, env);
+
+        const isRenter = (rental.renter_user_id === user.id);
+        const isOwner = (rental.owner_user_id === user.id);
+        const isAdminUser = isAdmin(user.pi_uid, env) && user.role === 'admin';
+
+        if (!isRenter && !isOwner && !isAdminUser) {
+          return errorResponse('Access denied to rental review status', 403, env);
+        }
+
+        const isCompleted = (rental.status === 'completed');
+        const isPaid = (rental.payment_status === 'completed');
+        const isEligible = isCompleted && isPaid;
+
+        const reviews = await env.RENTORA_DB.prepare(`
+          SELECT r.*, u.username AS reviewer_username, u.display_name AS reviewer_display_name, u.avatar_url AS reviewer_avatar
+          FROM reviews r
+          JOIN users u ON u.id = r.reviewer_user_id
+          WHERE r.rental_id = ?1
+        `).bind(rentalId).all();
+
+        const reviewList = reviews.results || [];
+        const myReview = reviewList.find(r => r.reviewer_user_id === user.id) || null;
+        const otherReview = reviewList.find(r => r.reviewer_user_id !== user.id) || null;
+
+        const headers = {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'private, no-store, no-cache, must-revalidate, max-age=0',
+          'Pragma': 'no-cache',
+          'X-Content-Type-Options': 'nosniff',
+          'Referrer-Policy': 'no-referrer',
+          'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+        };
+        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+
+        return new Response(JSON.stringify({
+          success: true,
+          rentalId: rental.id,
+          listingId: rental.listing_id,
+          listingTitle: rental.listing_title,
+          isEligible,
+          userRole: isRenter ? 'renter' : (isOwner ? 'owner' : 'admin'),
+          otherParty: isRenter ? {
+            id: rental.owner_user_id,
+            username: rental.owner_username,
+            displayName: rental.owner_display_name,
+            avatar: rental.owner_avatar
+          } : {
+            id: rental.renter_user_id,
+            username: rental.renter_username,
+            displayName: rental.renter_display_name,
+            avatar: rental.renter_avatar
+          },
+          myReview: myReview ? {
+            id: myReview.id,
+            rating: myReview.rating,
+            reviewText: myReview.review_text || '',
+            createdAt: myReview.created_at
+          } : null,
+          otherReview: otherReview ? {
+            id: otherReview.id,
+            rating: otherReview.rating,
+            reviewText: otherReview.review_text || '',
+            createdAt: otherReview.created_at
+          } : null,
+          hasUserReviewed: Boolean(myReview),
+          hasOtherReviewed: Boolean(otherReview)
+        }), { status: 200, headers });
+      }
+
+      if (method === 'POST' && path.startsWith('/api/rentals/') && path.endsWith('/reviews')) {
+        const rentalId = path.slice('/api/rentals/'.length, -'/reviews'.length).trim();
+        if (!rentalId) return errorResponse('Missing rental ID', 400, env);
+        const { user } = await requireUser(request, env);
+        const body = await readJson(request);
+
+        const rawRating = body?.rating;
+        if (rawRating === undefined || rawRating === null || typeof rawRating !== 'number' || !Number.isInteger(rawRating)) {
+          return errorResponse('Rating must be an integer between 1 and 5', 400, env);
+        }
+        const rating = Number(rawRating);
+        if (rating < 1 || rating > 5) {
+          return errorResponse('Rating must be an integer between 1 and 5', 400, env);
+        }
+
+        const reviewText = String(body?.reviewText || body?.comment || '').trim();
+        if (reviewText.length > 1000) {
+          return errorResponse('Review text is too long (max 1000 characters)', 400, env);
+        }
+
+        const rental = await env.RENTORA_DB.prepare(`
+          SELECT r.*, l.id AS listing_id, l.owner_user_id
+          FROM rentals r
+          JOIN listings l ON l.id = r.listing_id
+          WHERE r.id = ?1
+          LIMIT 1
+        `).bind(rentalId).first();
+
+        if (!rental) return errorResponse('Rental not found', 404, env);
+
+        const isRenter = (rental.renter_user_id === user.id);
+        const isOwner = (rental.owner_user_id === user.id);
+
+        if (!isRenter && !isOwner) {
+          return errorResponse('Only participants of this rental are permitted to leave a review', 403, env);
+        }
+
+        if (rental.status !== 'completed' || rental.payment_status !== 'completed') {
+          return errorResponse('Review is only permitted after rental is completed and payment is verified', 403, env);
+        }
+
+        const reviewerUserId = user.id;
+        const revieweeUserId = isRenter ? rental.owner_user_id : rental.renter_user_id;
+
+        if (reviewerUserId === revieweeUserId) {
+          return errorResponse('Self-rating is not allowed', 400, env);
+        }
+
+        const existing = await env.RENTORA_DB.prepare(`
+          SELECT id FROM reviews
+          WHERE rental_id = ?1 AND reviewer_user_id = ?2 AND reviewee_user_id = ?3
+          LIMIT 1
+        `).bind(rentalId, reviewerUserId, revieweeUserId).first();
+
+        if (existing) {
+          return errorResponse('Duplicate review: you have already submitted a review for this rental', 409, env);
+        }
+
+        const reviewId = `rev_${crypto.randomUUID()}`;
+        const createdAt = now();
+
+        await env.RENTORA_DB.prepare(`
+          INSERT INTO reviews(id, rental_id, listing_id, reviewer_user_id, reviewee_user_id, rating, review_text, status, created_at, updated_at)
+          VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, 'approved', ?8, ?8)
+        `).bind(reviewId, rentalId, rental.listing_id, reviewerUserId, revieweeUserId, rating, reviewText || null, createdAt).run();
+
+        const headers = {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'private, no-store, no-cache, must-revalidate, max-age=0',
+          'Pragma': 'no-cache',
+          'X-Content-Type-Options': 'nosniff',
+          'Referrer-Policy': 'no-referrer',
+          'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+        };
+        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+
+        return new Response(JSON.stringify({
+          success: true,
+          review: {
+            id: reviewId,
+            rentalId,
+            listingId: rental.listing_id,
+            reviewerUserId,
+            reviewerUsername: user.username,
+            revieweeUserId,
+            rating,
+            reviewText,
+            createdAt
+          }
+        }), { status: 201, headers });
+      }
+
+      if (method === 'GET' && path.startsWith('/api/users/') && path.endsWith('/reviews')) {
+        const identifier = path.slice('/api/users/'.length, -'/reviews'.length).trim();
+        if (!identifier) return errorResponse('Missing user identifier', 400, env);
+
+        const targetUser = await env.RENTORA_DB.prepare(`
+          SELECT id, pi_uid, username, display_name, avatar_url
+          FROM users
+          WHERE id = ?1 OR pi_uid = ?1 OR lower(username) = lower(?1)
+          LIMIT 1
+        `).bind(identifier).first();
+
+        if (!targetUser) return errorResponse('User not found', 404, env);
+
+        const rows = await env.RENTORA_DB.prepare(`
+          SELECT
+            r.id,
+            r.rental_id,
+            r.listing_id,
+            r.rating,
+            r.review_text,
+            r.created_at,
+            u.username AS reviewer_username,
+            u.display_name AS reviewer_display_name,
+            u.avatar_url AS reviewer_avatar,
+            l.title AS listing_title
+          FROM reviews r
+          JOIN users u ON u.id = r.reviewer_user_id
+          JOIN listings l ON l.id = r.listing_id
+          WHERE r.reviewee_user_id = ?1 AND r.status = 'approved'
+          ORDER BY r.created_at DESC
+        `).bind(targetUser.id).all();
+
+        const reviewList = rows.results || [];
+        const totalReviews = reviewList.length;
+        const averageRating = totalReviews > 0
+          ? Number((reviewList.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1))
+          : null;
+
+        const headers = {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'public, max-age=15, stale-while-revalidate=30',
+          'X-Content-Type-Options': 'nosniff'
+        };
+        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+
+        return new Response(JSON.stringify({
+          success: true,
+          userId: targetUser.id,
+          username: targetUser.username,
+          stats: {
+            totalReviews,
+            averageRating,
+            isNew: totalReviews === 0
+          },
+          reviews: reviewList.map(r => ({
+            id: r.id,
+            rentalId: r.rental_id,
+            listingId: r.listing_id,
+            listingTitle: r.listing_title,
+            reviewerUsername: r.reviewer_username,
+            reviewerDisplayName: r.reviewer_display_name,
+            reviewerAvatar: r.reviewer_avatar,
+            rating: r.rating,
+            reviewText: r.review_text || '',
+            createdAt: r.created_at
+          }))
+        }), { status: 200, headers });
+      }
+
+      if (method === 'GET' && path.startsWith('/api/listings/') && path.endsWith('/reviews')) {
+        const listingId = path.slice('/api/listings/'.length, -'/reviews'.length).trim();
+        if (!listingId) return errorResponse('Missing listing ID', 400, env);
+
+        const listing = await env.RENTORA_DB.prepare(`
+          SELECT id, title, owner_user_id FROM listings WHERE id = ?1 AND status != 'deleted' LIMIT 1
+        `).bind(listingId).first();
+
+        if (!listing) return errorResponse('Listing not found', 404, env);
+
+        const rows = await env.RENTORA_DB.prepare(`
+          SELECT
+            r.id,
+            r.rental_id,
+            r.listing_id,
+            r.rating,
+            r.review_text,
+            r.created_at,
+            u.username AS reviewer_username,
+            u.display_name AS reviewer_display_name,
+            u.avatar_url AS reviewer_avatar
+          FROM reviews r
+          JOIN users u ON u.id = r.reviewer_user_id
+          WHERE r.listing_id = ?1 AND r.reviewee_user_id = ?2 AND r.status = 'approved'
+          ORDER BY r.created_at DESC
+        `).bind(listing.id, listing.owner_user_id).all();
+
+        const reviewList = rows.results || [];
+        const totalReviews = reviewList.length;
+        const averageRating = totalReviews > 0
+          ? Number((reviewList.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1))
+          : null;
+
+        const headers = {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'public, max-age=15, stale-while-revalidate=30',
+          'X-Content-Type-Options': 'nosniff'
+        };
+        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+
+        return new Response(JSON.stringify({
+          success: true,
+          listingId: listing.id,
+          stats: {
+            totalReviews,
+            averageRating,
+            isNew: totalReviews === 0
+          },
+          reviews: reviewList.map(r => ({
+            id: r.id,
+            rentalId: r.rental_id,
+            reviewerUsername: r.reviewer_username,
+            reviewerDisplayName: r.reviewer_display_name,
+            reviewerAvatar: r.reviewer_avatar,
+            rating: r.rating,
+            reviewText: r.review_text || '',
+            createdAt: r.created_at
+          }))
+        }), { status: 200, headers });
+      }
+
+      // Legacy review endpoint permanently deprecated
+      if (method === 'POST' && path === '/api/sync/review') {
+        return errorResponse('Legacy review endpoint is deprecated. Please use POST /api/rentals/:rentalId/reviews', 410, env);
+      }
+
       if (method === 'POST' && path === '/api/sync/rental') { const { user } = await requireUser(request, env); const rental = await readJson(request); if (!rental?.id || !rental.itemId || !rental.startDate || !rental.endDate) return errorResponse('Invalid rental', 400, env); const listing = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.id=?1 AND l.status='active' LIMIT 1`).bind(rental.itemId).first(); if (!listing) return errorResponse('Listing not found', 404, env); if (listing.owner_user_id === user.id) return errorResponse('Owner cannot rent own listing', 409, env); const start = new Date(`${rental.startDate}T00:00:00Z`); const end = new Date(`${rental.endDate}T00:00:00Z`); const days = Math.max(1, Math.ceil((end - start) / 86400000)); const rentalAmount = Number(listing.price_per_day) * days; const deposit = Number(listing.deposit_amount); const fee = Math.max(0.0001, rentalAmount * Number(listing.platform_fee_rate || env.PLATFORM_FEE_RATE || 0.05)); const total = fee; const existing = await env.RENTORA_DB.prepare('SELECT id FROM rentals WHERE id=?1').bind(rental.id).first(); const metadata = JSON.stringify({ ...rental, id: rental.id, itemId: listing.id, ownerUid: listing.owner_pi_uid, ownerUsername: listing.owner_username, renterUid: user.pi_uid, renterUsername: user.username, daysCount: days, pricePerDay: listing.price_per_day, rentalTotal: rentalAmount, baseAmount: rentalAmount, deposit, securityDeposit: deposit, rentoraFee: fee, totalPlatformFee: fee, paymentDueToRentora: fee }); if (existing) { const own = await env.RENTORA_DB.prepare('SELECT renter_user_id FROM rentals WHERE id=?1').bind(rental.id).first(); if (!own || own.renter_user_id !== user.id) return errorResponse('Rental ownership denied', 403, env); await env.RENTORA_DB.prepare(`UPDATE rentals SET start_date=?1,end_date=?2,rental_amount=?3,deposit_amount=?4,platform_fee=?5,total_amount=?6,metadata=?7,updated_at=?8 WHERE id=?9`).bind(rental.startDate, rental.endDate, rentalAmount, deposit, fee, total, metadata, now(), rental.id).run(); } else { await env.RENTORA_DB.prepare(`INSERT INTO rentals(id,listing_id,renter_user_id,start_date,end_date,rental_amount,deposit_amount,platform_fee,total_amount,status,payment_status,metadata,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,'pending_payment','unpaid',?10,?11,?11)`).bind(rental.id, listing.id, user.id, rental.startDate, rental.endDate, rentalAmount, deposit, fee, total, metadata, now()).run(); } const saved = await env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.id=?1`).bind(rental.id).first(); return jsonResponse({ success: true, rental: rentalView(saved) }, 200, env); }
       if (method === 'POST' && path === '/api/sync/rental/status') { const { user } = await requireUser(request, env); const body = await readJson(request); const rentalId = String(body?.rentalId || '').trim(); const action = String(body?.action || '').trim().toLowerCase(); if (!rentalId || !['handover','return'].includes(action)) return errorResponse('rentalId and a valid action are required', 400, env); const rental = await env.RENTORA_DB.prepare(`SELECT r.*, l.owner_user_id, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.id=?1 LIMIT 1`).bind(rentalId).first(); if (!rental) return errorResponse('Rental not found', 404, env); if (rental.renter_user_id !== user.id && rental.owner_user_id !== user.id) return errorResponse('Rental access denied', 403, env); const meta = parseMetadata(rental.metadata); const targetStatus = action === 'handover' ? 'active' : 'completed'; const expectedStatus = action === 'handover' ? 'confirmed' : 'active'; const flag = action === 'handover' ? 'isHandoverConfirmed' : 'isReturnConfirmed'; const timestampKey = action === 'handover' ? 'handoverTimestamp' : 'returnTimestamp'; if (rental.status === targetStatus && meta[flag]) return jsonResponse({ success: true, idempotent: true, rental: rentalView(rental) }, 200, env); if (rental.status !== expectedStatus) return errorResponse(`Invalid rental transition from ${rental.status || 'unknown'}`, 409, env); const updatedMeta = { ...meta, [flag]: true, [timestampKey]: now() }; const updatedAt = now(); const claim = await env.RENTORA_DB.prepare(`UPDATE rentals SET status=?1,metadata=?2,updated_at=?3 WHERE id=?4 AND status=?5`).bind(targetStatus, JSON.stringify(updatedMeta), updatedAt, rentalId, expectedStatus).run(); if (!Number(claim?.meta?.changes || 0)) return errorResponse('Rental transition was concurrently changed', 409, env); const saved = await env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.id=?1`).bind(rentalId).first(); return jsonResponse({ success: true, rental: rentalView(saved) }, 200, env); }
-      if (method === 'POST' && path === '/api/sync/review') { const { user } = await requireUser(request, env); const review = await readJson(request); const rental = review?.rentalId ? await env.RENTORA_DB.prepare('SELECT * FROM rentals WHERE id=?1').bind(review.rentalId).first() : null; if (!rental || rental.renter_user_id !== user.id || rental.status !== 'completed') return errorResponse('Review is not allowed for this rental', 403, env); if (!review.targetUid) return errorResponse('targetUid is required', 400, env); const target = await env.RENTORA_DB.prepare('SELECT id FROM users WHERE pi_uid=?1').bind(review.targetUid).first(); if (!target) return errorResponse('Review target not found', 404, env); const id = review.id || `rev_${crypto.randomUUID()}`; await env.RENTORA_DB.prepare(`INSERT INTO reviews(id,rental_id,author_user_id,target_user_id,rating,body,metadata,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8) ON CONFLICT(rental_id,author_user_id) DO UPDATE SET rating=excluded.rating,body=excluded.body,metadata=excluded.metadata`).bind(id, rental.id, user.id, target.id, Number(review.rating), review.body || '', JSON.stringify(review), now()).run(); return jsonResponse({ success: true, review }, 200, env); }
       if (method === 'POST' && path === '/api/sync/user') {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);

@@ -113,9 +113,8 @@ async function safeSync(request, env) {
     user = await requireUser(request, env);
   }
 
-  const [items, reviews] = await Promise.all([
+  const [items] = await Promise.all([
     env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).all(),
-    env.RENTORA_DB.prepare(`SELECT r.*, au.pi_uid author_pi_uid, au.username author_username, tu.pi_uid target_pi_uid, tu.username target_username FROM reviews r JOIN users au ON au.id=r.author_user_id JOIN users tu ON tu.id=r.target_user_id ORDER BY r.created_at DESC`).all(),
   ]);
 
   const out = {
@@ -123,7 +122,7 @@ async function safeSync(request, env) {
     rentals: [],
     transactions: [],
     users: user ? [userView(user)] : [],
-    reviews: reviews.results || [],
+    reviews: [],
     reports: [],
     chats: [],
     timestamp: now(),

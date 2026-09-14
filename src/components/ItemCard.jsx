@@ -16,7 +16,7 @@ import {
 export default function ItemCard({ item, onSelect, onRentClick }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser } = usePiAuth();
-  const { favorites = [], toggleFavorite, reviews = [] } = useRentora();
+  const { favorites = [], toggleFavorite } = useRentora();
 
   if (!item) return null;
 
@@ -26,8 +26,8 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
   const ownerName = (item.ownerUsername || '').toLowerCase().replace('@', '').trim();
   const isOwner = myName && ownerName && (myName === ownerName || (item.ownerUid && currentUser?.uid && item.ownerUid === currentUser.uid));
 
-  // Dynamic Item Rating from verified reviews
-  const ratingSummary = getItemRatingSummary(item, reviews);
+  // Dynamic Item Rating
+  const ratingSummary = getItemRatingSummary(item);
 
   const imageUrl = (item.images && item.images.length > 0)
     ? item.images[0]
@@ -87,7 +87,7 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
             </span>
             <span className="flex items-center gap-0.5 text-amber-500 font-bold shrink-0">
               <Star className="w-3 h-3 fill-amber-400 stroke-[2]" />
-              <span>{ratingSummary.formattedScore}</span>
+              <span>{ratingSummary.display || 'جدید'}</span>
             </span>
           </div>
 

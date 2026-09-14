@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
@@ -15,7 +15,8 @@ import {
   Flag,
   Check,
   MessageSquare,
-  Edit3
+  Edit3,
+  Loader2
 } from 'lucide-react';
 
 export default function ItemDetailPage({
@@ -29,12 +30,33 @@ export default function ItemDetailPage({
 }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, setAuthModalOpen } = usePiAuth();
-  const { favorites, toggleFavorite, reviews = [] } = useRentora();
+  const { favorites, toggleFavorite, fetchListingReviews } = useRentora();
 
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [reviewsData, setReviewsData] = useState({ stats: { totalReviews: 0, averageRating: null, isNew: true }, reviews: [] });
+  const [loadingReviews, setLoadingReviews] = useState(false);
+
+  useEffect(() => {
+    if (!item?.id) return;
+    let isMounted = true;
+    setLoadingReviews(true);
+
+    fetchListingReviews(item.id)
+      .then((data) => {
+        if (isMounted && data) {
+          setReviewsData(data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) setLoadingReviews(false);
+      });
+
+    return () => { isMounted = false; };
+  }, [item?.id]);
 
   if (!item) return null;
 
@@ -48,8 +70,9 @@ export default function ItemDetailPage({
     )
   );
 
-  // Real Reviews for this item
-  const itemReviews = (reviews || []).filter(rev => rev.itemId === item.id);
+  const itemReviews = reviewsData.reviews || [];
+  const averageRating = reviewsData.stats?.averageRating;
+  const totalReviews = reviewsData.stats?.totalReviews || 0;
 
   const handleShare = () => {
     try {
@@ -179,7 +202,7 @@ export default function ItemDetailPage({
           </span>
           <span className="flex items-center gap-0.5 text-amber-600 font-bold">
             <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 stroke-[2]" />
-            <span>{itemReviews.length > 0 ? (itemReviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0) / itemReviews.length).toFixed(1) : (item.rating && item.ratingCount > 0 ? `${item.rating}` : l('جدید', 'New', 'جديد', '新发布'))}</span>
+            <span>{averageRating ? `${averageRating}` : l('جدید', 'New', 'جديد', '新发布')}</span>
           </span>
         </div>
 
@@ -348,22 +371,48 @@ export default function ItemDetailPage({
       <div className="space-y-2.5 pt-2">
         <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
           <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
-          <span>{t('itemReviewsTitle')} ({itemReviews.length})</span>
+          <span>{t('itemReviewsTitle')} ({totalReviews})</span>
         </h3>
 
-        {itemReviews.length === 0 ? (
+        {loadingReviews ? (
+          <div className="p-4 rounded-xl rentora-card text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-[#534AB7]" />
+            <span>{l('در حال بارگذاری نظرات...', 'Loading reviews...', 'جارٍ تحميل التقييمات...', '正在加载评价...')}</span>
+          </div>
+        ) : totalReviews === 0 ? (
           <div className="p-4 rounded-xl rentora-card text-center text-xs text-slate-400">
             {t('itemNoReviews')}
           </div>
         ) : (
           <div className="space-y-2">
             {itemReviews.map((rev, idx) => (
-              <div key={rev.id || idx} className="p-3 rounded-xl rentora-card text-xs space-y-1">
+              <div key={rev.id || idx} className="p-3 rounded-xl rentora-card text-xs space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800 dark:text-slate-200" dir="ltr">@{rev.reviewerUsername}</span>
-                  <span className="text-amber-500 font-bold">{rev.rating || 5} ★</span>
+                  <div className="flex items-center gap-2">
+                    <img
+                      src={rev.reviewerAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${rev.reviewerUsername}`}
+                      alt={rev.reviewerUsername}
+                      className="w-5 h-5 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                    />
+                    <span className="font-bold text-slate-800 dark:text-slate-200" dir="ltr">
+                      {rev.reviewerDisplayName || `@${rev.reviewerUsername}`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 text-amber-500 font-bold">
+                    <span>{rev.rating}</span>
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  </div>
                 </div>
-                <p className="text-slate-600 dark:text-slate-300">{rev.comment}</p>
+                {rev.reviewText && (
+                  <p className="text-slate-600 dark:text-slate-300 pr-7 text-[11px] leading-relaxed">
+                    {rev.reviewText}
+                  </p>
+                )}
+                {rev.createdAt && (
+                  <div className="text-[10px] text-slate-400 pr-7">
+                    {new Date(rev.createdAt).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US')}
+                  </div>
+                )}
               </div>
             ))}
           </div>
