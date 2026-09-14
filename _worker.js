@@ -960,6 +960,7 @@ export default {
         return errorResponse('Image not found', 404, env);
       }
       if (method === 'POST' && path === '/api/sync/purge') { const { user } = await requireAdmin(request, env); await env.RENTORA_DB.batch([env.RENTORA_DB.prepare('DELETE FROM transactions'), env.RENTORA_DB.prepare('DELETE FROM payment_intents'), env.RENTORA_DB.prepare('DELETE FROM rentals'), env.RENTORA_DB.prepare('DELETE FROM reviews'), env.RENTORA_DB.prepare('DELETE FROM listings'), env.RENTORA_DB.prepare('DELETE FROM messages'), env.RENTORA_DB.prepare('DELETE FROM conversations'), env.RENTORA_DB.prepare('DELETE FROM reports'), env.RENTORA_DB.prepare('DELETE FROM listing_contacts')]); return jsonResponse({ success: true, purged: true, by: user.pi_uid }, 200, env); }
+      if (path.startsWith('/api/')) return errorResponse('Route Not Found', 404, env);
       if (env?.ASSETS && typeof env.ASSETS.fetch === 'function') return env.ASSETS.fetch(request);
       return errorResponse('Route Not Found', 404, env);
     } catch (err) { console.error('Rentora worker error', err); const status = Number(err?.status) || (String(err?.message || '').includes('body too large') ? 413 : 500); return errorResponse(status === 500 ? 'Server error' : err.message, status, env); }
