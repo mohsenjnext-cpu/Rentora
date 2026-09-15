@@ -94,29 +94,28 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
   // Dynamic reputation calculation
   const repSummary = getUserReputationSummary(currentUser?.username, userReviewsData || rentals);
 
-  // Handle image upload from device gallery / camera via R2
+  // Handle image upload from device gallery / camera to persistent R2 storage
   const handleImageFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsUploadingImage(true);
     setProfileError('');
+
     try {
       const uploadedUrl = await cloudSyncService.compressImage(file, 400, 0.85);
-      if (uploadedUrl) {
-        setAvatar(uploadedUrl);
-        if (!isEditing) {
-          const updater = updateProfile || updateUserProfile;
-          if (updater) {
-            await updater({ avatar: uploadedUrl });
-            setSaveSuccess(true);
-            setTimeout(() => setSaveSuccess(false), 2500);
-          }
+      setAvatar(uploadedUrl);
+
+      if (!isEditing) {
+        const updater = updateProfile || updateUserProfile;
+        if (updater) {
+          await updater({ avatar: uploadedUrl });
+          setSaveSuccess(true);
+          setTimeout(() => setSaveSuccess(false), 2500);
         }
       }
     } catch (err) {
-      console.error('Failed to upload avatar image:', err);
-      setProfileError(err?.message || l('خطا در آپلود تصویر آواتار.', 'Failed to upload avatar image.', 'فشل تحميل الصورة.', '头像上传失败。'));
+      setProfileError(err?.message || l('خطا در آپلود و ذخیره تصویر پروفایل.', 'Failed to upload profile photo.', 'فشل في رفع صورة الملف الشخصي.', '上传头像失败。'));
     } finally {
       setIsUploadingImage(false);
     }
@@ -298,10 +297,11 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
             <div className="flex items-center gap-2 pt-2">
               <button
                 type="submit"
-                className="btn-primary px-5 py-2 text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-sm"
+                disabled={isSaving}
+                className="btn-primary px-5 py-2 text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-sm disabled:opacity-50"
               >
                 <Save className="w-3.5 h-3.5" />
-                <span>{t('btnSave')}</span>
+                <span>{isSaving ? l('در حال ذخیره...', 'Saving...', 'جارٍ الحفظ...', '保存中...') : t('btnSave')}</span>
               </button>
               <button
                 type="button"

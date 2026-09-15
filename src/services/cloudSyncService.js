@@ -224,6 +224,96 @@ export class CloudSyncService {
   }
 
   // =========================================================================
+  // AUTHORITATIVE ADMIN & MODERATION API CLIENT
+  // =========================================================================
+
+  async fetchAdminOverview() {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/admin/overview?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      },
+      cache: 'no-store'
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'دسترسی مدیریتی غیرمجاز است.');
+      err.status = res.status;
+      throw err;
+    }
+    return data.overview;
+  }
+
+  async fetchAdminUsers() {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/admin/users?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      },
+      cache: 'no-store'
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'دسترسی به لیست کاربران ممکن نیست.');
+      err.status = res.status;
+      throw err;
+    }
+    return data.users || [];
+  }
+
+  async setAdminUserStatus(userId, status) {
+    if (!userId) throw new Error('userId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/admin/users/${encodeURIComponent(userId)}/status`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ status })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در تغییر وضعیت کاربر');
+      err.status = res.status;
+      throw err;
+    }
+    return data.user;
+  }
+
+  async setAdminListingStatus(listingId, status) {
+    if (!listingId) throw new Error('listingId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/admin/listings/${encodeURIComponent(listingId)}/status`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ status })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در تغییر وضعیت آگهی');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  // =========================================================================
   // AUTHORITATIVE REPORTS & DISPUTES API CLIENT
   // =========================================================================
 
