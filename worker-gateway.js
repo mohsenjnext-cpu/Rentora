@@ -163,7 +163,7 @@ async function safeSync(request, env) {
         env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all(),
         env.RENTORA_DB.prepare(`SELECT r.*, u.username reporter_username, u.pi_uid reporter_pi_uid FROM reports r JOIN users u ON u.id=r.reporter_user_id ORDER BY r.created_at DESC`).all(),
       ]);
-      out.users = (users.results || []).map(userView);
+      out.users = (users.results || []).map((u) => userView(u));
       out.reports = reports.results || [];
     }
   }

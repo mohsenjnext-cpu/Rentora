@@ -268,17 +268,43 @@ export function RentoraProvider({ children }) {
     return data.contact;
   };
 
-  const createRentalBooking = (item, bookingData) => {
+  const createRentalBooking = (arg1, arg2) => {
     if (!currentUser) throw new Error("برای ثبت رزرو ابتدا وارد حساب پای خود شوید.");
-    if (currentUser.username && item.ownerUsername && currentUser.username.toLowerCase() === item.ownerUsername.toLowerCase()) {
-      throw new Error("شما نمی‌توانید کالای متعلق به خودتان را اجاره کنید.");
+    
+    let item, bookingData;
+    if (arg2 && typeof arg2 === 'object') {
+      item = arg1;
+      bookingData = arg2;
+    } else if (arg1 && arg1.item) {
+      item = arg1.item;
+      bookingData = arg1;
+    } else {
+      item = arg1;
+      bookingData = arg1 || {};
     }
-    const { startDate, endDate, deliveryRequired, deliveryAddress } = bookingData;
+
+    if (!item) throw new Error("اطلاعات کالای مورد نظر برای رزرو یافت نشد.");
+
+    const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
+    const ownerName = (item?.ownerUsername || item?.owner_username || '').toLowerCase().replace('@', '').trim();
+    if ((myName && ownerName && myName === ownerName) || (item?.ownerUid && currentUser?.uid && item.ownerUid === currentUser.uid)) {
+      throw new Error("شما مالک این کالا هستید و نمی‌توانید آگهی خودتان را اجاره کنید.");
+    }
+
+    const startDate = bookingData.startDate || new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    const endDate = bookingData.endDate || new Date(Date.now() + 86400000 * 4).toISOString().split('T')[0];
+    const deliveryRequired = !!bookingData.deliveryRequired;
+    const deliveryAddress = bookingData.deliveryAddress || '';
+    const rawPrice = item.pricePerDay ?? item.price_per_day ?? item.dailyRate ?? item.price ?? 0;
+    const rawDeposit = item.deposit ?? item.deposit_amount ?? item.securityDeposit ?? 0;
+
     const financials = calculatePricing({
-      dailyRate: item.pricePerDay,
+      dailyRate: Number(rawPrice) || 0,
+      pricePerDay: Number(rawPrice) || 0,
       startDate,
       endDate,
-      securityDeposit: item.deposit || 0
+      daysCount: bookingData.daysCount,
+      securityDeposit: Number(rawDeposit) || 0
     });
 
     const bookingNumber = 'RN-' + Math.floor(100000 + Math.random() * 900000);
@@ -290,14 +316,14 @@ export function RentoraProvider({ children }) {
       itemId: item.id,
       itemTitle: item.title,
       itemCategory: item.category,
-      itemImage: Array.isArray(item.images) ? item.images[0] : item.images,
+      itemImage: Array.isArray(item.images) ? item.images[0] : (item.images || item.image),
       itemLocation: item.location,
       renterUid: currentUser.uid,
       renterUsername: currentUser.username,
       renterAvatar: currentUser.avatar,
-      ownerUid: item.ownerUid,
-      ownerUsername: item.ownerUsername,
-      ownerAvatar: item.ownerAvatar,
+      ownerUid: item.ownerUid || item.owner_uid,
+      ownerUsername: item.ownerUsername || item.owner_username,
+      ownerAvatar: item.ownerAvatar || item.owner_avatar,
       startDate,
       endDate,
       daysCount: financials.daysCount,
@@ -326,7 +352,7 @@ export function RentoraProvider({ children }) {
       rentalAgreement: {
         agreementId,
         itemTitle: item.title,
-        ownerUsername: item.ownerUsername,
+        ownerUsername: item.ownerUsername || item.owner_username,
         renterUsername: currentUser.username,
         rentalPeriodDays: financials.daysCount,
         startDate,

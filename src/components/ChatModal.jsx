@@ -58,6 +58,17 @@ export default function ChatModal({
   const activeItem = itemContext || initialItem;
   const activeRental = rentalContext || initialRental;
 
+  const myUid = currentUser?.uid || currentUser?.id;
+  const myUsername = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
+  const ownerUid = activeItem?.ownerUid || activeItem?.owner_uid;
+  const ownerUsername = (activeItem?.ownerUsername || activeItem?.owner_username || '').toLowerCase().replace('@', '').trim();
+  const isItemOwner = Boolean(
+    currentUser && activeItem && (
+      (myUid && ownerUid && myUid === ownerUid) ||
+      (myUsername && ownerUsername && myUsername === ownerUsername)
+    )
+  );
+
   const scrollToBottom = (smooth = true) => {
     try {
       messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
@@ -98,6 +109,17 @@ export default function ChatModal({
             setActiveConvId(res.conversationId);
           }
         } else if (activeItem?.id) {
+          if (isItemOwner) {
+            if (isMounted) {
+              setFilterWarningMessage(l(
+                'شما مالک این کالا هستید (امکان گفتگو یا رزرو برای مالک وجود ندارد).',
+                'You are the owner of this listing.',
+                'أنت صاحب هذا الإعلان.',
+                '您是该物品的物主。'
+              ));
+            }
+            return;
+          }
           const res = await getOrCreateConversation({ listingId: activeItem.id });
           if (isMounted && res?.conversationId) {
             setActiveConvId(res.conversationId);
@@ -111,6 +133,18 @@ export default function ChatModal({
         }
       } catch (err) {
         console.warn('Init conversation error:', err.message);
+        if (isMounted) {
+          if (err.message?.includes('Self-conversation') || err.message?.includes('خودتان')) {
+            setFilterWarningMessage(l(
+              'شما مالک این کالا هستید و امکان گفتگو با خودتان وجود ندارد.',
+              'You are the owner of this item. Self-conversation is not allowed.',
+              'أنت صاحب هذا الغرض ولا يمكنك محادثة نفسك.',
+              '您是该物品的物主，无法与自己发起对话。'
+            ));
+          } else {
+            setFilterWarningMessage(err.message || 'خطا در بارگذاری گفتگو');
+          }
+        }
       } finally {
         if (isMounted) setIsLoadingMessages(false);
       }
@@ -121,7 +155,7 @@ export default function ChatModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, activeItem?.id, activeRental?.id, isAuthenticated, currentUser]);
+  }, [isOpen, activeItem?.id, activeRental?.id, isAuthenticated, currentUser, isItemOwner]);
 
   // Load messages whenever activeConvId changes
   const loadMessages = useCallback(async (convId, silent = false) => {
@@ -177,6 +211,16 @@ export default function ChatModal({
     const text = (textToSend || messageText || '').trim();
     if (!text) return;
 
+    if (isItemOwner) {
+      setFilterWarningMessage(l(
+        'شما مالک این کالا هستید و امکان گفتگو با خودتان وجود ندارد.',
+        'You are the owner of this item. Self-conversation is not allowed.',
+        'أنت صاحب هذا الغرض ولا يمكنك محادثة نفسك.',
+        '您是该物品的物主，无法与自己发起对话。'
+      ));
+      return;
+    }
+
     // Strict Anti-Bypass Filter Inspection for Pre-Booking Mode
     if (!isPostBooking) {
       const safety = inspectMessageSafety(text);
@@ -223,6 +267,7 @@ export default function ChatModal({
   };
 
   const handleBookingCTA = () => {
+    if (isItemOwner) return;
     onClose();
     if (onDirectRent && activeItem) onDirectRent(activeItem);
     else if (onBookDirectly && activeItem) onBookDirectly(activeItem);
@@ -316,7 +361,7 @@ export default function ChatModal({
 
           {/* Action Buttons in Header */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {activeItem && !isPostBooking && (
+            {activeItem && !isPostBooking && !isItemOwner && (
               <button
                 type="button"
                 onClick={handleBookingCTA}

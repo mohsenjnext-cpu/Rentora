@@ -78,7 +78,9 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
         cloudSyncService.fetchAdminUsers().catch(() => [])
       ]);
       if (overviewData) setAdminOverview(overviewData);
-      if (Array.isArray(usersData)) setAdminUsers(usersData);
+      if (Array.isArray(usersData) && usersData.length > 0) {
+        setAdminUsers(usersData);
+      }
     } catch (err) {
       if (err?.status === 401 || err?.status === 403) {
         setAdminAuthError(true);
@@ -92,7 +94,38 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     if (isAdmin) {
       loadAdminServerData();
     }
-  }, [isAdmin]);
+  }, [isAdmin, activeTab]);
+
+  const allRealUsers = useMemo(() => {
+    const userMap = new Map();
+
+    // 1. First populate from cloudSyncService cached users
+    try {
+      const cached = cloudSyncService.getCachedUsers();
+      if (Array.isArray(cached)) {
+        cached.forEach(u => {
+          const key = (u.username || u.uid || u.id || '').toLowerCase();
+          if (key) userMap.set(key, u);
+        });
+      }
+    } catch (_) {}
+
+    // 2. Add current logged in user
+    if (currentUser) {
+      const key = (currentUser.username || currentUser.uid || currentUser.id || '').toLowerCase();
+      if (key) userMap.set(key, { ...(userMap.get(key) || {}), ...currentUser });
+    }
+
+    // 3. Populate and override with authoritative admin users from server
+    if (Array.isArray(adminUsers) && adminUsers.length > 0) {
+      adminUsers.forEach(u => {
+        const key = (u.username || u.uid || u.id || '').toLowerCase();
+        if (key) userMap.set(key, { ...(userMap.get(key) || {}), ...u });
+      });
+    }
+
+    return Array.from(userMap.values());
+  }, [adminUsers, currentUser]);
 
   // Strict 403 for non-admins
   if (!isAdmin || adminAuthError) {
@@ -120,7 +153,6 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     );
   }
 
-  const allRealUsers = adminUsers.length > 0 ? adminUsers : (currentUser ? [currentUser] : []);
   const totalCommissionRevenue = adminOverview?.totalPlatformRevenue !== undefined
     ? adminOverview.totalPlatformRevenue
     : (transactions || []).reduce((sum, tx) => sum + (tx.platformFee || tx.amount || 0), 0);

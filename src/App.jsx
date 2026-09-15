@@ -99,13 +99,14 @@ function MainApp() {
 
   const handleRentItem = (item) => {
     if (!item) return;
+    const fullItem = (items || []).find(i => i.id === item.id) || item;
     const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
-    const ownerName = (item.ownerUsername || '').toLowerCase().replace('@', '').trim();
-    if ((myName && ownerName && myName === ownerName) || (item.ownerUid && currentUser?.uid && item.ownerUid === currentUser.uid)) {
-      handleSelectItem(item);
+    const ownerName = (fullItem.ownerUsername || fullItem.owner_username || '').toLowerCase().replace('@', '').trim();
+    if ((myName && ownerName && myName === ownerName) || (fullItem.ownerUid && currentUser?.uid && fullItem.ownerUid === currentUser.uid)) {
+      handleSelectItem(fullItem);
       return;
     }
-    setDirectBookingItem(item);
+    setDirectBookingItem(fullItem);
     setIsDirectBookingOpen(true);
   };
 

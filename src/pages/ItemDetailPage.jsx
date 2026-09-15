@@ -240,7 +240,7 @@ export default function ItemDetailPage({
         {onOpenChat && !isOwner && (
           <button
             type="button"
-            onClick={() => onOpenChat({ ownerUsername: item.ownerUsername, title: item.title, id: item.id, images: item.images, pricePerDay: item.pricePerDay })}
+            onClick={() => onOpenChat(item)}
             className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-700 dark:text-slate-200 hover:border-[#534AB7] text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
           >
             <MessageSquare className="w-3.5 h-3.5 text-[#534AB7] stroke-[2]" />
@@ -327,7 +327,7 @@ export default function ItemDetailPage({
             {onOpenChat && !isOwner && (
               <button
                 type="button"
-                onClick={() => onOpenChat({ ownerUsername: item.ownerUsername, title: item.title, id: item.id, images: item.images, pricePerDay: item.pricePerDay })}
+                onClick={() => onOpenChat(item)}
                 className="btn-secondary px-3.5 py-2 text-xs font-bold cursor-pointer flex items-center gap-1.5"
               >
                 <MessageSquare className="w-4 h-4 text-[#534AB7]" />

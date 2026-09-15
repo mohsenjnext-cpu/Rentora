@@ -384,7 +384,7 @@ export default {
       if (method === 'GET' && path === '/api/admin/users') {
         const { user } = await requireAdmin(request, env);
         const rows = await env.RENTORA_DB.prepare("SELECT * FROM users ORDER BY created_at DESC").all();
-        return jsonResponse({ success: true, users: (rows.results || []).map(userView) }, 200, env, origin);
+        return jsonResponse({ success: true, users: (rows.results || []).map((u) => userView(u, env)) }, 200, env, origin);
       }
       if (method === 'POST' && path.startsWith('/api/admin/users/') && path.endsWith('/status')) {
         const targetUserId = path.slice('/api/admin/users/'.length, -'/status'.length).trim();
@@ -402,7 +402,7 @@ export default {
         }
         await env.RENTORA_DB.prepare("UPDATE users SET status=?1, updated_at=?2 WHERE id=?3").bind(newStatus, now(), target.id).run();
         const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
-        return jsonResponse({ success: true, user: userView(updated) }, 200, env, origin);
+        return jsonResponse({ success: true, user: userView(updated, env) }, 200, env, origin);
       }
       if (method === 'POST' && path.startsWith('/api/admin/listings/') && path.endsWith('/status')) {
         const listingId = path.slice('/api/admin/listings/'.length, -'/status'.length).trim();
@@ -456,7 +456,7 @@ export default {
         const user = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE id=?1').bind(userId).first();
         if (user.status !== 'active') return errorResponse('User is suspended', 403, env, undefined, origin);
         const sessionToken = await createSession(env, user);
-        return jsonResponse({ authenticated: true, verifiedWithPiApi: true, user: userView(user), sessionToken, uid, username }, 200, env, origin);
+        return jsonResponse({ authenticated: true, verifiedWithPiApi: true, user: userView(user, env), sessionToken, uid, username }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/auth/logout') { requireBindings(env); const header = request.headers.get('Authorization') || ''; if (header.startsWith('Bearer ')) { const token = header.slice(7).trim(); if (token) await env.RENTORA_KV.delete(`session:${await sha256(token)}`); } return jsonResponse({ success: true }, 200, env, origin); }
       if (method === 'POST' && path === '/api/payments/intent') { const { user } = await requireUser(request, env); const body = await readJson(request); if (!body.rentalId) return errorResponse('rentalId is required', 400, env, undefined, origin); const rental = await env.RENTORA_DB.prepare(`SELECT r.*, l.title, l.id listing_id, l.price_per_day, l.deposit_amount FROM rentals r JOIN listings l ON l.id=r.listing_id WHERE r.id=?1 AND r.renter_user_id=?2 LIMIT 1`).bind(body.rentalId, user.id).first(); if (!rental) return errorResponse('Rental not found', 404, env, undefined, origin); if (!['draft','pending_payment'].includes(rental.status)) return errorResponse('Rental is not payable', 409, env, undefined, origin); const existing = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE rental_id=?1 LIMIT 1').bind(rental.id).first(); if (existing && existing.status !== 'cancelled' && new Date(existing.expires_at) > new Date()) return jsonResponse(existing, 200, env, origin); const id = `pii_${crypto.randomUUID()}`; const memo = `Rentora Fee #${String(rental.id).slice(-12)}`; const expires = new Date(Date.now() + PAYMENT_INTENT_TTL * 1000).toISOString(); await env.RENTORA_DB.prepare(`INSERT INTO payment_intents(id,rental_id,user_id,amount,memo,status,created_at,expires_at,updated_at) VALUES(?1,?2,?3,?4,?5,'created',?6,?7,?6)`).bind(id, rental.id, user.id, rental.platform_fee, memo, now(), expires).run(); await env.RENTORA_DB.prepare(`UPDATE rentals SET payment_status='pending', status='pending_payment', updated_at=?1 WHERE id=?2`).bind(now(), rental.id).run(); await env.RENTORA_KV.put(`payment-intent:${id}`, JSON.stringify({ userId: user.id, rentalId: rental.id, amount: rental.platform_fee, memo }), { expirationTtl: PAYMENT_INTENT_TTL }); return jsonResponse({ paymentIntentId: id, amount: rental.platform_fee, memo, expiresAt: expires }, 201, env, origin); }

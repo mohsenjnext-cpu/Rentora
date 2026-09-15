@@ -66,19 +66,23 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
 
   if (!isOpen || !item) return null;
 
+  // Ensure safe numeric resolution for pricing and deposits
+  const dailyPrice = Number(item.pricePerDay ?? item.price_per_day ?? item.dailyRate ?? item.price ?? 0);
+  const depositAmount = Number(item.deposit ?? item.deposit_amount ?? item.securityDeposit ?? 0);
+
   // Calculate live financial quote using integer-based engine
   const pricing = calculatePricing({
-    pricePerDay: item.pricePerDay,
-    dailyRate: item.pricePerDay,
+    pricePerDay: dailyPrice,
+    dailyRate: dailyPrice,
     startDate: dates.startDate,
     endDate: dates.endDate,
-    securityDeposit: item.deposit || 0,
-    ownerUsername: item.ownerUsername
+    securityDeposit: depositAmount,
+    ownerUsername: item.ownerUsername || item.owner_username
   });
 
   const rentoraFee = pricing.rentoraFee !== undefined ? pricing.rentoraFee : (pricing.totalPlatformFee || 0);
   const rentalTotal = pricing.rentalTotal !== undefined ? pricing.rentalTotal : pricing.baseRentalAmount;
-  const deposit = pricing.deposit !== undefined ? pricing.deposit : (pricing.securityDeposit || 0);
+  const deposit = pricing.deposit !== undefined ? pricing.deposit : depositAmount;
   const totalObligation = pricing.totalRentalObligation !== undefined ? pricing.totalRentalObligation : (rentalTotal + deposit);
 
   const handleCreateBooking = async (e) => {
@@ -91,7 +95,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
     }
 
     const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
-    const ownerName = (item?.ownerUsername || '').toLowerCase().replace('@', '').trim();
+    const ownerName = (item?.ownerUsername || item?.owner_username || '').toLowerCase().replace('@', '').trim();
     if ((myName && ownerName && myName === ownerName) || (item?.ownerUid && currentUser?.uid && item.ownerUid === currentUser.uid)) {
       setErrorMessage(l(
         'شما مالک این کالا هستید و نمی‌توانید آگهی خودتان را اجاره کنید.',
@@ -126,9 +130,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
 
     try {
       // 1. Create Draft Booking with formal Rental Agreement
-      const draftRental = await createRentalBooking({
-        item,
-        itemId: item.id,
+      const draftRental = await createRentalBooking(item, {
         startDate: dates.startDate,
         endDate: dates.endDate,
         daysCount: pricing.daysCount,
@@ -410,7 +412,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
                 <div className="min-w-0 flex-1">
                   <h4 className="font-bold text-xs text-slate-900 dark:text-white truncate">{item.title}</h4>
                   <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                    <span className="font-mono text-[#0F6E56] dark:text-[#48D2A8] font-bold">{item.pricePerDay} π / {l('روز', 'day', 'يوم', '天')}</span>
+                    <span className="font-mono text-[#0F6E56] dark:text-[#48D2A8] font-bold">{dailyPrice} π / {l('روز', 'day', 'يوم', '天')}</span>
                     <span>•</span>
                     <span className="truncate">{item.location || 'ایران'}</span>
                   </div>
@@ -465,7 +467,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
                 {/* Rental Total */}
                 <div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-300">
                   <div>
-                    <span>{l(`مبلغ اجاره (${pricing.daysCount} روز × ${item.pricePerDay} π):`, `Rental Total (${pricing.daysCount} days):`, `إجمالي الإيجار (${pricing.daysCount} أيام):`, `租金总额 (${pricing.daysCount} 天):`)}</span>
+                    <span>{l(`مبلغ اجاره (${pricing.daysCount} روز × ${dailyPrice} π):`, `Rental Total (${pricing.daysCount} days):`, `إجمالي الإيجار (${pricing.daysCount} أيام):`, `租金总额 (${pricing.daysCount} 天):`)}</span>
                     <span className="text-[10px] text-slate-400 block">{l('➔ تسویه مستقیم با مالک در محل تحویل', '➔ Direct P2P payment at pickup', '➔ دفع مباشر للمؤجر عند الاستلام', '➔ 线下当面直接向物主结清')}</span>
                   </div>
                   <span className="font-mono font-bold text-slate-900 dark:text-white">{rentalTotal} π</span>
