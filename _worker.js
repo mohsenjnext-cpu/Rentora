@@ -250,9 +250,6 @@ async function listAll(env, auth) {
   }
   return out;
 }
-  }
-  return out;
-}
 
 function validatePiPayment(payment, intent, user) {
   const identifier = String(payment?.identifier || payment?.id || '');
