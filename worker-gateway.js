@@ -113,9 +113,21 @@ async function safeSync(request, env) {
     user = await requireUser(request, env);
   }
 
-  const [items] = await Promise.all([
-    env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).all(),
-  ]);
+  const allowed = String(env.ADMIN_PI_UIDS || '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean);
+  const uName = String(user?.username || '').toLowerCase();
+  const uId = String(user?.pi_uid || '').toLowerCase();
+  const isAdmin = user ? (user.role === 'admin' && (allowed.includes(uId) || allowed.includes(uName) || uName === 'avina60' || uName === 'mohsenjnext')) : false;
+
+  let itemsQuery;
+  if (isAdmin) {
+    itemsQuery = env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).all();
+  } else if (user) {
+    itemsQuery = env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE (l.status = 'active' OR l.owner_user_id = ?1) AND l.status != 'deleted' ORDER BY l.created_at DESC`).bind(user.id).all();
+  } else {
+    itemsQuery = env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status = 'active' ORDER BY l.created_at DESC`).all();
+  }
+
+  const [items] = await Promise.all([itemsQuery]);
 
   const out = {
     items: (items.results || []).map(listingView),
@@ -129,11 +141,6 @@ async function safeSync(request, env) {
   };
 
   if (user) {
-    const allowed = String(env.ADMIN_PI_UIDS || '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean);
-    const uName = String(user.username || '').toLowerCase();
-    const uId = String(user.pi_uid || '').toLowerCase();
-    const isAdmin = user.role === 'admin' || allowed.includes(uId) || allowed.includes(uName) || uName === 'avina60' || uName === 'mohsenjnext';
-
     const [rentals, transactions] = await Promise.all([
       env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.renter_user_id=?1 OR r.owner_user_id=?1 ORDER BY r.created_at DESC`).bind(user.id).all(),
       env.RENTORA_DB.prepare(`SELECT t.*, u.pi_uid user_pi_uid FROM transactions t JOIN users u ON u.id=t.user_id WHERE t.user_id=?1 ORDER BY t.created_at DESC`).bind(user.id).all(),

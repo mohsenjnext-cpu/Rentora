@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
+import { cloudSyncService } from '../services/cloudSyncService';
 import { 
   X, 
   Camera, 
@@ -9,7 +10,9 @@ import {
   Check, 
   Image as ImageIcon,
   RefreshCw,
-  User
+  User,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 
 const PRESET_AVATARS = [
@@ -34,52 +37,33 @@ export default function AvatarModal({ isOpen, onClose }) {
   const [selectedAvatar, setSelectedAvatar] = useState(currentUser?.avatar || PRESET_AVATARS[0]);
   const [customUrl, setCustomUrl] = useState('');
   const [activeTab, setActiveTab] = useState('upload'); // 'upload' | 'presets' | 'url'
+  const [isUploading, setIsUploading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const fileInputRef = useRef(null);
 
   if (!isOpen || !currentUser) return null;
 
-  // Handle local image file upload & compression
-  const handleFileChange = (e) => {
+  // Handle local image file upload & R2 storage
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('لطفاً یک فایل تصویری معتبر انتخاب کنید.');
+      setErrorMsg('لطفاً یک فایل تصویری معتبر انتخاب کنید.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        // Compress & resize to 256x256 max using canvas
-        const canvas = document.createElement('canvas');
-        const maxSize = 256;
-        let width = img.width;
-        let height = img.height;
+    setIsUploading(true);
+    setErrorMsg('');
 
-        if (width > height) {
-          if (width > maxSize) {
-            height = Math.round((height * maxSize) / width);
-            width = maxSize;
-          }
-        } else {
-          if (height > maxSize) {
-            width = Math.round((width * maxSize) / height);
-            height = maxSize;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        setSelectedAvatar(dataUrl);
-      };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
+    try {
+      const uploadedUrl = await cloudSyncService.compressImage(file, 256, 0.85);
+      setSelectedAvatar(uploadedUrl);
+    } catch (err) {
+      setErrorMsg(err.message || 'خطا در آپلود عکس.');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleApplyUrl = (e) => {
@@ -94,8 +78,10 @@ export default function AvatarModal({ isOpen, onClose }) {
     setSelectedAvatar(`https://api.dicebear.com/7.x/bottts/svg?seed=${randomSeed}`);
   };
 
-  const handleSave = () => {
-    updateUserProfile({ avatar: selectedAvatar });
+  const handleSave = async () => {
+    if (updateUserProfile) {
+      await updateUserProfile({ avatar: selectedAvatar });
+    }
     onClose();
   };
 
@@ -204,6 +190,12 @@ export default function AvatarModal({ isOpen, onClose }) {
         {/* Tab 1: Upload from local storage */}
         {activeTab === 'upload' && (
           <div className="space-y-3 pt-1 animate-fadeIn">
+            {errorMsg && (
+              <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
             <input
               type="file"
               ref={fileInputRef}
@@ -212,14 +204,14 @@ export default function AvatarModal({ isOpen, onClose }) {
               className="hidden"
             />
             <div
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => !isUploading && fileInputRef.current?.click()}
               className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-[#534AB7] rounded-xl p-6 text-center cursor-pointer transition bg-slate-50/50 dark:bg-[#16152B]/40 space-y-2"
             >
               <div className="w-10 h-10 mx-auto rounded-full bg-[#EEEDFE] dark:bg-[#1E1B3D] text-[#534AB7] flex items-center justify-center">
-                <Upload className="w-5 h-5 stroke-[2]" />
+                {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5 stroke-[2]" />}
               </div>
               <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                برای انتخاب تصویر از گوشی یا کامپیوتر کلیک کنید
+                {isUploading ? 'در حال آپلود و بهینه‌سازی تصویر...' : 'برای انتخاب تصویر از گوشی یا کامپیوتر کلیک کنید'}
               </div>
               <p className="text-[10px] text-slate-400">
                 پشتیبانی از فرمت‌های JPG، PNG و WebP (حداکثر ۵ مگابایت)

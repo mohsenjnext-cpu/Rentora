@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { piService } from '../services/piService';
 import { cloudSyncService } from '../services/cloudSyncService';
 import { getApiBaseUrl } from '../services/apiConfig';
@@ -6,7 +6,7 @@ import { getApiBaseUrl } from '../services/apiConfig';
 const PiAuthContext = createContext();
 const STORAGE_KEY_USER = 'rentora_live_v1_session';
 
-function installSessionFetchBridge() {
+function installSessionFetchBridge(onSessionInvalid) {
   if (typeof window === 'undefined' || typeof window.fetch !== 'function') return () => {};
   if (window.__rentoraSessionFetchBridge) return () => {};
 
@@ -27,7 +27,13 @@ function installSessionFetchBridge() {
           headers.delete('x-pi-uid');
           headers.delete('x-pi-username');
           if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${session.sessionToken}`);
-          return originalFetch(input, { ...init, headers });
+          const res = await originalFetch(input, { ...init, headers });
+          if (res.status === 401 && !url.includes('/api/auth/logout')) {
+            if (typeof onSessionInvalid === 'function') {
+              onSessionInvalid();
+            }
+          }
+          return res;
         }
       }
     } catch (_) {}
@@ -55,11 +61,63 @@ export function PiAuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [isServerVerifiedAdmin, setIsServerVerifiedAdmin] = useState(false);
+
+  const handleSessionInvalid = useCallback(() => {
+    try {
+      localStorage.removeItem(STORAGE_KEY_USER);
+    } catch (_) {}
+    setCurrentUser(null);
+    setIsServerVerifiedAdmin(false);
+  }, []);
 
   useEffect(() => {
-    const restoreFetch = installSessionFetchBridge();
+    const restoreFetch = installSessionFetchBridge(handleSessionInvalid);
     return restoreFetch;
-  }, []);
+  }, [handleSessionInvalid]);
+
+  // Authoritatively verify session with server on initial mount & whenever currentUser changes
+  useEffect(() => {
+    if (!currentUser?.sessionToken) {
+      setIsServerVerifiedAdmin(false);
+      return;
+    }
+
+    let isMounted = true;
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) return;
+
+    fetch(`${apiBase}/api/auth/me`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${currentUser.sessionToken}`,
+        'Cache-Control': 'no-cache'
+      }
+    })
+      .then(res => {
+        if (res.status === 401) {
+          handleSessionInvalid();
+          return null;
+        }
+        return res.json().catch(() => null);
+      })
+      .then(data => {
+        if (!isMounted || !data) return;
+        if (data.authenticated && data.user) {
+          const verifiedAdmin = Boolean(data.isAdmin || data.user.isAdmin || data.user.role === 'admin');
+          setIsServerVerifiedAdmin(verifiedAdmin);
+          setCurrentUser(prev => prev ? {
+            ...prev,
+            ...data.user,
+            role: data.user.role || (verifiedAdmin ? 'admin' : 'user'),
+            sessionToken: prev.sessionToken
+          } : null);
+        }
+      })
+      .catch(() => {});
+
+    return () => { isMounted = false; };
+  }, [currentUser?.sessionToken, handleSessionInvalid]);
 
   useEffect(() => {
     try {
@@ -81,6 +139,8 @@ export function PiAuthProvider({ children }) {
     try {
       const authData = await piService.authenticate();
       if (!authData?.sessionToken || !authData?.uid) throw new Error('سرور رنتورا یک نشست معتبر صادر نکرد.');
+      const isAdminRole = authData.user?.role === 'admin';
+      setIsServerVerifiedAdmin(isAdminRole);
       const userObj = {
         ...authData.user,
         uid: authData.uid,
@@ -121,7 +181,7 @@ export function PiAuthProvider({ children }) {
     } catch (_) {
       // Local logout still happens even if the network is unavailable.
     } finally {
-      setCurrentUser(null);
+      handleSessionInvalid();
     }
   };
 
@@ -150,14 +210,29 @@ export function PiAuthProvider({ children }) {
     return updated;
   };
 
-  const toggleUserStatus = () => { throw new Error('تغییر وضعیت کاربران فقط از طریق API مدیریتی سرور مجاز است.'); };
+  const toggleUserStatus = async (targetUserId, newStatus) => {
+    const updated = await cloudSyncService.setAdminUserStatus(targetUserId, newStatus);
+    if (updated) {
+      setUsers(prev => prev.map(u => (u.id === targetUserId || u.uid === targetUserId || u.username === targetUserId) ? { ...u, status: updated.status } : u));
+    }
+    return updated;
+  };
+
+  const moderateListingStatus = async (listingId, newStatus) => {
+    return cloudSyncService.setAdminListingStatus(listingId, newStatus);
+  };
+
+  const isActuallyAdmin = Boolean(
+    currentUser?.sessionToken &&
+    (isServerVerifiedAdmin || currentUser?.role === 'admin')
+  );
 
   return (
     <PiAuthContext.Provider value={{
       users,
       currentUser,
       isAuthenticated: !!currentUser?.sessionToken,
-      isAdmin: currentUser?.role === 'admin',
+      isAdmin: isActuallyAdmin,
       isLoading,
       authError,
       authModalOpen,
@@ -168,7 +243,8 @@ export function PiAuthProvider({ children }) {
       logout,
       updateUserProfile,
       updateProfile: updateUserProfile,
-      toggleUserStatus
+      toggleUserStatus,
+      moderateListingStatus
     }}>
       {children}
     </PiAuthContext.Provider>

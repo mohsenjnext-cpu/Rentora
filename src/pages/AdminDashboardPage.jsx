@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
@@ -30,12 +30,13 @@ import {
   Globe, 
   Wifi,
   UploadCloud,
-  Edit3
+  Edit3,
+  Loader2
 } from 'lucide-react';
 
 export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, onEditItem }) {
   const { lang, dir, t, l } = useLanguage();
-  const { isAdmin, currentUser, users = [], toggleUserStatus } = usePiAuth();
+  const { isAdmin, currentUser, toggleUserStatus, moderateListingStatus } = usePiAuth();
   const { 
     items = [], 
     rentals = [], 
@@ -43,7 +44,6 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     reports = [], 
     platformConfig, 
     updatePlatformConfig, 
-    toggleItemStatus, 
     deleteItem, 
     resolveReport, 
     purgeDatabase, 
@@ -57,45 +57,45 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
   const [purgeSuccessNotice, setPurgeSuccessNotice] = useState(false);
   const [isPurgeModalOpen, setIsPurgeModalOpen] = useState(false);
-  const [isPushingCloud, setIsPushingCloud] = useState(false);
+
+  // Admin server-side data states
+  const [adminOverview, setAdminOverview] = useState(null);
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [loadingAdminData, setLoadingAdminData] = useState(true);
+  const [adminAuthError, setAdminAuthError] = useState(false);
 
   // Backend URL state
   const [backendUrlInput, setBackendUrlInput] = useState(getApiBaseUrl());
   const [backendTestStatus, setBackendTestStatus] = useState(null); // 'testing' | 'success' | 'error'
   const [backendTestMsg, setBackendTestMsg] = useState('');
 
-  // Compute real dynamic users list
-  const allRealUsers = useMemo(() => {
-    const userMap = new Map();
-
-    (users || []).forEach(u => {
-      if (u.username) userMap.set(u.username.toLowerCase(), u);
-    });
-
-    if (currentUser?.username) {
-      userMap.set(currentUser.username.toLowerCase(), currentUser);
-    }
-
-    (items || []).forEach(item => {
-      if (item.ownerUsername && !userMap.has(item.ownerUsername.toLowerCase())) {
-        userMap.set(item.ownerUsername.toLowerCase(), {
-          uid: item.ownerUid || `pi_usr_${item.ownerUsername}`,
-          username: item.ownerUsername,
-          displayName: item.ownerUsername,
-          avatar: item.ownerAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${item.ownerUsername}`,
-          bio: item.ownerBio || 'کاربر شبکه پای در پلتفرم رنتورا',
-          role: 'user',
-          kycStatus: item.ownerKYC ? 'verified' : 'unverified',
-          status: 'active'
-        });
+  const loadAdminServerData = async () => {
+    setLoadingAdminData(true);
+    setAdminAuthError(false);
+    try {
+      const [overviewData, usersData] = await Promise.all([
+        cloudSyncService.fetchAdminOverview().catch(() => null),
+        cloudSyncService.fetchAdminUsers().catch(() => [])
+      ]);
+      if (overviewData) setAdminOverview(overviewData);
+      if (Array.isArray(usersData)) setAdminUsers(usersData);
+    } catch (err) {
+      if (err?.status === 401 || err?.status === 403) {
+        setAdminAuthError(true);
       }
-    });
+    } finally {
+      setLoadingAdminData(false);
+    }
+  };
 
-    return Array.from(userMap.values());
-  }, [users, currentUser, items]);
+  useEffect(() => {
+    if (isAdmin) {
+      loadAdminServerData();
+    }
+  }, [isAdmin]);
 
   // Strict 403 for non-admins
-  if (!isAdmin) {
+  if (!isAdmin || adminAuthError) {
     return (
       <div className="py-20 text-center max-w-md mx-auto space-y-4 animate-fadeIn select-none">
         <div className="w-14 h-14 mx-auto rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 flex items-center justify-center border border-rose-200 dark:border-rose-900 shadow-sm">
@@ -120,7 +120,10 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     );
   }
 
-  const totalCommissionRevenue = (transactions || []).reduce((sum, tx) => sum + (tx.platformFee || 0), 0);
+  const allRealUsers = adminUsers.length > 0 ? adminUsers : (currentUser ? [currentUser] : []);
+  const totalCommissionRevenue = adminOverview?.totalPlatformRevenue !== undefined
+    ? adminOverview.totalPlatformRevenue
+    : (transactions || []).reduce((sum, tx) => sum + (tx.platformFee || tx.amount || 0), 0);
 
   const handleSaveCommission = (e) => {
     e.preventDefault();
@@ -132,6 +135,28 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     }
     setSaveSuccessNotice(true);
     setTimeout(() => setSaveSuccessNotice(false), 2500);
+  };
+
+  const handleToggleUserStatus = async (user) => {
+    const targetStatus = user.status === 'active' ? 'suspended' : 'active';
+    try {
+      const updated = await cloudSyncService.setAdminUserStatus(user.id || user.uid, targetStatus);
+      if (updated) {
+        setAdminUsers(prev => prev.map(u => (u.id === user.id || u.uid === user.uid) ? { ...u, status: updated.status } : u));
+      }
+    } catch (err) {
+      alert(err.message || 'خطا در تغییر وضعیت کاربر');
+    }
+  };
+
+  const handleToggleListingModeration = async (item) => {
+    const newStatus = item.status === 'active' ? 'paused' : 'active';
+    try {
+      await cloudSyncService.setAdminListingStatus(item.id, newStatus);
+      await refreshApp();
+    } catch (err) {
+      alert(err.message || 'خطا در تغییر وضعیت آگهی');
+    }
   };
 
   const handleTestBackendConnection = async () => {
@@ -153,10 +178,10 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
         const data = await res.json();
         setBackendTestStatus('success');
         setBackendTestMsg(l(
-          `اتصال موفق به سرور رنتورا (${data.service || 'Cloudflare Worker'}) - نسخه ${data.version || '2.3.0'}`,
-          `Connected successfully to (${data.service || 'Cloudflare Worker'}) - v${data.version || '2.3.0'}`,
+          `اتصال موفق به سرور رنتورا (${data.service || 'Cloudflare Worker'}) - نسخه ${data.version || '4.3.0'}`,
+          `Connected successfully to (${data.service || 'Cloudflare Worker'}) - v${data.version || '4.3.0'}`,
           `تم الاتصال بنجاح بخادم رنتورا (${data.service || 'Cloudflare Worker'})`,
-          `已成功连接至 Rentora 云端 Worker (${data.version || '2.3.0'})`
+          `已成功连接至 Rentora 云端 Worker (${data.version || '4.3.0'})`
         ));
       } else {
         setBackendTestStatus('error');
@@ -165,27 +190,6 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     } catch (e) {
       setBackendTestStatus('error');
       setBackendTestMsg(l(`خطا در اتصال: ${e.message}`, `Connection error: ${e.message}`, `خطأ في الاتصال: ${e.message}`, `连接失败：${e.message}`));
-    }
-  };
-
-  // Push all local items & users to the remote backend
-  const handlePushAllToCloud = async () => {
-    setIsPushingCloud(true);
-    try {
-      for (const item of items) {
-        await cloudSyncService.broadcastNewItem(item);
-      }
-      for (const user of allRealUsers) {
-        await cloudSyncService.broadcastUserProfile(user);
-      }
-      await refreshApp();
-      setBackendTestStatus('success');
-      setBackendTestMsg(l('تمام آگهی‌ها و کاربران با موفقیت در فضای ابری همگام شدند.', 'All items and users pushed to cloud successfully.', 'تمت مزامنة كافة الإعلانات والمستخدمين سحابياً.', '全部物品与用户资料已同步至云端。'));
-    } catch (e) {
-      setBackendTestStatus('error');
-      setBackendTestMsg(e.message);
-    } finally {
-      setIsPushingCloud(false);
     }
   };
 
@@ -225,11 +229,14 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={refreshApp}
-            disabled={isRefreshing}
+            onClick={async () => {
+              await refreshApp();
+              await loadAdminServerData();
+            }}
+            disabled={isRefreshing || loadingAdminData}
             className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#16152B] text-slate-700 dark:text-slate-200 hover:border-[#534AB7] text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
           >
-            <RotateCw className={`w-3.5 h-3.5 text-[#534AB7] stroke-[2] ${isRefreshing ? 'animate-spin' : ''}`} />
+            <RotateCw className={`w-3.5 h-3.5 text-[#534AB7] stroke-[2] ${(isRefreshing || loadingAdminData) ? 'animate-spin' : ''}`} />
             <span>{isRefreshing ? l('در حال رفرش...', 'Refreshing...', 'جارٍ التحديث...', '正在刷新...') : l('رفرش داده‌ها', 'Refresh Data', 'تحديث البيانات', '刷新数据')}</span>
           </button>
 
@@ -248,46 +255,50 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
       {purgeSuccessNotice && (
         <div className="p-3 rounded-xl badge-trust text-xs font-bold flex items-center gap-2 animate-fadeIn">
           <CheckCircle2 className="w-4 h-4 text-[#0F6E56]" />
-          <span>{l('تمام داده‌های آزمایشی و کش داخلی پاکسازی و صفر شدند.', 'Local database and test data purged successfully.', 'تم مسح قاعدة البيانات المحلية بنجاح.', '本地数据库与测试缓存已成功清理并归零。')}</span>
+          <span>{l('پایگاه‌داده با موفقیت بازنشانی و پاکسازی شد.', 'Database purged successfully.', 'تمت إعادة ضبط قاعدة البيانات بنجاح.', '数据库已成功重置并清空。')}</span>
         </div>
       )}
 
-      {/* 1. Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-        <div className="p-3.5 rounded-xl rentora-card space-y-1">
-          <span className="text-[11px] font-medium text-slate-400 block">{l('درآمد کل کارمزد پلتفرم', 'Total Platform Revenue', 'إجمالي دخل المنصة', '平台总收益')}</span>
-          <div className="text-xl sm:text-2xl font-black text-[#0F6E56] dark:text-[#48D2A8] font-mono">
-            {totalCommissionRevenue.toFixed(3)} π
+      {saveSuccessNotice && (
+        <div className="p-3 rounded-xl badge-trust text-xs font-bold flex items-center gap-2 animate-fadeIn">
+          <CheckCircle2 className="w-4 h-4 text-[#0F6E56]" />
+          <span>{t('adminCommissionSaved')}</span>
+        </div>
+      )}
+
+      {/* Stats Summary Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="p-3 rounded-xl rentora-card space-y-1">
+          <span className="text-[10px] text-slate-400 font-medium">{t('adminStatsTotalPioneers')}</span>
+          <div className="text-lg font-black text-slate-900 dark:text-white font-mono">
+            {adminOverview?.totalUsers ?? allRealUsers.length}
           </div>
         </div>
 
-        <div className="p-3.5 rounded-xl banner-purple space-y-1">
-          <span className="text-[11px] font-semibold text-[#534AB7] dark:text-[#AFA9EC] block flex items-center gap-1">
-            <Layers className="w-3.5 h-3.5 text-[#534AB7]" />
-            <span>{l('رزروهای ثبت‌شده', 'Total Bookings', 'إجمالي الحجوزات', '预订总数')}</span>
-          </span>
-          <div className="text-xl sm:text-2xl font-black text-[#26215C] dark:text-[#EEEDFE] font-mono">
-            {rentals.length}
+        <div className="p-3 rounded-xl rentora-card space-y-1">
+          <span className="text-[10px] text-slate-400 font-medium">{t('adminStatsTotalListings')}</span>
+          <div className="text-lg font-black text-slate-900 dark:text-white font-mono">
+            {adminOverview?.totalListings ?? items.length}
           </div>
         </div>
 
-        <div className="p-3.5 rounded-xl rentora-card space-y-1">
-          <span className="text-[11px] font-medium text-slate-400 block">{t('ownerStatsListings')}</span>
-          <div className="text-xl sm:text-2xl font-black text-[#26215C] dark:text-white font-mono">
-            {items.length}
+        <div className="p-3 rounded-xl rentora-card space-y-1">
+          <span className="text-[10px] text-slate-400 font-medium">{t('adminStatsTotalRentals')}</span>
+          <div className="text-lg font-black text-[#534AB7] dark:text-[#AFA9EC] font-mono">
+            {adminOverview?.totalRentals ?? rentals.length}
           </div>
         </div>
 
-        <div className="p-3.5 rounded-xl badge-trust space-y-1">
-          <span className="text-[11px] font-bold text-[#0F6E56] dark:text-[#48D2A8] block">{t('homeStatPioneers')}</span>
-          <div className="text-xl sm:text-2xl font-black text-[#0F6E56] dark:text-[#48D2A8] font-mono">
-            {allRealUsers.length}
+        <div className="p-3 rounded-xl rentora-card space-y-1">
+          <span className="text-[10px] text-slate-400 font-medium">{t('adminStatsTreasuryRev')}</span>
+          <div className="text-lg font-black text-[#0F6E56] dark:text-[#48D2A8] font-mono">
+            {Number(totalCommissionRevenue).toFixed(4)} π
           </div>
         </div>
       </div>
 
-      {/* Admin Nav Tabs */}
-      <div className="flex items-center gap-1.5 border-b border-slate-150 dark:border-slate-800 pb-2 overflow-x-auto scrollbar-none">
+      {/* Tabs */}
+      <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-[#1A1930] rounded-xl overflow-x-auto pb-1 text-xs">
         {[
           { id: 'overview', label: t('adminTabCommission'), icon: Percent },
           { id: 'database', label: t('adminTabDatabase'), icon: Database },
@@ -304,224 +315,184 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
               onClick={() => setActiveTab(tab.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
                 activeTab === tab.id
-                  ? 'bg-[#26215C] text-white dark:bg-[#534AB7]'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  ? 'bg-white dark:bg-[#26215C] text-[#26215C] dark:text-white shadow-xs font-bold'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
-              <Icon className="w-3.5 h-3.5 stroke-[1.8]" />
+              <Icon className="w-3.5 h-3.5" />
               <span>{tab.label}</span>
             </button>
           );
         })}
       </div>
 
-      {/* TAB 1: Commission Control */}
+      {/* TAB 1: Commission Config */}
       {activeTab === 'overview' && (
-        <div className="p-4 sm:p-5 rounded-xl rentora-card space-y-5">
-          <form onSubmit={handleSaveCommission} className="space-y-5 max-w-xl">
-            
-            {/* Platform Booking Commission */}
-            <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#1E1D33] border border-slate-200 dark:border-slate-700 space-y-2">
-              <div className="flex justify-between items-center text-xs font-bold text-slate-800 dark:text-slate-200">
-                <span>{l('درصد کارمزد پلتفرم رنتورا (از مستأجر)', 'Rentora Platform Commission (from Renter)', 'نسبة عمولة المنصة (من المستأجر)', 'Rentora 平台费率（由租客支付）')}</span>
-                <span className="text-base font-black text-[#26215C] dark:text-[#EEEDFE] font-mono">{commissionPercent} ٪</span>
-              </div>
+        <form onSubmit={handleSaveCommission} className="p-4 sm:p-5 rounded-xl rentora-card space-y-4">
+          <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+            <Percent className="w-4 h-4 text-[#534AB7]" />
+            <span>{t('adminCommissionTitle')}</span>
+          </h3>
 
-              <input
-                type="range"
-                min="0"
-                max="20"
-                step="0.5"
-                value={commissionPercent}
-                onChange={(e) => setCommissionPercent(parseFloat(e.target.value) || 0)}
-                className="w-full accent-[#26215C] dark:accent-[#534AB7] cursor-pointer"
-              />
-              <p className="text-[10px] text-slate-400">
-                {l('کارمزد پلتفرم تنها وجهی است که از طریق Pi Payment رسمی دریافت می‌شود.', 'Platform commission is the only fee collected via official Pi Payment.', 'عمولة المنصة هي المبلغ الوحيد الذي يُدفع رسمياً عبر باي.', '平台服务费是唯一通过官方 Pi 钱包支付的费用。')}
-              </p>
-            </div>
-
-            {/* Minimum Fee Floor */}
-            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#1E1D33] border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 space-y-1.5">
-              <div className="font-bold flex items-center justify-between">
-                <span>{t('adminFeeFloorLabel')}</span>
-                <span className="font-mono font-black text-[#0F6E56] text-sm">{minFeeFloor} π</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                {t('adminPlatformFeeLabel')}
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="50"
+                  value={commissionPercent}
+                  onChange={(e) => setCommissionPercent(e.target.value)}
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#534AB7]"
+                />
+                <span className="absolute left-3 rtl:left-3 rtl:right-auto top-2.5 text-xs text-slate-400 font-bold">%</span>
               </div>
             </div>
 
-            <button
-              type="submit"
-              className="btn-primary px-5 py-2.5 text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs"
-            >
-              <Save className="w-3.5 h-3.5 stroke-[2]" />
-              <span>{t('adminSaveConfigBtn')}</span>
-            </button>
-          </form>
-        </div>
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                {t('adminMinFeeLabel')}
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.0001"
+                  min="0.0001"
+                  value={minFeeFloor}
+                  onChange={(e) => setMinFeeFloor(e.target.value)}
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#534AB7]"
+                />
+                <span className="absolute left-3 rtl:left-3 rtl:right-auto top-2.5 text-xs text-slate-400 font-bold">π</span>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="btn-primary px-4 py-2 text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>{t('adminSaveBtn')}</span>
+          </button>
+        </form>
       )}
 
-      {/* TAB 2: Cloud Backend & Multi-Device Sync */}
+      {/* TAB 2: Database & Backend Diagnostic */}
       {activeTab === 'database' && (
         <div className="space-y-4">
-          
-          <div className="p-4 sm:p-5 rounded-2xl rentora-card space-y-4">
-            <div className="flex items-center gap-2.5 pb-2 border-b border-slate-150 dark:border-slate-800">
-              <Globe className="w-5 h-5 text-[#534AB7] stroke-[2]" />
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                  {t('adminCloudBackendTitle')}
-                </h3>
-                <p className="text-[11px] text-slate-400">
-                  {t('adminCloudBackendDesc')}
-                </p>
-              </div>
+          <div className="p-4 sm:p-5 rounded-xl rentora-card space-y-4">
+            <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+              <Globe className="w-4 h-4 text-[#534AB7]" />
+              <span>{l('وضعیت اتصال سرور ابری (Cloudflare Worker)', 'Cloudflare Worker Status', 'حالة خادم كلاودفلير', 'Cloudflare Worker 状态')}</span>
+            </h3>
+
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                {l('آدرس ورکر سرور:', 'Worker URL:', 'رابط الخادم:', 'Worker 地址：')}
+              </label>
+              <input
+                type="url"
+                value={backendUrlInput}
+                onChange={(e) => setBackendUrlInput(e.target.value)}
+                placeholder="https://rentora.your-subdomain.workers.dev"
+                dir="ltr"
+                className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#534AB7]"
+              />
             </div>
 
-            <div className="space-y-3 max-w-xl">
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  {t('adminCloudBackendUrl')}
-                </label>
-                <div
-                  className="w-full mt-1.5 p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-[#121124] text-slate-700 dark:text-slate-200 font-mono flex items-center justify-between"
-                  dir="ltr"
-                >
-                  <span>{backendUrlInput || 'https://rentora.mohsenjnext.workers.dev'}</span>
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">● Active</span>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={handleTestBackendConnection}
-                  disabled={backendTestStatus === 'testing'}
-                  className="btn-primary px-3.5 py-2 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Wifi className="w-3.5 h-3.5" />
-                  <span>{t('adminTestConnectionBtn')}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handlePushAllToCloud}
-                  disabled={isPushingCloud}
-                  className="px-3.5 py-2 rounded-xl border border-emerald-300 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                >
-                  <UploadCloud className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{isPushingCloud ? l('در حال ارسال...', 'Pushing...', 'جارٍ الإرسال...', '正在推送...') : l('همگام‌سازی با فضای ابری', 'Sync Data with Cloud', 'مزامنة الكل سحابياً', '一键同步全部数据至云端')}</span>
-                </button>
-              </div>
-
-              {backendTestMsg && (
-                <div className={`p-2.5 rounded-xl text-xs font-semibold animate-fadeIn ${
-                  backendTestStatus === 'success' ? 'badge-trust' : 'badge-amber'
-                }`}>
-                  {backendTestMsg}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="p-4 sm:p-5 rounded-2xl rentora-card space-y-4">
-            <div className="flex items-center gap-2.5 pb-2 border-b border-slate-150 dark:border-slate-800">
-              <Database className="w-5 h-5 text-rose-600 stroke-[2]" />
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                  {t('adminPurgeTitle')}
-                </h3>
-                <p className="text-[11px] text-slate-400">
-                  {t('adminPurgeDesc')}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 pt-2">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setIsPurgeModalOpen(true)}
-                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-2 cursor-pointer transition shadow-md"
+                onClick={handleTestBackendConnection}
+                disabled={backendTestStatus === 'testing'}
+                className="btn-secondary px-4 py-2 text-xs font-bold cursor-pointer flex items-center gap-1.5"
               >
-                <Trash2 className="w-4 h-4 stroke-[2]" />
-                <span>{t('adminPurgeBtn')}</span>
+                <Wifi className="w-3.5 h-3.5 text-[#534AB7]" />
+                <span>{backendTestStatus === 'testing' ? l('در حال تست...', 'Testing...', 'جارٍ الفحص...', '测试中...') : l('تست اتصال ورکر', 'Test Connection', 'اختبار الاتصال', '测试连接')}</span>
               </button>
             </div>
-          </div>
 
+            {backendTestMsg && (
+              <div className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 animate-fadeIn ${
+                backendTestStatus === 'success'
+                  ? 'badge-trust'
+                  : 'bg-rose-50 dark:bg-rose-950/60 text-rose-600 border border-rose-200 dark:border-rose-900'
+              }`}>
+                {backendTestStatus === 'success' ? <CheckCircle2 className="w-4 h-4 text-[#0F6E56]" /> : <AlertTriangle className="w-4 h-4 text-rose-600" />}
+                <span>{backendTestMsg}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* TAB 3: Real Users Directory */}
+      {/* TAB 3: Users Directory */}
       {activeTab === 'users' && (
         <div className="space-y-3">
           <div className="p-3.5 rounded-xl rentora-card space-y-3">
             <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <Users className="w-4 h-4 text-[#534AB7]" />
-                  <span>{t('adminTabUsers')} ({allRealUsers.length})</span>
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={refreshApp}
-                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold flex items-center gap-1 text-[#534AB7] cursor-pointer"
-              >
-                <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
-                <span>{l('بروزرسانی', 'Refresh', 'تحديث', '刷新')}</span>
-              </button>
+              <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-[#534AB7]" />
+                <span>{t('adminTabUsers')} ({allRealUsers.length})</span>
+              </h3>
             </div>
 
             {allRealUsers.length === 0 ? (
               <EmptyState
-                type="package"
-                title={l('هنوز کاربری ثبت‌نام نکرده است', 'No pioneers registered yet', 'لم يسجل أي مستخدم بعد', '暂无先锋用户注册')}
+                type="user"
+                title={l('کاربری یافت نشد', 'No users found', 'لا يوجد مستخدمين', '未找到用户')}
               />
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {allRealUsers.map((u, idx) => {
-                  const isBlocked = u.status === 'banned';
-
+                  const isUserActive = u.status !== 'suspended';
+                  const isSelf = currentUser?.username?.toLowerCase() === u.username?.toLowerCase();
                   return (
-                    <div key={u.uid || idx} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-                      <div className="flex items-center gap-2.5">
+                    <div key={u.id || u.uid || idx} className="py-2.5 flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         <img
                           src={u.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.username}`}
                           alt=""
-                          className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0"
+                          className="w-8 h-8 rounded-full object-cover bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0"
                         />
-                        <div>
+                        <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-slate-900 dark:text-white font-mono" dir="ltr">
-                              @{u.username}
+                            <span className="font-bold text-slate-900 dark:text-white truncate">
+                              {u.displayName || u.username}
                             </span>
-                            {u.kycStatus === 'verified' ? (
-                              <span className="text-[9px] badge-trust px-1.5 py-0.2 rounded font-bold">
-                                KYC ✓
-                              </span>
-                            ) : (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-400 font-medium">
-                                Unverified
-                              </span>
+                            <span className="font-mono text-slate-400 text-[10px]">@{u.username}</span>
+                            {u.role === 'admin' && (
+                              <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-[#26215C] text-white">Admin</span>
                             )}
+                          </div>
+                          <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                            <span className={isUserActive ? 'text-[#0F6E56] font-bold' : 'text-rose-500 font-bold'}>
+                              {isUserActive ? l('فعال', 'Active', 'نشط', '正常') : l('مسدود', 'Suspended', 'محظور', '已冻结')}
+                            </span>
+                            <span>•</span>
+                            <span>{u.kycStatus === 'verified' ? 'KYC Verified' : 'Unverified'}</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      {!isSelf && u.role !== 'admin' && (
                         <button
                           type="button"
-                          onClick={() => toggleUserStatus(u.uid)}
-                          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition ${
-                            isBlocked
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                              : 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100 dark:bg-rose-950/40'
+                          onClick={() => handleToggleUserStatus(u)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition flex items-center gap-1 ${
+                            isUserActive
+                              ? 'border border-rose-200 dark:border-rose-900 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40'
+                              : 'badge-trust text-[#0F6E56]'
                           }`}
                         >
-                          {isBlocked ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
-                          <span>{isBlocked ? l('رفع مسدودی', 'Unblock', 'إلغاء الحظر', '解封') : l('مسدودسازی', 'Block', 'حظر', '封禁')}</span>
+                          {isUserActive ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
+                          <span>{isUserActive ? l('مسدودسازی', 'Suspend', 'حظر', '冻结') : l('رفع انسداد', 'Activate', 'تفعيل', '解冻')}</span>
                         </button>
-                      </div>
+                      )}
                     </div>
                   );
                 })}
@@ -531,26 +502,14 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
         </div>
       )}
 
-      {/* TAB 4: Items Moderation */}
+      {/* TAB 4: Listings Moderation */}
       {activeTab === 'moderation' && (
         <div className="space-y-3">
           <div className="p-3.5 rounded-xl rentora-card space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <Layers className="w-4 h-4 text-[#534AB7]" />
-                  <span>{t('adminTabModeration')} ({items.length})</span>
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={refreshApp}
-                className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold flex items-center gap-1 text-[#534AB7] cursor-pointer"
-              >
-                <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
-                <span>{l('بروزرسانی', 'Refresh', 'تحديث', '刷新')}</span>
-              </button>
-            </div>
+            <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+              <Layers className="w-4 h-4 text-[#534AB7]" />
+              <span>{t('adminTabModeration')} ({items.length})</span>
+            </h3>
 
             {items.length === 0 ? (
               <EmptyState
@@ -596,7 +555,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
 
                         <button
                           type="button"
-                          onClick={() => toggleItemStatus(it.id)}
+                          onClick={() => handleToggleListingModeration(it)}
                           className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition ${
                             isActive
                               ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
@@ -647,7 +606,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                         <span className="font-bold text-rose-600 dark:text-rose-400">{rep.reason || 'گزارش تخلف'}</span>
                         <span className="text-[10px] text-slate-400 font-mono">@{rep.reporterUsername}</span>
                       </div>
-                      <p className="text-slate-600 dark:text-slate-300 mt-1">{rep.description || 'توضیحاتی ثبت نشده است.'}</p>
+                      <p className="text-slate-600 dark:text-slate-300 mt-1">{rep.description || rep.details || 'توضیحاتی ثبت نشده است.'}</p>
                     </div>
                     <button
                       type="button"
@@ -689,7 +648,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                     </div>
                     <div className="text-right">
                       <span className="font-black text-[#0F6E56] font-mono text-xs block">+{tx.platformFee || tx.amount || 0.0001} π</span>
-                      <span className="text-[9px] text-slate-400">{tx.timestamp ? new Date(tx.timestamp).toLocaleDateString('fa-IR') : 'تاییدشده'}</span>
+                      <span className="text-[9px] text-slate-400">{tx.timestamp ? new Date(tx.timestamp).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US') : 'تاییدشده'}</span>
                     </div>
                   </div>
                 ))}
