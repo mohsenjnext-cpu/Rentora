@@ -19,7 +19,6 @@ import SupportModal from './components/SupportModal';
 import ChatModal from './components/ChatModal';
 import NotificationToast from './components/NotificationToast';
 import { requestNotificationPermission } from './services/notificationService';
-import { Lock } from 'lucide-react';
 
 // Pages
 import HomePage from './pages/HomePage';
