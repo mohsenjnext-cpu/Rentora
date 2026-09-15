@@ -141,6 +141,7 @@ CREATE INDEX IF NOT EXISTS idx_listings_owner ON listings(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_listings_status ON listings(status);
 CREATE INDEX IF NOT EXISTS idx_rentals_renter ON rentals(renter_user_id);
 CREATE INDEX IF NOT EXISTS idx_rentals_listing ON rentals(listing_id);
+CREATE INDEX IF NOT EXISTS idx_rentals_listing_dates_status ON rentals(listing_id, start_date, end_date, status);
 CREATE INDEX IF NOT EXISTS idx_payment_intents_user ON payment_intents(user_id);
 CREATE INDEX IF NOT EXISTS idx_payment_intents_status ON payment_intents(status);
 CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
@@ -154,3 +155,37 @@ CREATE INDEX IF NOT EXISTS idx_reviews_rental ON reviews(rental_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_listing ON reviews(listing_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_reviewer ON reviews(reviewer_user_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_reviewee ON reviews(reviewee_user_id);
+
+CREATE TRIGGER IF NOT EXISTS rentals_overlap_guard_insert
+BEFORE INSERT ON rentals
+FOR EACH ROW
+WHEN NEW.status IN ('pending_payment','paid','confirmed','active')
+  AND EXISTS (
+    SELECT 1 FROM rentals r
+    WHERE r.listing_id = NEW.listing_id
+      AND r.id <> NEW.id
+      AND r.status IN ('pending_payment','paid','confirmed','active')
+      AND julianday(r.end_date) > julianday(NEW.start_date)
+      AND julianday(r.start_date) < julianday(NEW.end_date)
+      AND (r.status <> 'pending_payment' OR julianday(r.created_at) >= julianday('now','-30 minutes'))
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'listing is already reserved for the requested dates');
+END;
+
+CREATE TRIGGER IF NOT EXISTS rentals_overlap_guard_update
+BEFORE UPDATE OF listing_id, start_date, end_date, status ON rentals
+FOR EACH ROW
+WHEN NEW.status IN ('pending_payment','paid','confirmed','active')
+  AND EXISTS (
+    SELECT 1 FROM rentals r
+    WHERE r.listing_id = NEW.listing_id
+      AND r.id <> NEW.id
+      AND r.status IN ('pending_payment','paid','confirmed','active')
+      AND julianday(r.end_date) > julianday(NEW.start_date)
+      AND julianday(r.start_date) < julianday(NEW.end_date)
+      AND (r.status <> 'pending_payment' OR julianday(r.created_at) >= julianday('now','-30 minutes'))
+  )
+BEGIN
+  SELECT RAISE(ABORT, 'listing is already reserved for the requested dates');
+END;
