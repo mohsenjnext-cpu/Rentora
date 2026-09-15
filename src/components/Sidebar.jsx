@@ -12,6 +12,7 @@ import {
   Settings, 
   LogOut, 
   ShieldCheck, 
+  ShieldAlert,
   ReceiptText, 
   Moon,
   Sun,

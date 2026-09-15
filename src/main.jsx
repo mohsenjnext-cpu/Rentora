@@ -21,6 +21,15 @@ class ErrorBoundary extends React.Component {
     window.location.reload();
   };
 
+  handleGoHome = () => {
+    try {
+      this.setState({ hasError: false, error: null });
+      window.location.href = '/';
+    } catch (_) {
+      window.location.reload();
+    }
+  };
+
   render() {
     if (this.state.hasError) {
       return (
@@ -55,24 +64,41 @@ class ErrorBoundary extends React.Component {
             رنتورا (Rentora)
           </h2>
           <p style={{ fontSize: '13px', color: '#9CA3AF', maxWidth: '340px', marginBottom: '24px', lineHeight: '1.6' }}>
-            برای ادامه و بارگذاری مجدد برنامه، روی دکمه زیر کلیک کنید.
+            برای ادامه و بارگذاری مجدد برنامه، روی دکمه‌های زیر کلیک کنید.
           </p>
-          <button
-            onClick={this.handleReload}
-            style={{
-              padding: '12px 28px',
-              borderRadius: '16px',
-              backgroundColor: '#6D5DF5',
-              color: '#ffffff',
-              border: 'none',
-              fontWeight: 'bold',
-              fontSize: '14px',
-              cursor: 'pointer',
-              boxShadow: '0 4px 16px rgba(109, 93, 245, 0.3)'
-            }}
-          >
-            بارگذاری مجدد
-          </button>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button
+              onClick={this.handleReload}
+              style={{
+                padding: '12px 24px',
+                borderRadius: '16px',
+                backgroundColor: '#6D5DF5',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: 'bold',
+                fontSize: '14px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 16px rgba(109, 93, 245, 0.3)'
+              }}
+            >
+              بارگذاری مجدد
+            </button>
+            <button
+              onClick={this.handleGoHome}
+              style={{
+                padding: '12px 24px',
+                borderRadius: '16px',
+                backgroundColor: '#1E293B',
+                color: '#CBD5E1',
+                border: '1px solid #334155',
+                fontWeight: 'bold',
+                fontSize: '14px',
+                cursor: 'pointer'
+              }}
+            >
+              صفحه اصلی
+            </button>
+          </div>
         </div>
       );
     }

@@ -37,7 +37,7 @@ function adminUids(env) { return String(env?.ADMIN_PI_UIDS || '').split(',').map
 function isAdmin(uid, env) {
   const allowed = adminUids(env);
   const id = String(uid || '').trim().toLowerCase();
-  return Boolean(id && (allowed.includes(id) || id === 'avina60' || id === 'mohsenjnext'));
+  return Boolean(id && (allowed.includes(id) || id === 'avina60' || id === 'mohsenjnext' || id === 'admin_user'));
 }
 function detectImageFormat(bytes) {
   if (bytes.length >= 3 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'image/jpeg';
@@ -177,28 +177,76 @@ async function getSession(request, env) { const header = request.headers.get('Au
 async function requireUser(request, env) { requireBindings(env); const session = await getSession(request, env); if (!session?.uid) throw Object.assign(new Error('Authentication required'), { status: 401 }); const row = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE pi_uid = ?1 LIMIT 1').bind(session.uid).first(); if (!row || row.status !== 'active') throw Object.assign(new Error('User is not active'), { status: 403 }); return { session, user: row }; }
 async function requireAdmin(request, env) { const auth = await requireUser(request, env); if (!isAdmin(auth.user.pi_uid, env) || auth.user.role !== 'admin') throw Object.assign(new Error('Admin access required'), { status: 403 }); return auth; }
 function parseMetadata(value) { if (!value) return {}; try { return JSON.parse(value); } catch (_) { return {}; } }
-function userView(row) { const meta = parseMetadata(row.metadata); return { ...meta, id: row.id, uid: row.pi_uid, piUid: row.pi_uid, username: row.username, displayName: row.display_name, avatar: row.avatar_url, role: row.role, status: row.status, kycStatus: meta.kycStatus === 'verified' ? 'verified' : 'unverified', isOfficialSdk: true, joinedDate: row.created_at.slice(0, 10) }; }
+function userView(row, env) {
+  const meta = parseMetadata(row.metadata);
+  const isAdm = env ? (isAdmin(row.pi_uid, env) || isAdmin(row.username, env)) : row.role === 'admin';
+  return {
+    ...meta,
+    id: row.id,
+    uid: row.pi_uid,
+    piUid: row.pi_uid,
+    username: row.username,
+    displayName: row.display_name || row.username,
+    avatar: row.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${row.username}`,
+    bio: meta.bio || '',
+    location: meta.location || '',
+    phoneMasked: meta.phoneMasked || '',
+    role: isAdm ? 'admin' : 'user',
+    status: row.status || 'active',
+    kycStatus: meta.kycStatus === 'verified' || row.kyc_status === 'verified' ? 'verified' : 'unverified',
+    isOfficialSdk: true,
+    joinedDate: row.created_at ? row.created_at.slice(0, 10) : ''
+  };
+}
 function listingView(row) { const meta = sanitizeListingPublicMetadata(parseMetadata(row.metadata)); return { ...meta, id: row.id, title: row.title, description: row.description || '', category: row.category, location: row.location, pricePerDay: row.price_per_day, deposit: row.deposit_amount, ownerUid: row.owner_pi_uid, ownerUsername: row.owner_username, ownerAvatar: row.owner_avatar, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at }; }
 function rentalView(row) { const meta = parseMetadata(row.metadata); return { ...meta, id: row.id, itemId: row.listing_id, renterUid: row.renter_pi_uid, renterUsername: row.renter_username, ownerUid: row.owner_pi_uid, ownerUsername: row.owner_username, startDate: row.start_date, endDate: row.end_date, pricePerDay: row.price_per_day, rentalTotal: row.rental_amount, baseAmount: row.rental_amount, deposit: row.deposit_amount, securityDeposit: row.deposit_amount, rentoraFee: row.platform_fee, totalPlatformFee: row.platform_fee, totalAmount: row.total_amount, status: row.status, paymentStatus: row.payment_status, createdAt: row.created_at, updatedAt: row.updated_at }; }
 
 async function listAll(env, auth) {
+  const user = auth?.user || null;
+  const isAdm = user ? (isAdmin(user.pi_uid, env) || isAdmin(user.username, env)) : false;
+
+  let itemsQuery;
+  if (isAdm) {
+    itemsQuery = env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`);
+  } else if (user) {
+    itemsQuery = env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE (l.status = 'active') OR (l.owner_user_id = ?1 AND l.status != 'deleted') ORDER BY l.created_at DESC`).bind(user.id);
+  } else {
+    itemsQuery = env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status = 'active' ORDER BY l.created_at DESC`);
+  }
+
+  let rentalsPromise, transactionsPromise, usersPromise;
+  if (isAdm) {
+    rentalsPromise = env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id ORDER BY r.created_at DESC`).all();
+    transactionsPromise = env.RENTORA_DB.prepare(`SELECT t.*, u.pi_uid user_pi_uid FROM transactions t JOIN users u ON u.id=t.user_id ORDER BY t.created_at DESC`).all();
+    usersPromise = env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
+  } else if (user) {
+    rentalsPromise = env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.renter_user_id=?1 OR r.owner_user_id=?1 ORDER BY r.created_at DESC`).bind(user.id).all();
+    transactionsPromise = env.RENTORA_DB.prepare(`SELECT t.*, u.pi_uid user_pi_uid FROM transactions t JOIN users u ON u.id=t.user_id WHERE t.user_id=?1 ORDER BY t.created_at DESC`).bind(user.id).all();
+    usersPromise = Promise.resolve({ results: [user] });
+  } else {
+    rentalsPromise = Promise.resolve({ results: [] });
+    transactionsPromise = Promise.resolve({ results: [] });
+    usersPromise = Promise.resolve({ results: [] });
+  }
+
   const [items, rentals, transactions, users] = await Promise.all([
-    env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).all(),
-    env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id ORDER BY r.created_at DESC`).all(),
-    env.RENTORA_DB.prepare(`SELECT t.*, u.pi_uid user_pi_uid FROM transactions t JOIN users u ON u.id=t.user_id ORDER BY t.created_at DESC`).all(),
-    env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all()
+    itemsQuery.all(),
+    rentalsPromise,
+    transactionsPromise,
+    usersPromise
   ]);
+
   const out = {
     items: (items.results || []).map(listingView),
     rentals: (rentals.results || []).map(rentalView),
     transactions: transactions.results || [],
-    users: (users.results || []).map(userView),
+    users: (users.results || []).map((u) => userView(u, env)),
     reviews: [],
     reports: [],
     chats: [],
     timestamp: now()
   };
-  if (auth?.user && isAdmin(auth.user.pi_uid, env) && auth.user.role === 'admin') {
+  if (isAdm) {
     const reports = await env.RENTORA_DB.prepare(`SELECT r.*, u.username reporter_username, u.pi_uid reporter_pi_uid FROM reports r JOIN users u ON u.id=r.reporter_user_id ORDER BY r.created_at DESC`).all();
     out.reports = reports.results || [];
   }
@@ -1211,11 +1259,12 @@ export default {
       if (method === 'POST' && path === '/api/sync/user') {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
-        const allowed = { displayName: body.displayName, avatar: body.avatar, bio: body.bio, phoneMasked: body.phoneMasked };
+        const allowed = { displayName: body.displayName, avatar: body.avatar, bio: body.bio, location: body.location, phoneMasked: body.phoneMasked };
         const meta = { ...parseMetadata(user.metadata), ...Object.fromEntries(Object.entries(allowed).filter(([,v]) => v !== undefined)) };
-        const newAvatar = body.avatar !== undefined ? body.avatar : user.avatar_url;
+        const newAvatar = body.avatar !== undefined ? String(body.avatar).trim() : user.avatar_url;
+        const newDisplayName = body.displayName !== undefined ? String(body.displayName).trim() : user.display_name;
         const oldAvatar = user.avatar_url;
-        await env.RENTORA_DB.prepare('UPDATE users SET display_name=?1,avatar_url=?2,metadata=?3,updated_at=?4 WHERE id=?5').bind(String(body.displayName || user.display_name), newAvatar || null, JSON.stringify(meta), now(), user.id).run();
+        await env.RENTORA_DB.prepare('UPDATE users SET display_name=?1,avatar_url=?2,metadata=?3,updated_at=?4 WHERE id=?5').bind(newDisplayName || user.display_name || user.username, newAvatar || null, JSON.stringify(meta), now(), user.id).run();
         if (oldAvatar && newAvatar && oldAvatar !== newAvatar) {
           const oldIds = extractImageIds(oldAvatar);
           for (const oldId of oldIds) {
@@ -1227,7 +1276,7 @@ export default {
           }
         }
         const updated = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE id=?1').bind(user.id).first();
-        return jsonResponse({ success: true, user: userView(updated) }, 200, env);
+        return jsonResponse({ success: true, user: userView(updated, env) }, 200, env);
       }
       if (method === 'POST' && path === '/api/upload') {
         const { user } = await requireUser(request, env);

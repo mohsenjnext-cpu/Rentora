@@ -493,21 +493,13 @@ export class CloudSyncService {
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         
-        // 1. Merge items
+        // 1. Authoritative items from server
         const remoteItems = Array.isArray(data.items) ? data.items : [];
-        const mergedItemsMap = new Map();
-        localItems.forEach(i => mergedItemsMap.set(i.id, i));
-        remoteItems.forEach(i => mergedItemsMap.set(i.id, i));
-        const mergedItems = Array.from(mergedItemsMap.values());
-        this.saveCachedItems(mergedItems);
+        this.saveCachedItems(remoteItems);
 
-        // 2. Merge rentals
+        // 2. Authoritative rentals from server
         const remoteRentals = Array.isArray(data.rentals) ? data.rentals : [];
-        const mergedRentalsMap = new Map();
-        localRentals.forEach(r => mergedRentalsMap.set(r.id, r));
-        remoteRentals.forEach(r => mergedRentalsMap.set(r.id, r));
-        const mergedRentals = Array.from(mergedRentalsMap.values());
-        this.saveCachedRentals(mergedRentals);
+        this.saveCachedRentals(remoteRentals);
 
         // 3. Merge users
         const remoteUsers = Array.isArray(data.users) ? data.users : [];
@@ -524,11 +516,11 @@ export class CloudSyncService {
         const mergedUsers = Array.from(mergedUsersMap.values());
         this.saveCachedUsers(mergedUsers);
 
-        const currentHash = `${mergedItems.length}_${mergedRentals.length}_${mergedUsers.length}`;
+        const currentHash = `${remoteItems.length}_${remoteRentals.length}_${mergedUsers.length}`;
 
         const result = {
-          items: mergedItems,
-          rentals: mergedRentals,
+          items: remoteItems,
+          rentals: remoteRentals,
           users: mergedUsers,
           reviews: [],
           transactions: data.transactions || []

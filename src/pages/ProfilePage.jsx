@@ -3,6 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import { getUserReputationSummary } from '../services/reputationService';
+import { cloudSyncService } from '../services/cloudSyncService';
 import { 
   User, 
   ShieldCheck, 
@@ -93,57 +94,32 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
   // Dynamic reputation calculation
   const repSummary = getUserReputationSummary(currentUser?.username, userReviewsData || rentals);
 
-  // Handle image upload from device gallery / camera
-  const handleImageFileChange = (e) => {
+  // Handle image upload from device gallery / camera via R2
+  const handleImageFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsUploadingImage(true);
-    const reader = new FileReader();
-
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_SIZE = 400;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_SIZE) {
-            height = Math.round((height * MAX_SIZE) / width);
-            width = MAX_SIZE;
-          }
-        } else {
-          if (height > MAX_SIZE) {
-            width = Math.round((width * MAX_SIZE) / height);
-            height = MAX_SIZE;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        setAvatar(compressedDataUrl);
-
+    setProfileError('');
+    try {
+      const uploadedUrl = await cloudSyncService.compressImage(file, 400, 0.85);
+      if (uploadedUrl) {
+        setAvatar(uploadedUrl);
         if (!isEditing) {
           const updater = updateProfile || updateUserProfile;
           if (updater) {
-            updater({ avatar: compressedDataUrl });
+            await updater({ avatar: uploadedUrl });
             setSaveSuccess(true);
             setTimeout(() => setSaveSuccess(false), 2500);
           }
         }
-        setIsUploadingImage(false);
-      };
-
-      img.src = event.target.result;
-    };
-
-    reader.readAsDataURL(file);
+      }
+    } catch (err) {
+      console.error('Failed to upload avatar image:', err);
+      setProfileError(err?.message || l('خطا در آپلود تصویر آواتار.', 'Failed to upload avatar image.', 'فشل تحميل الصورة.', '头像上传失败。'));
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   const [isSaving, setIsSaving] = useState(false);

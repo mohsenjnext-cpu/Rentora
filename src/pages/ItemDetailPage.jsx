@@ -16,7 +16,8 @@ import {
   Check,
   MessageSquare,
   Edit3,
-  Loader2
+  Loader2,
+  Lock
 } from 'lucide-react';
 
 export default function ItemDetailPage({

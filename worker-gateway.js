@@ -99,9 +99,17 @@ function rentalView(row) {
 function userView(row) {
   const meta = parseMetadata(row.metadata);
   return {
-    ...meta, id: row.id, uid: row.pi_uid, piUid: row.pi_uid, username: row.username,
-    displayName: row.display_name, avatar: row.avatar_url, role: row.role,
-    status: row.status, kycStatus: meta.kycStatus || 'verified', isOfficialSdk: true,
+    ...meta,
+    id: row.id,
+    uid: row.pi_uid,
+    piUid: row.pi_uid,
+    username: row.username,
+    displayName: row.display_name,
+    avatar: row.avatar_url,
+    role: row.role,
+    status: row.status,
+    kycStatus: meta.kycStatus || 'verified',
+    isOfficialSdk: true,
     joinedDate: row.created_at?.slice(0, 10),
   };
 }
@@ -132,7 +140,7 @@ async function safeSync(request, env) {
     const allowed = String(env.ADMIN_PI_UIDS || '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean);
     const uName = String(user.username || '').toLowerCase();
     const uId = String(user.pi_uid || '').toLowerCase();
-    const isAdmin = user.role === 'admin' || allowed.includes(uId) || allowed.includes(uName) || uName === 'avina60' || uName === 'mohsenjnext';
+    const isAdmin = (user.role === 'admin' || allowed.includes(uId) || allowed.includes(uName) || uName === 'avina60' || uName === 'mohsenjnext');
 
     const [rentals, transactions] = await Promise.all([
       env.RENTORA_DB.prepare(`SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users ru ON ru.id=r.renter_user_id JOIN users ou ON ou.id=l.owner_user_id WHERE r.renter_user_id=?1 OR r.owner_user_id=?1 ORDER BY r.created_at DESC`).bind(user.id).all(),
