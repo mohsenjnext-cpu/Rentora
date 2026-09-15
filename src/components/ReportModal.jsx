@@ -5,16 +5,19 @@ import {
   X, 
   Flag, 
   CheckCircle2, 
-  AlertTriangle,
-  Send
+  AlertCircle,
+  Send,
+  Loader2
 } from 'lucide-react';
 
-export default function ReportModal({ target, type, isOpen, onClose }) {
+export default function ReportModal({ target, type = 'listing', isOpen, onClose }) {
   const { lang, dir, t, l } = useLanguage();
   const { submitReport } = useRentora();
 
   const [reason, setReason] = useState('fake_listing');
   const [details, setDetails] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(null);
   const [submitted, setSubmitted] = useState(false);
 
   if (!isOpen) return null;
@@ -26,20 +29,31 @@ export default function ReportModal({ target, type, isOpen, onClose }) {
     { id: 'other', label: l('سایر موارد تخلف', 'Other issue', 'سبب آخر', '其他违规问题') }
   ];
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    submitReport({
-      type,
-      targetUsername: target?.username,
-      targetTitle: target?.title,
-      reason,
-      details
-    });
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      onClose();
-    }, 2000);
+    setSubmitting(true);
+    setErrorMsg(null);
+
+    try {
+      await submitReport({
+        type,
+        targetId: target?.id || target?.username || target?.title || 'unknown',
+        targetUsername: target?.username,
+        targetTitle: target?.title,
+        reason,
+        details: details.trim()
+      });
+      setSubmitted(true);
+      setTimeout(() => {
+        setSubmitted(false);
+        setDetails('');
+        onClose();
+      }, 2000);
+    } catch (err) {
+      setErrorMsg(err?.message || l('خطا در ارسال گزارش تخلف', 'Failed to submit report', 'فشل في إرسال البلاغ', '提交举报失败'));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -62,7 +76,7 @@ export default function ReportModal({ target, type, isOpen, onClose }) {
               <h3 className="font-bold text-sm text-slate-900 dark:text-white">
                 {t('itemReportBtn')}
               </h3>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-slate-400 truncate max-w-[220px]">
                 {target?.title || `@${target?.username}`}
               </p>
             </div>
@@ -92,6 +106,13 @@ export default function ReportModal({ target, type, isOpen, onClose }) {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-3.5 text-xs">
+            {errorMsg && (
+              <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
             <div>
               <label className="font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
                 {l('علت گزارش', 'Reason for report', 'سبب البلاغ', '举报原因')}
@@ -126,6 +147,7 @@ export default function ReportModal({ target, type, isOpen, onClose }) {
               </label>
               <textarea
                 rows="3"
+                maxLength={2000}
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
                 placeholder={l('جزئیات بیشتر را بنویسید...', 'Provide more details...', 'اكتب المزيد من التفاصيل...', '请描述详细情况...')}
@@ -135,10 +157,17 @@ export default function ReportModal({ target, type, isOpen, onClose }) {
 
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer transition flex items-center justify-center gap-1.5 shadow-sm"
+              disabled={submitting}
+              className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer transition flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
             >
-              <Send className={`w-3.5 h-3.5 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
-              <span>{l('ارسال گزارش تخلف', 'Submit Report', 'إرسال البلاغ', '提交违规报告')}</span>
+              {submitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Send className={`w-3.5 h-3.5 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
+                  <span>{l('ارسال گزارش تخلف', 'Submit Report', 'إرسال البلاغ', '提交违规报告')}</span>
+                </>
+              )}
             </button>
           </form>
         )}

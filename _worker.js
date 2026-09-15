@@ -1137,6 +1137,70 @@ export default {
         }), { status: 200, headers });
       }
 
+      // =========================================================================
+      // AUTHORITATIVE DISPUTES & VIOLATION REPORTS
+      // =========================================================================
+      if (method === 'POST' && path === '/api/reports') {
+        const { user } = await requireUser(request, env);
+        const body = await readJson(request);
+
+        const targetType = String(body?.type || body?.targetType || 'listing').trim().toLowerCase();
+        const targetId = String(body?.targetId || body?.targetUsername || body?.targetTitle || '').trim();
+        const reason = String(body?.reason || 'other').trim();
+        const details = String(body?.details || body?.description || '').trim();
+
+        if (!targetId) return errorResponse('Target identifier is required', 400, env, undefined, origin);
+        if (!reason) return errorResponse('Report reason is required', 400, env, undefined, origin);
+        if (details.length > 2000) return errorResponse('Details too long (max 2000 characters)', 400, env, undefined, origin);
+
+        const reportId = `rep_${crypto.randomUUID()}`;
+        const meta = {
+          targetUsername: body?.targetUsername || null,
+          targetTitle: body?.targetTitle || null,
+          details,
+          reporterUsername: user.username
+        };
+
+        await env.RENTORA_DB.prepare(`
+          INSERT INTO reports(id, reporter_user_id, target_type, target_id, reason, status, metadata, created_at, updated_at)
+          VALUES(?1, ?2, ?3, ?4, ?5, 'open', ?6, ?7, ?7)
+        `).bind(reportId, user.id, targetType, targetId, reason, JSON.stringify(meta), now()).run();
+
+        return jsonResponse({
+          success: true,
+          reportId,
+          report: {
+            id: reportId,
+            reporterUserId: user.id,
+            reporterUsername: user.username,
+            targetType,
+            targetId,
+            reason,
+            status: 'open',
+            details,
+            createdAt: now()
+          }
+        }, 201, env, origin);
+      }
+
+      if (method === 'POST' && path.startsWith('/api/reports/') && path.endsWith('/resolve')) {
+        const reportId = path.slice('/api/reports/'.length, -'/resolve'.length).trim();
+        if (!reportId) return errorResponse('Missing report ID', 400, env, undefined, origin);
+        const { user } = await requireAdmin(request, env);
+        const body = await readJson(request);
+        const status = String(body?.status || 'resolved').trim().toLowerCase();
+        const allowed = ['resolved', 'dismissed', 'reviewing'];
+        const finalStatus = allowed.includes(status) ? status : 'resolved';
+
+        const report = await env.RENTORA_DB.prepare('SELECT id FROM reports WHERE id=?1 LIMIT 1').bind(reportId).first();
+        if (!report) return errorResponse('Report not found', 404, env, undefined, origin);
+
+        await env.RENTORA_DB.prepare('UPDATE reports SET status=?1, updated_at=?2 WHERE id=?3')
+          .bind(finalStatus, now(), reportId).run();
+
+        return jsonResponse({ success: true, reportId, status: finalStatus, resolvedBy: user.username }, 200, env, origin);
+      }
+
       // Legacy review endpoint permanently deprecated
       if (method === 'POST' && path === '/api/sync/review') {
         return errorResponse('Legacy review endpoint is deprecated. Please use POST /api/rentals/:rentalId/reviews', 410, env);

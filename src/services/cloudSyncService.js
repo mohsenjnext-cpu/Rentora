@@ -224,6 +224,50 @@ export class CloudSyncService {
   }
 
   // =========================================================================
+  // AUTHORITATIVE REPORTS & DISPUTES API CLIENT
+  // =========================================================================
+
+  async submitReport(reportData) {
+    if (!reportData) throw new Error('Invalid report payload');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/reports`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(reportData)
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در ارسال گزارش تخلف');
+      err.status = res.status;
+      throw err;
+    }
+    return data.report;
+  }
+
+  async resolveReport(reportId, status = 'resolved') {
+    if (!reportId) throw new Error('reportId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/reports/${encodeURIComponent(reportId)}/resolve`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ status })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در به‌روزرسانی گزارش');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  // =========================================================================
   // AUTHORITATIVE RENTAL REVIEWS API CLIENT
   // =========================================================================
 

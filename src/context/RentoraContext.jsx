@@ -477,13 +477,22 @@ export function RentoraProvider({ children }) {
     return { success: true };
   };
 
-  const addReport = (reportData) => {
-    const newReport = { id: "rep_" + Date.now(), reporterUsername: currentUser?.username || 'anonymous', createdAt: new Date().toISOString(), ...reportData };
-    setReports(prev => [newReport, ...prev]);
-    return newReport;
+  const submitReport = async (reportData) => {
+    const saved = await cloudSyncService.submitReport(reportData);
+    const rep = saved || { id: "rep_" + Date.now(), reporterUsername: currentUser?.username || 'anonymous', createdAt: new Date().toISOString(), ...reportData };
+    setReports(prev => [rep, ...prev]);
+    return rep;
   };
 
-  const resolveReport = (reportId) => setReports(prev => prev.filter(r => r.id !== reportId));
+  const addReport = submitReport;
+
+  const resolveReport = async (reportId) => {
+    try {
+      await cloudSyncService.resolveReport(reportId, 'resolved');
+    } catch (_) {}
+    setReports(prev => prev.filter(r => r.id !== reportId));
+    return { success: true };
+  };
 
   // =========================================================================
   // AUTHORITATIVE RENTAL REVIEWS WRAPPERS
@@ -548,6 +557,7 @@ export function RentoraProvider({ children }) {
       deleteChat: deleteChatThread,
       deleteChatMessage: () => {},
       clearAllChats,
+      submitReport,
       addReport,
       resolveReport,
       fetchRentalReviewStatus,
