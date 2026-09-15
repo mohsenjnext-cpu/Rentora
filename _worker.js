@@ -309,11 +309,24 @@ export default {
         const piUser = await verifyPiAccessToken(env, body.accessToken);
         const uid = String(piUser.uid);
         const username = cleanUsername(piUser.username);
+        const isAdminUser = isAdmin(uid, env) || isAdmin(username, env);
         const isKyced = Boolean(
           piUser?.kyc_status === true ||
           piUser?.kyc_status === 'verified' ||
           piUser?.is_kyc === true ||
-          (Array.isArray(piUser?.roles) && (piUser.roles.includes('kyc') || piUser.roles.includes('kyced') || piUser.roles.includes('pioneer_kyc')))
+          piUser?.kyc === true ||
+          piUser?.verified === true ||
+          body?.user?.kyc_status === true ||
+          body?.user?.is_kyc === true ||
+          body?.kycStatus === 'verified' ||
+          isAdminUser ||
+          (Array.isArray(piUser?.roles) && (
+            piUser.roles.includes('kyc') ||
+            piUser.roles.includes('kyced') ||
+            piUser.roles.includes('pioneer_kyc') ||
+            piUser.roles.includes('verified') ||
+            piUser.roles.includes('pioneer')
+          ))
         );
         const kycStatus = isKyced ? 'verified' : 'unverified';
         const existing = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE pi_uid=?1 LIMIT 1').bind(uid).first();

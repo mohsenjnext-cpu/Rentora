@@ -35,7 +35,15 @@ class PiNetworkService {
     const accessToken = authResult?.accessToken;
     const sdkUser = authResult?.user;
     if (!accessToken || !sdkUser?.uid || !sdkUser?.username) throw new Error('اطلاعات معتبر از Pi Browser دریافت نشد.');
-    const response = await fetch(`${apiBase}/api/auth/pi-login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken }) });
+    const response = await fetch(`${apiBase}/api/auth/pi-login`, { 
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify({ 
+        accessToken, 
+        user: sdkUser,
+        kycStatus: (sdkUser?.kyc_status === true || sdkUser?.kyc_status === 'verified' || sdkUser?.is_kyc === true) ? 'verified' : undefined 
+      }) 
+    });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data?.sessionToken || !data?.user?.uid) throw new Error(data?.error || 'احراز هویت Pi در سرور رد شد.');
     return { accessToken, uid: data.user.uid, username: data.user.username, sessionToken: data.sessionToken, isOfficialSdk: true, kycStatus: data.user.kycStatus || 'unknown', user: data.user };
