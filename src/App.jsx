@@ -167,7 +167,7 @@ function MainApp() {
       <SecurityModal isOpen={isSecurityModalOpen} onClose={() => setIsSecurityModalOpen(false)} />
       <SupportModal isOpen={isSupportModalOpen} onClose={() => setIsSupportModalOpen(false)} onOpenDispute={() => handleOpenHelp('rules')} />
       <ChatModal isOpen={isChatModalOpen} onClose={() => { setIsChatModalOpen(false); setChatTargetItem(null); setChatTargetRental(null); }} initialItem={chatTargetItem} initialRental={chatTargetRental} onDirectRent={(item) => { setIsChatModalOpen(false); handleRentItem(item); }} onOpenPublicProfile={handleOpenPublicProfile} />
-      {directBookingItem && <BookingModal item={directBookingItem} isOpen={isDirectBookingOpen} onClose={() => { setIsDirectBookingOpen(false); setDirectBookingItem(null); }} onBookingComplete={() => { setIsDirectBookingOpen(false); setDirectBookingItem(null); setCurrentTab('activity'); }} />}
+      {directBookingItem && <BookingModal item={directBookingItem} isOpen={isDirectBookingOpen} onClose={() => { setIsDirectBookingOpen(false); setDirectBookingItem(null); }} onBookingSuccess={() => { setIsDirectBookingOpen(false); setDirectBookingItem(null); setCurrentTab('activity'); }} />}
       <BottomNav currentTab={currentTab} onNavigate={handleNavigate} />
       <NotificationToast notification={latestNotification} onClose={clearLatestNotification} onOpenChat={(notif) => { handleOpenChat({ id: notif.itemId || notif.threadId, recipientUsername: notif.senderUsername, title: notif.itemTitle }); }} />
     </div>
