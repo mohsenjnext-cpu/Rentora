@@ -250,6 +250,28 @@ export class CloudSyncService {
     return data.overview;
   }
 
+  async requestAdminPayout(amount, memo) {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/admin/payout`, {
+      method: 'POST',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ amount: Number(amount), memo: memo || undefined })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'درخواست واریز به حساب پای ادمین ناموفق بود.');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
   async fetchAdminUsers() {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('API Base URL is not configured');

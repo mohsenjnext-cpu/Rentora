@@ -394,14 +394,18 @@ export default {
       }
       if (method === 'GET' && path === '/api/admin/overview') {
         const { user } = await requireAdmin(request, env);
-        const [usersCount, listingsCount, rentalsCount, transactionsCount, revRow, reportsCount] = await Promise.all([
+        const [usersCount, listingsCount, rentalsCount, transactionsCount, revRow, payoutRow, reportsCount] = await Promise.all([
           env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM users").bind().first(),
           env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM listings WHERE status != 'deleted'").bind().first(),
           env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM rentals").bind().first(),
-          env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM transactions WHERE status = 'completed'").bind().first(),
-          env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status = 'completed'").bind().first(),
+          env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM transactions WHERE status = 'completed' AND (type = 'platform_fee' OR type IS NULL)").bind().first(),
+          env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status = 'completed' AND (type = 'platform_fee' OR type IS NULL)").bind().first(),
+          env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status = 'completed' AND type = 'admin_payout'").bind().first(),
           env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM reports WHERE status = 'open'").bind().first()
         ]);
+        const totalRev = Number(revRow?.total || 0);
+        const totalPayouts = Number(payoutRow?.total || 0);
+        const availableBalance = Math.max(0, totalRev - totalPayouts);
         return jsonResponse({
           success: true,
           overview: {
@@ -409,10 +413,80 @@ export default {
             totalListings: Number(listingsCount?.c || 0),
             totalRentals: Number(rentalsCount?.c || 0),
             totalTransactions: Number(transactionsCount?.c || 0),
-            totalPlatformRevenue: Number(revRow?.total || 0),
+            totalPlatformRevenue: totalRev,
+            totalPayouts,
+            availableBalance,
+            adminRecipient: user.username,
             openReports: Number(reportsCount?.c || 0)
           }
         }, 200, env, origin);
+      }
+      if (method === 'POST' && path === '/api/admin/payout') {
+        const { user } = await requireAdmin(request, env);
+        const body = await readJson(request);
+        const amount = Math.max(0.0001, Number(body?.amount || 0));
+        if (!amount || isNaN(amount)) return errorResponse('مبلغ تسویه نامعتبر است.', 400, env, undefined, origin);
+
+        try {
+          const paymentPayload = {
+            amount: Number(amount.toFixed(4)),
+            memo: String(body?.memo || `Rentora Treasury Payout to @${user.username}`).slice(0, 120),
+            metadata: {
+              type: 'admin_treasury_payout',
+              adminUid: user.pi_uid,
+              adminUsername: user.username,
+              requestedAt: now()
+            },
+            uid: user.pi_uid
+          };
+
+          const piRes = await piFetch(env, '/payments', {
+            method: 'POST',
+            body: JSON.stringify({ payment: paymentPayload })
+          });
+          const created = await piRes.json().catch(() => ({}));
+
+          if (!piRes.ok && !created?.identifier) {
+            return jsonResponse({
+              success: false,
+              error: created?.error_message || created?.error || created?.message || 'ایجاد تراکنش واریز در شبکه پای رد شد.',
+              details: created
+            }, 502, env, origin);
+          }
+
+          const paymentId = created.identifier || created.id;
+          let approvedData = null;
+          if (paymentId) {
+            const appRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, {
+              method: 'POST',
+              body: '{}'
+            });
+            approvedData = await appRes.json().catch(() => ({}));
+          }
+
+          await env.RENTORA_DB.prepare(
+            "INSERT INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, 'admin_payout', 'completed', ?7)"
+          ).bind(
+            `tx_${crypto.randomUUID()}`,
+            `payout_${paymentId || crypto.randomUUID()}`,
+            paymentId || `a2u_${crypto.randomUUID()}`,
+            created?.transaction?.txid || approvedData?.transaction?.txid || `txid_a2u_${Date.now()}`,
+            user.id,
+            amount,
+            now()
+          ).run();
+
+          return jsonResponse({
+            success: true,
+            paymentId,
+            amount,
+            recipient: user.username,
+            message: `مبلغ ${amount} π با موفقیت به حساب پای @${user.username} واریز گردید.`
+          }, 200, env, origin);
+        } catch (err) {
+          console.error('Payout error', err);
+          return errorResponse(err.message || 'خطا در اجرای تسویه حساب', 500, env, undefined, origin);
+        }
       }
       if (method === 'GET' && path === '/api/admin/users') {
         const { user } = await requireAdmin(request, env);

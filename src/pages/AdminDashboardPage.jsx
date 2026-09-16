@@ -31,7 +31,8 @@ import {
   Wifi,
   UploadCloud,
   Edit3,
-  Loader2
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 
 export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, onEditItem }) {
@@ -68,6 +69,13 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
   const [backendUrlInput, setBackendUrlInput] = useState(getApiBaseUrl());
   const [backendTestStatus, setBackendTestStatus] = useState(null); // 'testing' | 'success' | 'error'
   const [backendTestMsg, setBackendTestMsg] = useState('');
+
+  // Treasury Payout state (A2U)
+  const [payoutAmount, setPayoutAmount] = useState('');
+  const [payoutMemo, setPayoutMemo] = useState('');
+  const [isSubmittingPayout, setIsSubmittingPayout] = useState(false);
+  const [payoutSuccessMsg, setPayoutSuccessMsg] = useState('');
+  const [payoutErrorMsg, setPayoutErrorMsg] = useState('');
 
   const loadAdminServerData = async () => {
     setLoadingAdminData(true);
@@ -130,6 +138,12 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     ? adminOverview.totalPlatformRevenue
     : (transactions || []).reduce((sum, tx) => sum + (tx.platformFee || tx.amount || 0), 0);
 
+  const availableTreasuryBalance = Number(
+    adminOverview?.availableBalance !== undefined 
+      ? adminOverview.availableBalance 
+      : (adminOverview?.totalPlatformRevenue !== undefined ? adminOverview.totalPlatformRevenue : totalCommissionRevenue)
+  );
+
   const handleSaveCommission = (e) => {
     e.preventDefault();
     if (updatePlatformConfig) {
@@ -140,6 +154,43 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     }
     setSaveSuccessNotice(true);
     setTimeout(() => setSaveSuccessNotice(false), 2500);
+  };
+
+  const handleRequestPayout = async (e) => {
+    e.preventDefault();
+    setPayoutErrorMsg('');
+    setPayoutSuccessMsg('');
+
+    const amount = Number(payoutAmount);
+    if (!amount || isNaN(amount) || amount <= 0) {
+      setPayoutErrorMsg(l('لطفاً مبلغ معتبری برای برداشت وارد کنید.', 'Please enter a valid payout amount.', 'يرجى إدخال مبلغ صحيح.', '请输入有效的提现金额。'));
+      return;
+    }
+
+    if (amount > availableTreasuryBalance && availableTreasuryBalance > 0) {
+      setPayoutErrorMsg(l('مبلغ درخواستی بیشتر از موجودی قابل برداشت صندوق است.', 'Requested amount exceeds available treasury balance.', 'المبلغ المطلوب يتجاوز الرصيد المتاح.', '提现金额超出金库可用余额。'));
+      return;
+    }
+
+    setIsSubmittingPayout(true);
+    try {
+      const result = await cloudSyncService.requestAdminPayout(amount, payoutMemo);
+      setPayoutSuccessMsg(result.message || l(
+        `مبلغ ${amount} π با موفقیت به حساب پای @${currentUser?.username || 'admin'} منتقل شد.`,
+        `Successfully transferred ${amount} π to your Pi account.`,
+        `تم تحويل ${amount} π بنجاح إلى حسابك.`,
+        `已成功将 ${amount} π 提现至您的 Pi 账号。`
+      ));
+      setPayoutAmount('');
+      setPayoutMemo('');
+      await loadAdminServerData();
+      await refreshApp();
+      setTimeout(() => setPayoutSuccessMsg(''), 7000);
+    } catch (err) {
+      setPayoutErrorMsg(err.message || l('خطا در واریز به حساب پای', 'Payout transfer failed', 'فشل التحويل', '提现失败'));
+    } finally {
+      setIsSubmittingPayout(false);
+    }
   };
 
   const handleToggleUserStatus = async (user) => {
@@ -331,59 +382,182 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
         })}
       </div>
 
-      {/* TAB 1: Commission Config */}
+      {/* TAB 1: Commission Config & Treasury Payout */}
       {activeTab === 'overview' && (
-        <form onSubmit={handleSaveCommission} className="p-4 sm:p-5 rounded-xl rentora-card space-y-4">
-          <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
-            <Percent className="w-4 h-4 text-[#534AB7]" />
-            <span>{t('adminCommissionTitle')}</span>
-          </h3>
+        <div className="space-y-4">
+          
+          {/* Treasury Payout Card (A2U) */}
+          <div className="p-4 sm:p-5 rounded-xl rentora-card space-y-4 border-2 border-[#0F6E56]/30 bg-gradient-to-b from-white to-[#E1F5EE]/20 dark:from-[#151426] dark:to-[#0B382C]/30">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-150 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#0F6E56] text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <CreditCard className="w-4 h-4 stroke-[2]" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
+                    {l('تسویه و واریز درآمد به کیف پول پای ادمین (A2U)', 'Direct Treasury Payout to Admin (A2U)', 'تحويل الأرباح لحساب الأدمن (A2U)', '金库收益直接提现至管理员账户 (A2U)')}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {l('انتقال موجودی کارمزدها از کیف پول اپلیکیشن به حساب پای شما', 'Transfer platform fees from App Wallet to your Pi account', 'تحويل عمولات المنصة إلى محفظتك الشخصية', '从 App 官方金库钱包直接打款至您的 Pi 钱包')}
+                  </p>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                {t('adminPlatformFeeLabel')}
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="50"
-                  value={commissionPercent}
-                  onChange={(e) => setCommissionPercent(e.target.value)}
-                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#534AB7]"
-                />
-                <span className="absolute left-3 rtl:left-3 rtl:right-auto top-2.5 text-xs text-slate-400 font-bold">%</span>
+              <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                <span className="text-[11px] text-slate-500 font-medium">{l('اکانت مقصد:', 'Recipient:', 'المستلم:', '收款账号：')}</span>
+                <span className="font-mono text-xs font-bold text-[#0F6E56] dark:text-[#48D2A8] bg-[#E1F5EE] dark:bg-[#0B382C] px-2 py-0.5 rounded-lg">
+                  @{currentUser?.username || 'admin'}
+                </span>
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                {t('adminMinFeeLabel')}
-              </label>
-              <div className="relative">
-                <input
-                  type="number"
-                  step="0.0001"
-                  min="0.0001"
-                  value={minFeeFloor}
-                  onChange={(e) => setMinFeeFloor(e.target.value)}
-                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#534AB7]"
-                />
-                <span className="absolute left-3 rtl:left-3 rtl:right-auto top-2.5 text-xs text-slate-400 font-bold">π</span>
+            {/* Balances summary */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+              <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#1C1B33] border border-slate-200 dark:border-slate-700 space-y-0.5">
+                <span className="text-[10px] text-slate-400 block">{l('کل کارمزد دریافتی:', 'Total Revenue:', 'إجمالي العمولات:', '累计平台费：')}</span>
+                <strong className="font-mono text-sm font-black text-slate-900 dark:text-white">{Number(totalCommissionRevenue).toFixed(4)} π</strong>
+              </div>
+              <div className="p-3 rounded-lg bg-slate-50 dark:bg-[#1C1B33] border border-slate-200 dark:border-slate-700 space-y-0.5">
+                <span className="text-[10px] text-slate-400 block">{l('مجموع تسویه‌شده پیشین:', 'Total Payouts Done:', 'إجمالي المسحوب:', '累计已提现：')}</span>
+                <strong className="font-mono text-sm font-black text-[#534AB7] dark:text-[#AFA9EC]">{Number(adminOverview?.totalPayouts || 0).toFixed(4)} π</strong>
+              </div>
+              <div className="p-3 rounded-lg bg-emerald-50 dark:bg-[#0B382C]/60 border border-emerald-200 dark:border-emerald-800 space-y-0.5">
+                <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold block">{l('موجودی قابل برداشت:', 'Available to Withdraw:', 'الرصيد المتاح للسحب:', '可提现余额：')}</span>
+                <strong className="font-mono text-sm font-black text-[#0F6E56] dark:text-[#48D2A8]">{Number(availableTreasuryBalance).toFixed(4)} π</strong>
               </div>
             </div>
+
+            {payoutSuccessMsg && (
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-[#0F6E56] dark:text-[#48D2A8] text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{payoutSuccessMsg}</span>
+              </div>
+            )}
+
+            {payoutErrorMsg && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-300 text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{payoutErrorMsg}</span>
+              </div>
+            )}
+
+            {/* Payout Form */}
+            <form onSubmit={handleRequestPayout} className="space-y-3 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    {l('مبلغ برداشت و تسویه به حساب پای (π):', 'Withdrawal Amount (π):', 'مبلغ السحب (π):', '提现金额 (π)：')}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0.0001"
+                      max={availableTreasuryBalance > 0 ? availableTreasuryBalance : undefined}
+                      placeholder={availableTreasuryBalance > 0 ? `مثلاً ${availableTreasuryBalance.toFixed(4)}` : '0.0000'}
+                      value={payoutAmount}
+                      onChange={(e) => setPayoutAmount(e.target.value)}
+                      className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#0F6E56]"
+                    />
+                    {availableTreasuryBalance > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPayoutAmount(String(availableTreasuryBalance))}
+                        className="absolute left-2 rtl:left-2 rtl:right-auto top-2 px-2 py-0.5 rounded bg-[#E1F5EE] dark:bg-[#0B382C] text-[#0F6E56] dark:text-[#48D2A8] text-[10px] font-bold cursor-pointer hover:opacity-80 transition"
+                      >
+                        {l('حداکثر', 'Max', 'الكل', '全部')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    {l('عنوان تراکنش (اختیاری):', 'Memo (Optional):', 'ملاحظة (اختياري):', '备注（可选）：')}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Rentora Treasury Payout"
+                    value={payoutMemo}
+                    onChange={(e) => setPayoutMemo(e.target.value)}
+                    className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#0F6E56]"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmittingPayout || availableTreasuryBalance <= 0}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#0F6E56] hover:bg-[#0B5441] text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50 transition"
+              >
+                {isSubmittingPayout ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{l('در حال صدور تراکنش واریز به کیف پول پای...', 'Processing Pi A2U payout...', 'جارٍ التحويل...', '正在向 Pi 钱包转账...')}</span>
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="w-4 h-4 text-emerald-300" />
+                    <span>{l(`واریز به کیف پول پای (@${currentUser?.username || 'admin'})`, `Withdraw to Pi Wallet (@${currentUser?.username || 'admin'})`, `تحويل إلى محفظة باي (@${currentUser?.username || 'admin'})`, `立即提现到 Pi 钱包 (@${currentUser?.username || 'admin'})`)}</span>
+                  </>
+                )}
+              </button>
+            </form>
           </div>
 
-          <button
-            type="submit"
-            className="btn-primary px-4 py-2 text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span>{t('adminSaveBtn')}</span>
-          </button>
-        </form>
+          {/* Platform Fee Percentage & Floor Config Form */}
+          <form onSubmit={handleSaveCommission} className="p-4 sm:p-5 rounded-xl rentora-card space-y-4">
+            <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+              <Percent className="w-4 h-4 text-[#534AB7]" />
+              <span>{t('adminCommissionTitle')}</span>
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  {t('adminPlatformFeeLabel')}
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="50"
+                    value={commissionPercent}
+                    onChange={(e) => setCommissionPercent(e.target.value)}
+                    className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#534AB7]"
+                  />
+                  <span className="absolute left-3 rtl:left-3 rtl:right-auto top-2.5 text-xs text-slate-400 font-bold">%</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  {t('adminMinFeeLabel')}
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.0001"
+                    min="0.0001"
+                    value={minFeeFloor}
+                    onChange={(e) => setMinFeeFloor(e.target.value)}
+                    className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#534AB7]"
+                  />
+                  <span className="absolute left-3 rtl:left-3 rtl:right-auto top-2.5 text-xs text-slate-400 font-bold">π</span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="btn-primary px-4 py-2 text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{t('adminSaveBtn')}</span>
+            </button>
+          </form>
+        </div>
       )}
 
       {/* TAB 2: Database & Backend Diagnostic */}

@@ -343,14 +343,96 @@ async function adminRoute(request, env, path) {
     return json({ success: true, users: (rows.results || []).map((row) => userView(row, env)) }, 200, request, env);
   }
   if (path === '/api/admin/overview') {
-    const [usersCount, listingsCount, rentalsCount, transactionsCount, revRow] = await Promise.all([
+    const [usersCount, listingsCount, rentalsCount, transactionsCount, revRow, payoutRow] = await Promise.all([
       env.RENTORA_DB.prepare('SELECT COUNT(*) AS c FROM users').first(),
       env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM listings WHERE status != 'deleted'").first(),
       env.RENTORA_DB.prepare('SELECT COUNT(*) AS c FROM rentals').first(),
-      env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM transactions WHERE status='completed'").first(),
-      env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed'").first()
+      env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)").first(),
+      env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)").first(),
+      env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'").first()
     ]);
-    return json({ success: true, overview: { totalUsers: Number(usersCount?.c || 0), totalListings: Number(listingsCount?.c || 0), totalRentals: Number(rentalsCount?.c || 0), totalTransactions: Number(transactionsCount?.c || 0), totalPlatformRevenue: Number(revRow?.total || 0), openReports: 0 } }, 200, request, env);
+    const totalRev = Number(revRow?.total || 0);
+    const totalPayouts = Number(payoutRow?.total || 0);
+    const availableBalance = Math.max(0, totalRev - totalPayouts);
+    return json({
+      success: true,
+      overview: {
+        totalUsers: Number(usersCount?.c || 0),
+        totalListings: Number(listingsCount?.c || 0),
+        totalRentals: Number(rentalsCount?.c || 0),
+        totalTransactions: Number(transactionsCount?.c || 0),
+        totalPlatformRevenue: totalRev,
+        totalPayouts,
+        availableBalance,
+        adminRecipient: user.username,
+        openReports: 0
+      }
+    }, 200, request, env);
+  }
+  if (path === '/api/admin/payout' && request.method === 'POST') {
+    const body = await readJson(request);
+    const amount = Math.max(0.0001, Number(body?.amount || 0));
+    if (!amount || isNaN(amount)) return json({ error: 'مبلغ تسویه نامعتبر است.' }, 400, request, env);
+
+    try {
+      const paymentPayload = {
+        amount: Number(amount.toFixed(4)),
+        memo: String(body?.memo || `Rentora Treasury Payout to @${user.username}`).slice(0, 120),
+        metadata: {
+          type: 'admin_treasury_payout',
+          adminUid: user.pi_uid,
+          adminUsername: user.username,
+          requestedAt: now()
+        },
+        uid: user.pi_uid
+      };
+
+      const piRes = await piFetch(env, '/payments', {
+        method: 'POST',
+        body: JSON.stringify({ payment: paymentPayload })
+      });
+      const created = await piRes.json().catch(() => ({}));
+
+      if (!piRes.ok && !created?.identifier) {
+        return json({
+          error: piErrorMessage(created, 'ایجاد تراکنش واریز به کاربر در شبکه پای رد شد.'),
+          details: created
+        }, 502, request, env);
+      }
+
+      const paymentId = created.identifier || created.id;
+      let approvedData = null;
+      if (paymentId) {
+        const appRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, {
+          method: 'POST',
+          body: '{}'
+        });
+        approvedData = await appRes.json().catch(() => ({}));
+      }
+
+      await env.RENTORA_DB.prepare(
+        "INSERT INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, 'admin_payout', 'completed', ?7)"
+      ).bind(
+        `tx_${crypto.randomUUID()}`,
+        `payout_${paymentId || crypto.randomUUID()}`,
+        paymentId || `a2u_${crypto.randomUUID()}`,
+        created?.transaction?.txid || approvedData?.transaction?.txid || `txid_a2u_${Date.now()}`,
+        user.id,
+        amount,
+        now()
+      ).run();
+
+      return json({
+        success: true,
+        paymentId,
+        amount,
+        recipient: user.username,
+        message: `مبلغ ${amount} π با موفقیت به حساب پای @${user.username} واریز گردید.`
+      }, 200, request, env);
+    } catch (err) {
+      console.error('Payout error', err);
+      return json({ error: err.message || 'خطا در اجرای تسویه حساب' }, 500, request, env);
+    }
   }
   return json({ error: 'Not found' }, 404, request, env);
 }
@@ -414,7 +496,7 @@ export default {
         const isAdmin = adminAllowed(user.pi_uid, env) || adminAllowed(user.username, env);
         return json({ authenticated: true, user: { ...userView(user, env), isAdmin }, isAdmin }, 200, request, env);
       }
-      if (request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users')) return await adminRoute(request, env, path);
+      if ((request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users')) || (request.method === 'POST' && path === '/api/admin/payout')) return await adminRoute(request, env, path);
       return legacyWorker.fetch(request, env, ctx);
     } catch (err) {
       console.error('Gateway error', err);
