@@ -1,13 +1,16 @@
 import { getApiBaseUrl } from './apiConfig';
 
 class PiNetworkService {
-  constructor() { this.isInitialized = false; this.isSandbox = true; }
+  constructor() { this.isInitialized = false; this.isSandbox = false; }
   hasPiSdk() { return typeof window !== 'undefined' && !!window.Pi && typeof window.Pi.authenticate === 'function'; }
-  setSandboxMode() { this.isSandbox = true; this.isInitialized = false; return this.init(); }
+  setSandboxMode() { this.isSandbox = false; this.isInitialized = false; return this.init(); }
   async init() {
-    this.isSandbox = true;
+    // Rentora is a Pi Testnet app, not a Pi Sandbox app. The Pi SDK's sandbox
+    // mode targets sandbox.minepi.com and must not be mixed with Testnet server
+    // payments. The Developer Portal app network remains the source of truth.
+    this.isSandbox = false;
     if (!this.hasPiSdk() || typeof window.Pi.init !== 'function') return false;
-    try { window.Pi.init({ version: '2.0', sandbox: true }); this.isInitialized = true; return true; }
+    try { window.Pi.init({ version: '2.0', sandbox: false }); this.isInitialized = true; return true; }
     catch (_) { this.isInitialized = false; throw new Error('راه‌اندازی Pi SDK ناموفق بود.'); }
   }
   async authenticate(customIncompleteHandler = null) {
@@ -35,14 +38,14 @@ class PiNetworkService {
     const accessToken = authResult?.accessToken;
     const sdkUser = authResult?.user;
     if (!accessToken || !sdkUser?.uid || !sdkUser?.username) throw new Error('اطلاعات معتبر از Pi Browser دریافت نشد.');
-    const response = await fetch(`${apiBase}/api/auth/pi-login`, { 
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify({ 
-        accessToken, 
+    const response = await fetch(`${apiBase}/api/auth/pi-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        accessToken,
         user: sdkUser,
-        kycStatus: (sdkUser?.kyc_status === true || sdkUser?.kyc_status === 'verified' || sdkUser?.is_kyc === true) ? 'verified' : undefined 
-      }) 
+        kycStatus: (sdkUser?.kyc_status === true || sdkUser?.kyc_status === 'verified' || sdkUser?.is_kyc === true) ? 'verified' : undefined
+      })
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data?.sessionToken || !data?.user?.uid) throw new Error(data?.error || 'احراز هویت Pi در سرور رد شد.');
