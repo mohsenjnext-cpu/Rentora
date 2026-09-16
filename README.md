@@ -4,4 +4,4 @@ Rentora is a peer-to-peer rental marketplace built for the Pi Network ecosystem.
 
 > **Important:** Testnet deployment is the target. Mainnet/production readiness is not claimed until the real Cloudflare bindings, Pi credentials, migrations, and end-to-end payment flow have been verified.
 
-<!-- repaired deploy trigger -->
+<!-- simplified repair trigger -->
