@@ -1,5 +1,11 @@
--- Rentora authoritative Cloudflare D1 schema
+-- Rentora authoritative Cloudflare D1 bootstrap schema
 -- Pi Testnet marketplace. Prices, bookings and payment intents are server-owned.
+--
+-- IMPORTANT:
+-- This file must be safe to execute against an existing D1 database.
+-- Schema evolution belongs in db/migrations/*.sql. In particular,
+-- rentals.owner_user_id is added by migration 0009, so this bootstrap
+-- schema must not reference that column before the migration runs.
 
 PRAGMA foreign_keys = ON;
 
@@ -36,7 +42,6 @@ CREATE TABLE IF NOT EXISTS rentals (
   id TEXT PRIMARY KEY,
   listing_id TEXT NOT NULL REFERENCES listings(id),
   renter_user_id TEXT NOT NULL REFERENCES users(id),
-  owner_user_id TEXT REFERENCES users(id),
   start_date TEXT NOT NULL,
   end_date TEXT NOT NULL,
   rental_amount REAL NOT NULL CHECK (rental_amount >= 0),
@@ -141,7 +146,6 @@ CREATE TABLE IF NOT EXISTS listing_contacts (
 CREATE INDEX IF NOT EXISTS idx_listings_owner ON listings(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_listings_status ON listings(status);
 CREATE INDEX IF NOT EXISTS idx_rentals_renter ON rentals(renter_user_id);
-CREATE INDEX IF NOT EXISTS idx_rentals_owner ON rentals(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_rentals_listing ON rentals(listing_id);
 CREATE INDEX IF NOT EXISTS idx_rentals_listing_dates_status ON rentals(listing_id, start_date, end_date, status);
 CREATE INDEX IF NOT EXISTS idx_payment_intents_user ON payment_intents(user_id);
@@ -157,24 +161,6 @@ CREATE INDEX IF NOT EXISTS idx_reviews_rental ON reviews(rental_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_listing ON reviews(listing_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_reviewer ON reviews(reviewer_user_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_reviewee ON reviews(reviewee_user_id);
-
-CREATE TRIGGER IF NOT EXISTS rentals_owner_reference_insert
-AFTER INSERT ON rentals
-FOR EACH ROW
-BEGIN
-  UPDATE rentals
-  SET owner_user_id = (SELECT l.owner_user_id FROM listings l WHERE l.id = NEW.listing_id)
-  WHERE id = NEW.id;
-END;
-
-CREATE TRIGGER IF NOT EXISTS rentals_owner_reference_listing_update
-AFTER UPDATE OF listing_id ON rentals
-FOR EACH ROW
-BEGIN
-  UPDATE rentals
-  SET owner_user_id = (SELECT l.owner_user_id FROM listings l WHERE l.id = NEW.listing_id)
-  WHERE id = NEW.id;
-END;
 
 CREATE TRIGGER IF NOT EXISTS rentals_overlap_guard_insert
 BEFORE INSERT ON rentals
