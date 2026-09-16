@@ -413,57 +413,99 @@ async function adminRoute(request, env, path) {
     }, 200, request, env);
   }
   if (path === '/api/admin/payout' && request.method === 'POST') {
+    const [revRow, payoutRow] = await Promise.all([
+      env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)").first(),
+      env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'").first()
+    ]);
+    const totalRev = Number(revRow?.total || 0);
+    const totalPayouts = Number(payoutRow?.total || 0);
+    const availableBalance = Math.max(0, totalRev - totalPayouts);
+
     const body = await readJson(request);
-    const amount = Math.max(0.0001, Number(body?.amount || 0));
-    if (!amount || isNaN(amount)) return json({ error: 'مبلغ تسویه نامعتبر است.' }, 400, request, env);
-    const targetWallet = String(body?.walletAddress || '').trim();
+    let requestedAmount = Number(body?.amount || 0);
+    if (!requestedAmount || isNaN(requestedAmount) || requestedAmount <= 0) {
+      requestedAmount = availableBalance;
+    }
+    const amount = Number(requestedAmount.toFixed(4));
+    if (amount <= 0 || amount > availableBalance) {
+      return json({ error: `مبلغ درخواستی (${amount} π) از موجودی واقعی کارمزدها (${availableBalance.toFixed(4)} π) بیشتر است.` }, 400, request, env);
+    }
 
     try {
       await autoResolveIncompleteServerPayments(env, user);
 
       const paymentPayload = {
-        amount: Number(amount.toFixed(4)),
-        memo: String(body?.memo || `Rentora Treasury Payout to ${targetWallet ? targetWallet.slice(0, 10) + '...' : '@' + user.username}`).slice(0, 120),
+        amount,
+        memo: String(body?.memo || `Rentora Treasury Payout to @${user.username}`).slice(0, 120),
         metadata: {
           type: 'admin_treasury_payout',
           adminUid: user.pi_uid,
           adminUsername: user.username,
-          targetWallet: targetWallet || undefined,
           requestedAt: now()
         },
         uid: user.pi_uid
       };
 
-      let paymentId = `payout_${crypto.randomUUID()}`;
-      let resolvedTxid = `tx_${crypto.randomUUID()}`;
+      let piRes = await piFetch(env, '/payments', {
+        method: 'POST',
+        body: JSON.stringify({ payment: paymentPayload })
+      });
+      let created = await piRes.json().catch(() => ({}));
 
-      try {
-        let piRes = await piFetch(env, '/payments', {
+      if (!piRes.ok && (created?.error_message || '').includes('complete the ongoing payment')) {
+        await autoResolveIncompleteServerPayments(env, user);
+        piRes = await piFetch(env, '/payments', {
           method: 'POST',
           body: JSON.stringify({ payment: paymentPayload })
         });
-        let created = await piRes.json().catch(() => ({}));
+        created = await piRes.json().catch(() => ({}));
+      }
 
-        if (!piRes.ok && (created?.error_message || '').includes('complete the ongoing payment')) {
-          await autoResolveIncompleteServerPayments(env, user);
-          piRes = await piFetch(env, '/payments', {
-            method: 'POST',
-            body: JSON.stringify({ payment: paymentPayload })
-          });
-          created = await piRes.json().catch(() => ({}));
-        }
+      if (!piRes.ok || !created?.identifier) {
+        const errMsg = piErrorMessage(created, 'ایجاد تراکنش واریز به کاربر در شبکه پای رد شد.');
+        return json({ error: errMsg, details: created }, 502, request, env);
+      }
 
-        if (created?.identifier || created?.id) {
-          paymentId = created.identifier || created.id;
-          const appRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, {
-            method: 'POST',
-            body: '{}'
-          });
-          const approvedData = await appRes.json().catch(() => ({}));
-          resolvedTxid = created?.transaction?.txid || approvedData?.transaction?.txid || `txid_a2u_${Date.now()}`;
+      const paymentId = created.identifier || created.id;
+
+      const appRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, {
+        method: 'POST',
+        body: '{}'
+      });
+      const approved = await appRes.json().catch(() => ({}));
+      if (!appRes.ok && !approved?.status?.developer_approved) {
+        const errMsg = piErrorMessage(approved, 'تایید تراکنش واریز در سرور پای ناموفق بود.');
+        return json({ error: errMsg, details: approved, paymentId }, 502, request, env);
+      }
+
+      let paymentInfo = approved;
+      if (!paymentInfo?.transaction?.txid) {
+        const getRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
+        if (getRes.ok) {
+          paymentInfo = await getRes.json().catch(() => ({}));
         }
-      } catch (piErr) {
-        console.warn('Pi A2U API note:', piErr);
+      }
+
+      const txid = paymentInfo?.transaction?.txid;
+      if (!txid) {
+        return json({
+          success: true,
+          pending: true,
+          paymentId,
+          amount,
+          recipient: user.username,
+          message: `تراکنش واریز مبلغ ${amount} π در شبکه پای تایید شد و پس از اجرای بلاک‌چین نهایی می‌گردد.`
+        }, 202, request, env);
+      }
+
+      const compRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ txid })
+      });
+      const compData = await compRes.json().catch(() => ({}));
+      if (!compRes.ok && !compData?.status?.developer_completed) {
+        const errMsg = piErrorMessage(compData, 'تکمیل نهایی تراکنش در شبکه پای ناموفق بود.');
+        return json({ error: errMsg, details: compData, paymentId, txid }, 502, request, env);
       }
 
       await env.RENTORA_DB.prepare(
@@ -472,7 +514,7 @@ async function adminRoute(request, env, path) {
         `tx_${crypto.randomUUID()}`,
         null,
         paymentId,
-        resolvedTxid,
+        txid,
         user.id,
         amount,
         now()
@@ -481,9 +523,10 @@ async function adminRoute(request, env, path) {
       return json({
         success: true,
         paymentId,
+        txid,
         amount,
-        recipient: targetWallet || user.username,
-        message: `مبلغ ${amount} π با موفقیت برای کیف پول ${targetWallet ? targetWallet.slice(0, 10) + '...' : '@' + user.username} ثبت و تسویه گردید.`
+        recipient: user.username,
+        message: `مبلغ ${amount} π با موفقیت به حساب پای @${user.username} واریز گردید.`
       }, 200, request, env);
     } catch (err) {
       console.error('Payout error', err);

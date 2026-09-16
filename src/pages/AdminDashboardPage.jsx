@@ -74,12 +74,9 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
   // Treasury Payout state (A2U)
   const [payoutAmount, setPayoutAmount] = useState('');
   const [payoutMemo, setPayoutMemo] = useState('');
-  const [adminWalletAddress, setAdminWalletAddress] = useState(() => {
-    try { return localStorage.getItem('rentora_admin_wallet_addr') || ''; }
-    catch (_) { return ''; }
-  });
   const [isSubmittingPayout, setIsSubmittingPayout] = useState(false);
   const [payoutSuccessMsg, setPayoutSuccessMsg] = useState('');
+  const [payoutTxid, setPayoutTxid] = useState('');
   const [payoutErrorMsg, setPayoutErrorMsg] = useState('');
   const [needsWalletAuth, setNeedsWalletAuth] = useState(false);
 
@@ -187,6 +184,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     e.preventDefault();
     setPayoutErrorMsg('');
     setPayoutSuccessMsg('');
+    setPayoutTxid('');
 
     const amount = Number(payoutAmount);
     if (!amount || isNaN(amount) || amount <= 0) {
@@ -201,22 +199,20 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
 
     setIsSubmittingPayout(true);
     try {
-      if (adminWalletAddress) {
-        try { localStorage.setItem('rentora_admin_wallet_addr', adminWalletAddress.trim()); } catch (_) {}
-      }
-      const result = await cloudSyncService.requestAdminPayout(amount, payoutMemo, adminWalletAddress.trim());
+      const result = await cloudSyncService.requestAdminPayout(amount, payoutMemo);
       setPayoutSuccessMsg(result.message || l(
-        `مبلغ ${amount} π با موفقیت برای کیف پول مقصد ثبت و تسویه شد.`,
-        `Successfully settled ${amount} π to destination wallet.`,
-        `تم تحويل ${amount} π بنجاح إلى المحفظة.`,
-        `已成功向目标钱包打款 ${amount} π。`
+        `مبلغ ${amount} π با موفقیت به حساب پای @${currentUser?.username || 'admin'} واریز شد.`,
+        `Successfully transferred ${amount} π to your Pi account.`,
+        `تم تحويل ${amount} π بنجاح إلى حسابك.`,
+        `已成功将 ${amount} π 提现至您的 Pi 账号。`
       ));
+      if (result?.txid) setPayoutTxid(result.txid);
       setPayoutAmount('');
       setPayoutMemo('');
       setNeedsWalletAuth(false);
       await loadAdminServerData();
       await refreshApp();
-      setTimeout(() => setPayoutSuccessMsg(''), 7000);
+      setTimeout(() => { setPayoutSuccessMsg(''); setPayoutTxid(''); }, 10000);
     } catch (err) {
       const msg = String(err?.message || '');
       if (msg.includes('wallet_address') || msg.includes('scope') || msg.includes('public key')) {
@@ -470,9 +466,17 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
             </div>
 
             {payoutSuccessMsg && (
-              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-[#0F6E56] dark:text-[#48D2A8] text-xs font-bold flex items-center gap-2 animate-fadeIn">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>{payoutSuccessMsg}</span>
+              <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-[#0F6E56] dark:text-[#48D2A8] text-xs font-bold space-y-1.5 animate-fadeIn">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{payoutSuccessMsg}</span>
+                </div>
+                {payoutTxid && (
+                  <div className="text-[11px] font-mono opacity-90 break-all bg-emerald-100/60 dark:bg-emerald-900/40 p-1.5 rounded-lg">
+                    <span className="font-sans font-normal text-slate-600 dark:text-slate-300">TXID: </span>
+                    {payoutTxid}
+                  </div>
+                )}
               </div>
             )}
 
@@ -488,7 +492,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div className="sm:col-span-2">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    {l('مبلغ برداشت و تسویه (π):', 'Withdrawal Amount (π):', 'مبلغ السحب (π):', '提现金额 (π)：')}
+                    {l('مبلغ برداشت کارمزد (π):', 'Withdrawal Amount (π):', 'مبلغ السحب (π):', '提现金额 (π)：')}
                   </label>
                   <div className="relative">
                     <input
@@ -525,23 +529,6 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                     className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#0F6E56]"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  {l('آدرس عمومی کیف پول پای ادمین (جهت واریز مستقیم):', 'Admin Personal Pi Wallet Address (Public Key):', 'عنوان المحفظة الشخصية للأدمن:', '管理员个人 Pi 钱包地址（收款）：')}
-                </label>
-                <input
-                  type="text"
-                  placeholder={l('آدرس عمومی کیف پول (مثلاً G...)', 'Public Key (e.g. G...)', 'عنوان المحفظة العام (مثال: G...)', '钱包公钥地址（如 G...）')}
-                  value={adminWalletAddress}
-                  onChange={(e) => setAdminWalletAddress(e.target.value)}
-                  dir="ltr"
-                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#0F6E56]"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  {l('مبالغ کارمزد پلتفرم از کیف پول اپلیکیشن به این آدرس کیف پول تسویه و ثبت می‌شود.', 'Platform fee earnings will be settled and credited to this wallet address.', 'سيتم تسجيل وتسوية العمولات إلى هذه المحفظة.', '平台收益将从 App 金库结算至此钱包。')}
-                </p>
               </div>
 
               {needsWalletAuth ? (
@@ -582,12 +569,12 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                   {isSubmittingPayout ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>{l('در حال صدور تراکنش و تسویه...', 'Processing payout settlement...', 'جارٍ التحويل...', '正在处理结算...')}</span>
+                      <span>{l('در حال صدور تراکنش واریز به کیف پول پای...', 'Processing Pi A2U payout...', 'جارٍ التحويل...', '正在向 Pi 钱包转账...')}</span>
                     </>
                   ) : (
                     <>
                       <CreditCard className="w-4 h-4 text-emerald-300" />
-                      <span>{l('انتقال و تسویه به کیف پول مقصد', 'Transfer & Settle to Wallet', 'تحويل وتسوية للمحفظة', '转账并结算到指定钱包')}</span>
+                      <span>{l(`برداشت کارمزد به حساب پای (@${currentUser?.username || 'admin'})`, `Withdraw Commission to Pi Account (@${currentUser?.username || 'admin'})`, `سحب الأرباح إلى حساب باي (@${currentUser?.username || 'admin'})`, `提现平台收益至 Pi 账号 (@${currentUser?.username || 'admin'})`)}</span>
                     </>
                   )}
                 </button>

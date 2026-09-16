@@ -425,10 +425,23 @@ export default {
       }
       if (method === 'POST' && path === '/api/admin/payout') {
         const { user } = await requireAdmin(request, env);
+        const [revRow, payoutRow] = await Promise.all([
+          env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)").first(),
+          env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'").first()
+        ]);
+        const totalRev = Number(revRow?.total || 0);
+        const totalPayouts = Number(payoutRow?.total || 0);
+        const availableBalance = Math.max(0, totalRev - totalPayouts);
+
         const body = await readJson(request);
-        const amount = Math.max(0.0001, Number(body?.amount || 0));
-        if (!amount || isNaN(amount)) return errorResponse('مبلغ تسویه نامعتبر است.', 400, env, undefined, origin);
-        const targetWallet = String(body?.walletAddress || '').trim();
+        let requestedAmount = Number(body?.amount || 0);
+        if (!requestedAmount || isNaN(requestedAmount) || requestedAmount <= 0) {
+          requestedAmount = availableBalance;
+        }
+        const amount = Number(requestedAmount.toFixed(4));
+        if (amount <= 0 || amount > availableBalance) {
+          return errorResponse(`مبلغ درخواستی (${amount} π) از موجودی واقعی کارمزدها (${availableBalance.toFixed(4)} π) بیشتر است.`, 400, env, undefined, origin);
+        }
 
         try {
           try {
@@ -443,7 +456,7 @@ export default {
                 if (p?.status?.transaction_verified && txid) {
                   await piFetch(env, `/payments/${encodeURIComponent(pid)}/complete`, { method: 'POST', body: JSON.stringify({ txid }) }).catch(() => {});
                   await env.RENTORA_DB.prepare(
-                    "INSERT INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, 'admin_payout', 'completed', ?7) ON CONFLICT(pi_payment_id) DO NOTHING"
+                    "INSERT INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, 'admin_payout', 'completed', ?7) ON CONFLICT(pi_payment_id) DO UPDATE SET pi_txid=excluded.pi_txid, status='completed'"
                   ).bind(`tx_${crypto.randomUUID()}`, null, pid, txid, user.id, Number(p?.amount || 0), now()).run().catch(() => {});
                 } else {
                   await piFetch(env, `/payments/${encodeURIComponent(pid)}/cancel`, { method: 'POST', body: '{}' }).catch(() => {});
@@ -453,63 +466,92 @@ export default {
           } catch (_) {}
 
           const paymentPayload = {
-            amount: Number(amount.toFixed(4)),
-            memo: String(body?.memo || `Rentora Treasury Payout to ${targetWallet ? targetWallet.slice(0, 10) + '...' : '@' + user.username}`).slice(0, 120),
+            amount,
+            memo: String(body?.memo || `Rentora Treasury Payout to @${user.username}`).slice(0, 120),
             metadata: {
               type: 'admin_treasury_payout',
               adminUid: user.pi_uid,
               adminUsername: user.username,
-              targetWallet: targetWallet || undefined,
               requestedAt: now()
             },
             uid: user.pi_uid
           };
 
-          let paymentId = `payout_${crypto.randomUUID()}`;
-          let resolvedTxid = `tx_${crypto.randomUUID()}`;
+          let piRes = await piFetch(env, '/payments', {
+            method: 'POST',
+            body: JSON.stringify({ payment: paymentPayload })
+          });
+          let created = await piRes.json().catch(() => ({}));
 
-          try {
-            let piRes = await piFetch(env, '/payments', {
-              method: 'POST',
-              body: JSON.stringify({ payment: paymentPayload })
-            });
-            let created = await piRes.json().catch(() => ({}));
-
-            if (!piRes.ok && (created?.error_message || '').includes('complete the ongoing payment')) {
-              const incRes = await piFetch(env, '/payments/incomplete_server_payments');
-              if (incRes.ok) {
-                const incData = await incRes.json().catch(() => ({}));
-                const incompleteList = incData?.incomplete_server_payments || (Array.isArray(incData) ? incData : []);
-                for (const p of incompleteList) {
-                  const pid = p?.identifier || p?.id;
-                  if (pid) {
-                    const txid = p?.transaction?.txid;
-                    if (p?.status?.transaction_verified && txid) {
-                      await piFetch(env, `/payments/${encodeURIComponent(pid)}/complete`, { method: 'POST', body: JSON.stringify({ txid }) }).catch(() => {});
-                    } else {
-                      await piFetch(env, `/payments/${encodeURIComponent(pid)}/cancel`, { method: 'POST', body: '{}' }).catch(() => {});
-                    }
+          if (!piRes.ok && (created?.error_message || '').includes('complete the ongoing payment')) {
+            const incRes = await piFetch(env, '/payments/incomplete_server_payments');
+            if (incRes.ok) {
+              const incData = await incRes.json().catch(() => ({}));
+              const incompleteList = incData?.incomplete_server_payments || (Array.isArray(incData) ? incData : []);
+              for (const p of incompleteList) {
+                const pid = p?.identifier || p?.id;
+                if (pid) {
+                  const txid = p?.transaction?.txid;
+                  if (p?.status?.transaction_verified && txid) {
+                    await piFetch(env, `/payments/${encodeURIComponent(pid)}/complete`, { method: 'POST', body: JSON.stringify({ txid }) }).catch(() => {});
+                  } else {
+                    await piFetch(env, `/payments/${encodeURIComponent(pid)}/cancel`, { method: 'POST', body: '{}' }).catch(() => {});
                   }
                 }
               }
-              piRes = await piFetch(env, '/payments', {
-                method: 'POST',
-                body: JSON.stringify({ payment: paymentPayload })
-              });
-              created = await piRes.json().catch(() => ({}));
             }
+            piRes = await piFetch(env, '/payments', {
+              method: 'POST',
+              body: JSON.stringify({ payment: paymentPayload })
+            });
+            created = await piRes.json().catch(() => ({}));
+          }
 
-            if (created?.identifier || created?.id) {
-              paymentId = created.identifier || created.id;
-              const appRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, {
-                method: 'POST',
-                body: '{}'
-              });
-              const approvedData = await appRes.json().catch(() => ({}));
-              resolvedTxid = created?.transaction?.txid || approvedData?.transaction?.txid || `txid_a2u_${Date.now()}`;
+          if (!piRes.ok || !created?.identifier) {
+            const errMsg = piErrorMessage(created, 'ایجاد تراکنش واریز به کاربر در شبکه پای رد شد.');
+            return errorResponse(errMsg, 502, env, created, origin);
+          }
+
+          const paymentId = created.identifier || created.id;
+
+          const appRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, {
+            method: 'POST',
+            body: '{}'
+          });
+          const approved = await appRes.json().catch(() => ({}));
+          if (!appRes.ok && !approved?.status?.developer_approved) {
+            const errMsg = piErrorMessage(approved, 'تایید تراکنش واریز در سرور پای ناموفق بود.');
+            return errorResponse(errMsg, 502, env, approved, origin);
+          }
+
+          let paymentInfo = approved;
+          if (!paymentInfo?.transaction?.txid) {
+            const getRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
+            if (getRes.ok) {
+              paymentInfo = await getRes.json().catch(() => ({}));
             }
-          } catch (piErr) {
-            console.warn('Pi A2U API note:', piErr);
+          }
+
+          const txid = paymentInfo?.transaction?.txid;
+          if (!txid) {
+            return jsonResponse({
+              success: true,
+              pending: true,
+              paymentId,
+              amount,
+              recipient: user.username,
+              message: `تراکنش واریز مبلغ ${amount} π در شبکه پای تایید شد و پس از اجرای بلاک‌چین نهایی می‌گردد.`
+            }, 202, env, origin);
+          }
+
+          const compRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, {
+            method: 'POST',
+            body: JSON.stringify({ txid })
+          });
+          const compData = await compRes.json().catch(() => ({}));
+          if (!compRes.ok && !compData?.status?.developer_completed) {
+            const errMsg = piErrorMessage(compData, 'تکمیل نهایی تراکنش در شبکه پای ناموفق بود.');
+            return errorResponse(errMsg, 502, env, compData, origin);
           }
 
           await env.RENTORA_DB.prepare(
@@ -518,7 +560,7 @@ export default {
             `tx_${crypto.randomUUID()}`,
             null,
             paymentId,
-            resolvedTxid,
+            txid,
             user.id,
             amount,
             now()
@@ -527,9 +569,10 @@ export default {
           return jsonResponse({
             success: true,
             paymentId,
+            txid,
             amount,
-            recipient: targetWallet || user.username,
-            message: `مبلغ ${amount} π با موفقیت برای کیف پول ${targetWallet ? targetWallet.slice(0, 10) + '...' : '@' + user.username} ثبت و تسویه گردید.`
+            recipient: user.username,
+            message: `مبلغ ${amount} π با موفقیت به حساب پای @${user.username} واریز گردید.`
           }, 200, env, origin);
         } catch (err) {
           console.error('Payout error', err);
