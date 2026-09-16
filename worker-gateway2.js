@@ -91,7 +91,12 @@ async function approvePayment(request, env) {
     const approved = await approvedResponse.json().catch(() => ({}));
     if (!approvedResponse.ok) return json({ error: piErrorMessage(approved, 'Pi payment approval failed'), piStatus: approvedResponse.status }, 502, request, env);
   }
-  await env.RENTORA_DB.prepare("UPDATE payment_intents SET pi_payment_id=?1,status='approved',updated_at=?2 WHERE id=?3 AND status IN ('created','approved')").bind(body.paymentId, now(), intent.id).run();
+  try {
+    await env.RENTORA_DB.prepare("UPDATE payment_intents SET pi_payment_id=?1,status='approved',updated_at=?2 WHERE id=?3 AND status IN ('created','approved')").bind(body.paymentId, now(), intent.id).run();
+  } catch (error) {
+    console.error('Rentora payment approval persistence error', error);
+    return json({ error: 'Payment approval reached Pi but could not be persisted in Rentora.', stage: 'd1_approve_persist' }, 503, request, env);
+  }
   return json({ approved: true, paymentId: body.paymentId }, 200, request, env);
 }
 async function completePayment(request, env) {
@@ -113,11 +118,16 @@ async function completePayment(request, env) {
     if (!completionResponse.ok || !completion?.status?.developer_completed) return json({ error: piErrorMessage(completion, 'Pi payment completion failed'), piStatus: completionResponse.status }, 502, request, env);
     validateTransactionTxid(completion, body.txid, true);
   }
-  await env.RENTORA_DB.batch([
-    env.RENTORA_DB.prepare("UPDATE payment_intents SET pi_payment_id=?1,pi_txid=?2,status='completed',updated_at=?3 WHERE id=?4 AND status IN ('approved','completed')").bind(body.paymentId, body.txid, now(), intent.id),
-    env.RENTORA_DB.prepare("UPDATE rentals SET payment_status='completed',status='confirmed',updated_at=?1 WHERE id=?2").bind(now(), intent.rental_id),
-    env.RENTORA_DB.prepare("INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)").bind(`tx_${crypto.randomUUID()}`, intent.id, body.paymentId, body.txid, user.id, intent.amount, now())
-  ]);
+  try {
+    await env.RENTORA_DB.batch([
+      env.RENTORA_DB.prepare("UPDATE payment_intents SET pi_payment_id=?1,pi_txid=?2,status='completed',updated_at=?3 WHERE id=?4 AND status IN ('approved','completed')").bind(body.paymentId, body.txid, now(), intent.id),
+      env.RENTORA_DB.prepare("UPDATE rentals SET payment_status='completed',status='confirmed',updated_at=?1 WHERE id=?2").bind(now(), intent.rental_id),
+      env.RENTORA_DB.prepare("INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)").bind(`tx_${crypto.randomUUID()}`, intent.id, body.paymentId, body.txid, user.id, intent.amount, now())
+    ]);
+  } catch (error) {
+    console.error('Rentora payment completion persistence error', error);
+    return json({ error: 'Pi payment completed but Rentora could not persist the confirmed rental.', stage: 'd1_complete_persist' }, 503, request, env);
+  }
   return json({ completed: true, paymentId: body.paymentId, txid: body.txid }, 200, request, env);
 }
 async function adminRoute(request, env, path) {
