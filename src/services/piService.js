@@ -1,18 +1,48 @@
 import { getApiBaseUrl } from './apiConfig';
 
 class PiNetworkService {
-  constructor() { this.isInitialized = false; this.isSandbox = false; }
-  hasPiSdk() { return typeof window !== 'undefined' && !!window.Pi && typeof window.Pi.authenticate === 'function'; }
-  setSandboxMode() { this.isSandbox = false; this.isInitialized = false; return this.init(); }
+  constructor() {
+    this.isInitialized = false;
+    this.isSandbox = false;
+    this.isSdkAuthenticated = false;
+  }
+
+  hasPiSdk() {
+    return typeof window !== 'undefined' && !!window.Pi && typeof window.Pi.authenticate === 'function';
+  }
+
+  setSandboxMode() {
+    this.isSandbox = false;
+    this.isInitialized = false;
+    return this.init();
+  }
+
   async init() {
     // Rentora is a Pi Testnet app, not a Pi Sandbox app. The Pi SDK's sandbox
     // mode targets sandbox.minepi.com and must not be mixed with Testnet server
     // payments. The Developer Portal app network remains the source of truth.
     this.isSandbox = false;
     if (!this.hasPiSdk() || typeof window.Pi.init !== 'function') return false;
-    try { window.Pi.init({ version: '2.0', sandbox: false }); this.isInitialized = true; return true; }
-    catch (_) { this.isInitialized = false; throw new Error('راه‌اندازی Pi SDK ناموفق بود.'); }
+    if (this.isInitialized) return true;
+    try {
+      window.Pi.init({ version: '2.0', sandbox: false });
+      this.isInitialized = true;
+      return true;
+    } catch (_) {
+      this.isInitialized = true;
+      return true;
+    }
   }
+
+  async ensureSdkAuthenticated(customIncompleteHandler = null) {
+    if (this.isSdkAuthenticated) return true;
+    if (!this.hasPiSdk()) {
+      throw new Error('NOT_IN_PI_BROWSER');
+    }
+    await this.authenticate(customIncompleteHandler);
+    return true;
+  }
+
   async authenticate(customIncompleteHandler = null) {
     if (!this.hasPiSdk()) throw new Error('NOT_IN_PI_BROWSER');
     await this.init();
@@ -31,13 +61,18 @@ class PiNetworkService {
         });
       } catch (_) {}
     });
+
     const authResult = await Promise.race([
       window.Pi.authenticate(['payments', 'username'], onIncompletePayment),
       new Promise((_, reject) => setTimeout(() => reject(new Error('پاسخی از Pi Browser دریافت نشد.')), 35000))
     ]);
+
     const accessToken = authResult?.accessToken;
     const sdkUser = authResult?.user;
     if (!accessToken || !sdkUser?.uid || !sdkUser?.username) throw new Error('اطلاعات معتبر از Pi Browser دریافت نشد.');
+
+    this.isSdkAuthenticated = true;
+
     const response = await fetch(`${apiBase}/api/auth/pi-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -51,11 +86,13 @@ class PiNetworkService {
     if (!response.ok || !data?.sessionToken || !data?.user?.uid) throw new Error(data?.error || 'احراز هویت Pi در سرور رد شد.');
     return { accessToken, uid: data.user.uid, username: data.user.username, sessionToken: data.sessionToken, isOfficialSdk: true, kycStatus: data.user.kycStatus || 'unknown', user: data.user };
   }
+
   getSessionHeaders() {
     const headers = { 'Content-Type': 'application/json' };
     try { const raw = localStorage.getItem('rentora_live_v1_session'); const session = raw ? JSON.parse(raw) : null; if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`; } catch (_) {}
     return headers;
   }
+
   async ensurePaymentIntent(paymentIntentId, rentalId) {
     if (!rentalId) throw new Error('شناسه رزرو برای ساخت Payment Intent لازم است.');
     const apiBase = getApiBaseUrl();
@@ -70,6 +107,7 @@ class PiNetworkService {
     if (paymentIntentId && intentId !== paymentIntentId) throw new Error('Payment Intent با رزرو جاری منطبق نیست.');
     return { id: intentId, amount: Number(data.amount), memo: String(data.memo) };
   }
+
   async approvePaymentOnServer(paymentId, paymentIntentId) {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
@@ -81,6 +119,7 @@ class PiNetworkService {
     }
     return data;
   }
+
   async completePaymentOnServer(paymentId, txid, paymentIntentId) {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
@@ -92,34 +131,79 @@ class PiNetworkService {
     }
     return data;
   }
+
   async createPayment({ paymentData, callbacks, paymentIntentId }) {
     await this.init();
     if (!this.hasPiSdk() || typeof window.Pi.createPayment !== 'function') throw new Error('پرداخت Pi فقط در Pi Browser رسمی امکان‌پذیر است.');
+
+    // Ensure Pi SDK in active window has authenticated with 'payments' scope
+    await this.ensureSdkAuthenticated();
+
     const serverIntent = await this.ensurePaymentIntent(paymentIntentId, paymentData?.metadata?.rentalId);
     const amount = serverIntent.amount;
     const memo = serverIntent.memo;
     const { onReadyForServerApproval, onReadyForServerCompletion, onCancel, onError } = callbacks || {};
-    return new Promise((resolve, reject) => {
-      let settled = false;
-      const fail = (error) => { if (settled) return; settled = true; reject(error instanceof Error ? error : new Error(String(error || 'پرداخت ناموفق بود.'))); };
-      try {
-        window.Pi.createPayment(
-          { amount, memo, metadata: { ...(paymentData?.metadata || {}), paymentIntentId: serverIntent.id } },
-          {
-            onReadyForServerApproval: async (paymentId) => { try { await this.approvePaymentOnServer(paymentId, serverIntent.id); await onReadyForServerApproval?.(paymentId); } catch (error) { fail(error); } },
-            onReadyForServerCompletion: async (paymentId, txid) => {
-              try {
-                const result = await this.completePaymentOnServer(paymentId, txid, serverIntent.id);
-                await onReadyForServerCompletion?.(paymentId, txid, result);
-                if (!settled) { settled = true; resolve({ paymentId, txid, status: 'completed', isNativePiSdk: true, serverResult: result }); }
-              } catch (error) { fail(error); }
-            },
-            onCancel: (paymentId) => { onCancel?.(paymentId); fail(new Error('پرداخت توسط شما لغو شد.')); },
-            onError: (error, payment) => { onError?.(error, payment); fail(new Error(error?.message || 'تراکنش Pi با خطا متوقف شد.')); }
-          }
-        );
-      } catch (error) { fail(error); }
-    });
+
+    const executeNativePayment = () => {
+      return new Promise((resolve, reject) => {
+        let settled = false;
+        const fail = (error) => {
+          if (settled) return;
+          settled = true;
+          reject(error instanceof Error ? error : new Error(String(error?.message || error || 'پرداخت ناموفق بود.')));
+        };
+
+        try {
+          window.Pi.createPayment(
+            { amount, memo, metadata: { ...(paymentData?.metadata || {}), paymentIntentId: serverIntent.id } },
+            {
+              onReadyForServerApproval: async (paymentId) => {
+                try {
+                  await this.approvePaymentOnServer(paymentId, serverIntent.id);
+                  await onReadyForServerApproval?.(paymentId);
+                } catch (error) {
+                  fail(error);
+                }
+              },
+              onReadyForServerCompletion: async (paymentId, txid) => {
+                try {
+                  const result = await this.completePaymentOnServer(paymentId, txid, serverIntent.id);
+                  await onReadyForServerCompletion?.(paymentId, txid, result);
+                  if (!settled) {
+                    settled = true;
+                    resolve({ paymentId, txid, status: 'completed', isNativePiSdk: true, serverResult: result });
+                  }
+                } catch (error) {
+                  fail(error);
+                }
+              },
+              onCancel: (paymentId) => {
+                onCancel?.(paymentId);
+                fail(new Error('پرداخت توسط شما لغو شد.'));
+              },
+              onError: (error, payment) => {
+                onError?.(error, payment);
+                fail(new Error(error?.message || 'تراکنش Pi با خطا متوقف شد.'));
+              }
+            }
+          );
+        } catch (error) {
+          fail(error);
+        }
+      });
+    };
+
+    try {
+      return await executeNativePayment();
+    } catch (err) {
+      const errMsg = String(err?.message || '').toLowerCase();
+      if (errMsg.includes('scope') || errMsg.includes('payment') || errMsg.includes('authenticate')) {
+        this.isSdkAuthenticated = false;
+        await this.authenticate();
+        return await executeNativePayment();
+      }
+      throw err;
+    }
   }
 }
 

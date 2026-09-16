@@ -167,3 +167,17 @@ test('Health: GET /api/health returns 200 and passes all readiness checks', asyn
   assert.equal(data.checks.databaseBound, true);
   assert.equal(data.checks.sessionStoreBound, true);
 });
+
+test('Pi SDK Configuration: index.html configures sandbox: false for Pi Testnet', async () => {
+  const fs = await import('node:fs/promises');
+  const indexHtml = await fs.readFile('index.html', 'utf-8');
+  assert.ok(!indexHtml.includes('sandbox: true'), 'index.html must not initialize Pi SDK with sandbox: true');
+  assert.ok(indexHtml.includes('sandbox: false'), 'index.html must initialize Pi SDK with sandbox: false');
+});
+
+test('Pi SDK Payment Scopes: piService ensures payments scope before createPayment', async () => {
+  const fs = await import('node:fs/promises');
+  const serviceCode = await fs.readFile('src/services/piService.js', 'utf-8');
+  assert.ok(serviceCode.includes("['payments', 'username']"), "piService must request ['payments', 'username'] scopes");
+  assert.ok(serviceCode.includes('ensureSdkAuthenticated'), 'piService must ensure SDK authentication before createPayment');
+});
