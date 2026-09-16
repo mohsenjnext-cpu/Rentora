@@ -74,13 +74,11 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     setAdminAuthError(false);
     try {
       const [overviewData, usersData] = await Promise.all([
-        cloudSyncService.fetchAdminOverview().catch(() => null),
-        cloudSyncService.fetchAdminUsers().catch(() => [])
+        cloudSyncService.fetchAdminOverview(),
+        cloudSyncService.fetchAdminUsers()
       ]);
-      if (overviewData) setAdminOverview(overviewData);
-      if (Array.isArray(usersData) && usersData.length > 0) {
-        setAdminUsers(usersData);
-      }
+      setAdminOverview(overviewData || null);
+      setAdminUsers(Array.isArray(usersData) ? usersData : []);
     } catch (err) {
       if (err?.status === 401 || err?.status === 403) {
         setAdminAuthError(true);
@@ -97,34 +95,9 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
   }, [isAdmin, activeTab]);
 
   const allRealUsers = useMemo(() => {
-    const userMap = new Map();
-
-    // 1. First populate from cloudSyncService cached users
-    try {
-      const cached = cloudSyncService.getCachedUsers();
-      if (Array.isArray(cached)) {
-        cached.forEach(u => {
-          const key = (u.username || u.uid || u.id || '').toLowerCase();
-          if (key) userMap.set(key, u);
-        });
-      }
-    } catch (_) {}
-
-    // 2. Add current logged in user
-    if (currentUser) {
-      const key = (currentUser.username || currentUser.uid || currentUser.id || '').toLowerCase();
-      if (key) userMap.set(key, { ...(userMap.get(key) || {}), ...currentUser });
-    }
-
-    // 3. Populate and override with authoritative admin users from server
-    if (Array.isArray(adminUsers) && adminUsers.length > 0) {
-      adminUsers.forEach(u => {
-        const key = (u.username || u.uid || u.id || '').toLowerCase();
-        if (key) userMap.set(key, { ...(userMap.get(key) || {}), ...u });
-      });
-    }
-
-    return Array.from(userMap.values());
+    // The admin API is the sole source of truth.
+    if (Array.isArray(adminUsers)) return adminUsers;
+    return [];
   }, [adminUsers, currentUser]);
 
   // Strict 403 for non-admins
