@@ -1,0 +1,49 @@
+name: Temporary repair admin and Pi scope
+on:
+  workflow_dispatch:
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch admin authorization and Pi scope handling
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('_worker.js')
+          s = p.read_text()
+          old = "function isAdmin(uid, env) {\n  const allowed = adminUids(env);\n  const id = String(uid || '').trim().toLowerCase();\n  return Boolean(id && (allowed.includes(id) || id === 'avina60' || id === 'mohsenjnext' || id === 'admin_user'));\n}"
+          new = "function isAdmin(uid, env) {\n  const allowed = adminUids(env);\n  const id = String(uid || '').trim().toLowerCase();\n  return Boolean(id && (allowed.includes(id) || id === 'avina60' || id === 'mohsenjnext' || id === 'admin_user'));\n}\nfunction isAdminIdentity(user, env) {\n  if (!user) return false;\n  return isAdmin(user.pi_uid, env) || isAdmin(user.username, env);\n}"
+          assert old in s
+          s = s.replace(old, new, 1)
+          s = s.replace("if (!isAdmin(auth.user.pi_uid, env) || auth.user.role !== 'admin')", "if (!isAdminIdentity(auth.user, env) || auth.user.role !== 'admin')", 1)
+          s = s.replace("const isAdminUser = isAdmin(user.pi_uid, env) && user.role === 'admin';", "const isAdminUser = isAdminIdentity(user, env) && user.role === 'admin';", 1)
+          p.write_text(s)
+
+          p = Path('src/services/piService.js')
+          s = p.read_text()
+          old = "const authResult = await Promise.race([\n      window.Pi.authenticate(['payments', 'username'], onIncompletePayment),"
+          new = "const requestedScopes = ['username', 'payments'];\n    const authResult = await Promise.race([\n      window.Pi.authenticate(requestedScopes, onIncompletePayment),"
+          assert old in s
+          s = s.replace(old, new, 1)
+          old = "const sdkUser = authResult?.user;\n    if (!accessToken || !sdkUser?.uid || !sdkUser?.username) throw new Error('اطلاعات معتبر از Pi Browser دریافت نشد.');"
+          new = "const sdkUser = authResult?.user;\n    if (!accessToken || !sdkUser?.uid || !sdkUser?.username) throw new Error('اطلاعات معتبر از Pi Browser دریافت نشد.');\n    if (typeof window.Pi.createPayment === 'function' && !authResult) throw new Error('مجوز پرداخت Pi دریافت نشد.');"
+          assert old in s
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+      - name: Validate
+        run: |
+          node --check _worker.js
+          node --check src/services/piService.js
+          git diff --check
+      - name: Commit and push
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add _worker.js src/services/piService.js
+          git commit -m 'fix: authorize admin by verified identity and request Pi payment scope' || exit 0
+          git push origin HEAD:main
