@@ -62,16 +62,23 @@ class PiNetworkService {
     if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
     const response = await fetch(`${apiBase}/api/payments/intent`, { method: 'POST', headers: this.getSessionHeaders(), body: JSON.stringify({ rentalId, paymentIntentId: paymentIntentId || undefined }) });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data?.paymentIntentId || !Number.isFinite(Number(data?.amount)) || !data?.memo) throw new Error(data?.error || 'ساخت Payment Intent ناموفق بود.');
-    if (paymentIntentId && data.paymentIntentId !== paymentIntentId) throw new Error('Payment Intent با رزرو جاری منطبق نیست.');
-    return { id: data.paymentIntentId, amount: Number(data.amount), memo: String(data.memo) };
+    const intentId = data?.paymentIntentId || data?.id;
+    if (!response.ok || !intentId || !Number.isFinite(Number(data?.amount)) || !data?.memo) {
+      const errDetail = data?.error || data?.message || (response.status === 502 ? 'عدم امکان اتصال به سرور Pi' : 'ساخت Payment Intent ناموفق بود.');
+      throw new Error(errDetail);
+    }
+    if (paymentIntentId && intentId !== paymentIntentId) throw new Error('Payment Intent با رزرو جاری منطبق نیست.');
+    return { id: intentId, amount: Number(data.amount), memo: String(data.memo) };
   }
   async approvePaymentOnServer(paymentId, paymentIntentId) {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
     const response = await fetch(`${apiBase}/api/payments/approve`, { method: 'POST', headers: this.getSessionHeaders(), body: JSON.stringify({ paymentId, paymentIntentId }) });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok || data?.approved !== true) throw new Error(data?.error || 'تایید پرداخت در سرور ناموفق بود.');
+    if (!response.ok || data?.approved !== true) {
+      const errDetail = data?.error || data?.message || data?.error_message || (response.status === 502 ? 'خطا در تایید پرداخت در شبکه Pi' : 'تایید پرداخت در سرور ناموفق بود.');
+      throw new Error(errDetail);
+    }
     return data;
   }
   async completePaymentOnServer(paymentId, txid, paymentIntentId) {
@@ -79,7 +86,10 @@ class PiNetworkService {
     if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
     const response = await fetch(`${apiBase}/api/payments/complete`, { method: 'POST', headers: this.getSessionHeaders(), body: JSON.stringify({ paymentId, txid, paymentIntentId }) });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok || data?.completed !== true) throw new Error(data?.error || 'تکمیل پرداخت در سرور ناموفق بود.');
+    if (!response.ok || data?.completed !== true) {
+      const errDetail = data?.error || data?.message || data?.error_message || (response.status === 502 ? 'خطا در نهایی‌سازی پرداخت در شبکه Pi' : 'تکمیل پرداخت در سرور ناموفق بود.');
+      throw new Error(errDetail);
+    }
     return data;
   }
   async createPayment({ paymentData, callbacks, paymentIntentId }) {
