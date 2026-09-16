@@ -1,8 +1,10 @@
 name: Temporary repair admin and Pi scope
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
 jobs:
   repair:
+    if: ${{ !contains(github.event.head_commit.message, 'fix: authorize admin by verified identity and request Pi payment scope') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -29,10 +31,6 @@ jobs:
           new = "const requestedScopes = ['username', 'payments'];\n    const authResult = await Promise.race([\n      window.Pi.authenticate(requestedScopes, onIncompletePayment),"
           assert old in s
           s = s.replace(old, new, 1)
-          old = "const sdkUser = authResult?.user;\n    if (!accessToken || !sdkUser?.uid || !sdkUser?.username) throw new Error('اطلاعات معتبر از Pi Browser دریافت نشد.');"
-          new = "const sdkUser = authResult?.user;\n    if (!accessToken || !sdkUser?.uid || !sdkUser?.username) throw new Error('اطلاعات معتبر از Pi Browser دریافت نشد.');\n    if (typeof window.Pi.createPayment === 'function' && !authResult) throw new Error('مجوز پرداخت Pi دریافت نشد.');"
-          assert old in s
-          s = s.replace(old, new, 1)
           p.write_text(s)
           PY
       - name: Validate
@@ -45,5 +43,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add _worker.js src/services/piService.js
-          git commit -m 'fix: authorize admin by verified identity and request Pi payment scope' || exit 0
+          git commit -m 'fix: authorize admin by verified identity and request Pi payment scope'
           git push origin HEAD:main
