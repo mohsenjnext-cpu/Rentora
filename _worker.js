@@ -255,15 +255,25 @@ function validatePiPayment(payment, intent, user) {
   const identifier = String(payment?.identifier || payment?.id || '');
   if (!identifier) throw Object.assign(new Error('Pi payment identifier is missing'), { status: 409 });
   if (identifier !== String(intent.pi_payment_id || identifier)) throw Object.assign(new Error('Pi payment identifier mismatch'), { status: 409 });
-  const payerUid = payment?.user?.uid || payment?.from_address?.uid;
+  const payerUid = payment?.user?.uid || payment?.from_address?.uid || payment?.user_uid || payment?.uid;
   if (!payerUid) throw Object.assign(new Error('Pi payment payer identity is missing'), { status: 409 });
-  if (String(payerUid) !== String(user.pi_uid)) throw Object.assign(new Error('Pi payer mismatch'), { status: 403 });
-  const metadataIntent = payment?.metadata?.paymentIntentId;
+  if (String(payerUid).toLowerCase() !== String(user.pi_uid).toLowerCase()) throw Object.assign(new Error('Pi payer mismatch'), { status: 403 });
+  let paymentMeta = payment?.metadata;
+  if (typeof paymentMeta === 'string') {
+    try { paymentMeta = JSON.parse(paymentMeta); } catch (_) {}
+  }
+  const metadataIntent = paymentMeta?.paymentIntentId || paymentMeta?.intentId || paymentMeta?.id;
   if (!metadataIntent || String(metadataIntent) !== String(intent.id)) throw Object.assign(new Error('Pi payment metadata binding is missing or invalid'), { status: 409 });
   const amount = Number(payment?.amount);
-  if (!Number.isFinite(amount) || Math.abs(amount - Number(intent.amount)) > 1e-9) throw Object.assign(new Error('Pi payment amount mismatch'), { status: 409 });
-  if (String(payment?.memo || '') !== String(intent.memo)) throw Object.assign(new Error('Pi payment memo mismatch'), { status: 409 });
-  return String(payment?.status || '').toLowerCase();
+  if (!Number.isFinite(amount) || Math.abs(amount - Number(intent.amount)) > 0.001) throw Object.assign(new Error('Pi payment amount mismatch'), { status: 409 });
+  if (payment?.memo && intent?.memo && String(payment.memo).trim() !== String(intent.memo).trim()) throw Object.assign(new Error('Pi payment memo mismatch'), { status: 409 });
+  if (typeof payment?.status === 'object' && payment?.status !== null) {
+    if (payment.status.developer_completed) return 'completed';
+    if (payment.status.developer_approved) return 'approved';
+    if (payment.status.cancelled || payment.status.user_cancelled) return 'cancelled';
+    return 'pending';
+  }
+  return String(payment?.status || 'pending').toLowerCase();
 }
 export default {
   async fetch(request, env, ctx) {
@@ -469,7 +479,7 @@ export default {
         const paymentResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}`); const payment = await paymentResponse.json().catch(() => ({})); if (!paymentResponse.ok) return errorResponse('Unable to verify Pi payment', 502, env, undefined, origin);
         const status = validatePiPayment(payment, intent, user);
         if (!['created','pending','approved'].includes(status)) return errorResponse(`Pi payment cannot be approved from status ${status || 'unknown'}`, 409, env, undefined, origin);
-        const approveResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}/approve`, { method: 'POST', body: '{}' }); const approved = await approveResponse.json().catch(() => ({})); if (!approveResponse.ok) return errorResponse('Pi payment approval failed', 502, env, { details: approved }, origin);
+        const approveResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}/approve`, { method: 'POST', body: '{}' }); const approved = await approveResponse.json().catch(() => ({})); if (!approveResponse.ok && !(approveResponse.status === 400 && String(JSON.stringify(approved)).toLowerCase().includes('already'))) return errorResponse('Pi payment approval failed', 502, env, { details: approved }, origin);
         const claim = await env.RENTORA_DB.prepare(`UPDATE payment_intents SET pi_payment_id=?1,status='approved',updated_at=?2 WHERE id=?3 AND status='created' AND pi_payment_id IS NULL`).bind(body.paymentId, now(), intent.id).run();
         if (!Number(claim?.meta?.changes || 0)) { intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(intent.id, user.id).first(); if (!intent || intent.pi_payment_id !== body.paymentId || !['approved','completed'].includes(intent.status)) return errorResponse('Payment intent was concurrently claimed by another payment', 409, env, undefined, origin); }
         return jsonResponse({ approved: true, paymentId: body.paymentId, data: approved, idempotent: Number(claim?.meta?.changes || 0) === 0 }, 200, env, origin);
