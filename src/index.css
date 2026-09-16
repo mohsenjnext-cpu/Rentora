@@ -46,7 +46,6 @@
   }
 }
 
-/* Card & Surface Tokens */
 .rentora-card {
   background-color: #FFFFFF;
   border-radius: var(--card-radius);
@@ -58,7 +57,6 @@
   border: 0.5px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Primary Solid Button */
 .btn-primary {
   background-color: #26215C;
   color: #FFFFFF;
@@ -82,7 +80,6 @@
   background-color: #645AC7;
 }
 
-/* Secondary Button */
 .btn-secondary {
   background-color: transparent;
   color: #26215C;
@@ -97,7 +94,6 @@
   border-color: #7F77DD;
 }
 
-/* Trust / KYC Green Badge */
 .badge-trust {
   background-color: #E1F5EE;
   color: #0F6E56;
@@ -111,7 +107,6 @@
   border: 0.5px solid rgba(72, 210, 168, 0.25);
 }
 
-/* Needs-Action Amber Alert */
 .badge-amber {
   background-color: #FAEEDA;
   color: #854F0B;
@@ -126,7 +121,6 @@
   border-radius: 12px;
 }
 
-/* Purple Tint Banner */
 .banner-purple {
   background-color: #EEEDFE;
   border: 0.5px solid rgba(83, 74, 183, 0.2);
@@ -139,26 +133,242 @@
   border-radius: 16px;
 }
 
-/* Scrollbar Utility */
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
-}
-.scrollbar-none {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 
 @keyframes slideDown {
-  from {
-    transform: translateY(-120%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+  from { transform: translateY(-120%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
-.animate-slideDown {
-  animation: slideDown 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.animate-slideDown { animation: slideDown 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+/* Mobile-first visual system. Desktop remains on the original layout. */
+@media (max-width: 767px) {
+  body {
+    background: #F7F7FB;
+  }
+
+  .dark body {
+    background: #0B0A16;
+  }
+
+  /* Give the content a calmer, app-like rhythm around the new top bar. */
+  .md\:hidden.space-y-4 {
+    padding-top: 8px;
+    padding-bottom: 18px;
+  }
+
+  /* Hero: stronger visual anchor instead of a flat purple rectangle. */
+  .banner-purple {
+    position: relative;
+    overflow: hidden;
+    min-height: 226px;
+    padding: 20px !important;
+    border-radius: 24px;
+    border: 1px solid rgba(83, 74, 183, 0.16);
+    box-shadow: 0 12px 30px rgba(38, 33, 92, 0.08);
+    background:
+      radial-gradient(circle at 8% 8%, rgba(255,255,255,.92) 0 9%, transparent 32%),
+      linear-gradient(145deg, #F1F0FF 0%, #E7E5FF 55%, #F7F6FF 100%);
+  }
+
+  .banner-purple::after {
+    content: "";
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    left: -72px;
+    bottom: -88px;
+    border-radius: 999px;
+    background: rgba(83, 74, 183, 0.12);
+    pointer-events: none;
+  }
+
+  .dark .banner-purple {
+    background:
+      radial-gradient(circle at 8% 8%, rgba(127,119,221,.18) 0 10%, transparent 35%),
+      linear-gradient(145deg, #211E45 0%, #191735 58%, #141229 100%);
+    border-color: rgba(175,169,236,.16);
+    box-shadow: 0 14px 34px rgba(0,0,0,.24);
+  }
+
+  /* Hero typography and controls are intentionally larger for thumb-friendly use. */
+  .banner-purple h1 {
+    position: relative;
+    z-index: 1;
+    font-size: 27px !important;
+    line-height: 1.35 !important;
+    letter-spacing: -0.02em;
+  }
+
+  .banner-purple p {
+    position: relative;
+    z-index: 1;
+    max-width: 290px !important;
+    margin-top: 5px !important;
+    font-size: 12px !important;
+    line-height: 1.75 !important;
+  }
+
+  .banner-purple > button {
+    position: relative;
+    z-index: 1;
+    height: 42px !important;
+    padding-inline: 18px !important;
+    border-radius: 13px !important;
+    box-shadow: 0 7px 16px rgba(38,33,92,.18);
+  }
+
+  .banner-purple form {
+    position: relative;
+    z-index: 1;
+    height: 50px !important;
+    margin-top: 12px !important;
+    padding: 4px !important;
+    border-radius: 15px !important;
+    border-color: rgba(83,74,183,.12) !important;
+    box-shadow: 0 5px 18px rgba(38,33,92,.08);
+  }
+
+  .banner-purple form button {
+    height: 42px !important;
+    width: 58px !important;
+    border-radius: 12px !important;
+  }
+
+  /* Category row becomes a horizontal filter rail. */
+  .banner-purple + section {
+    margin-top: 2px;
+  }
+
+  .banner-purple + section h2 {
+    margin-bottom: 9px !important;
+    font-size: 14px !important;
+  }
+
+  .banner-purple + section .scrollbar-none {
+    gap: 8px !important;
+    padding-bottom: 3px;
+  }
+
+  .banner-purple + section .scrollbar-none button {
+    height: 38px !important;
+    padding-inline: 16px !important;
+    border-radius: 999px !important;
+    font-size: 11px !important;
+  }
+
+  /* Trust card gets hierarchy rather than looking like a status strip. */
+  .banner-purple + section + section {
+    min-height: 76px !important;
+    padding: 11px 13px !important;
+    gap: 11px !important;
+    border-radius: 17px !important;
+    box-shadow: 0 5px 18px rgba(15,110,86,.06);
+  }
+
+  .banner-purple + section + section > div:first-child {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 13px !important;
+  }
+
+  .banner-purple + section + section h4 {
+    font-size: 12px !important;
+    margin-bottom: 1px;
+  }
+
+  .banner-purple + section + section p {
+    font-size: 10px !important;
+    line-height: 1.55 !important;
+  }
+
+  /* Stats: turn three tiny boxes into compact metric tiles. */
+  .banner-purple + section + section + section {
+    gap: 8px !important;
+  }
+
+  .banner-purple + section + section + section > div {
+    height: 78px !important;
+    padding-top: 10px !important;
+    border-radius: 16px !important;
+    border-color: rgba(148,163,184,.18) !important;
+    box-shadow: 0 4px 15px rgba(30,30,47,.035);
+  }
+
+  .banner-purple + section + section + section > div > div:first-child {
+    font-size: 19px !important;
+    line-height: 1.2;
+  }
+
+  .banner-purple + section + section + section > div > div:last-child {
+    margin-top: 5px !important;
+    font-size: 9px !important;
+    font-weight: 600;
+  }
+
+  /* Featured section gets a stronger section header and roomier cards. */
+  .banner-purple + section + section + section + section {
+    margin-top: 2px;
+  }
+
+  .banner-purple + section + section + section + section > div:first-child {
+    margin-bottom: 9px !important;
+  }
+
+  .banner-purple + section + section + section + section > div:first-child h2 {
+    font-size: 17px !important;
+    letter-spacing: -0.01em;
+  }
+
+  .banner-purple + section + section + section + section > div:first-child button {
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #EEEDFE;
+    font-size: 10px !important;
+  }
+
+  .dark .banner-purple + section + section + section + section > div:first-child button {
+    background: #211E45;
+  }
+
+  /* Home's compact item cards: more image, less cramped metadata. */
+  .banner-purple + section + section + section + section .grid.grid-cols-2 {
+    gap: 10px !important;
+  }
+
+  .banner-purple + section + section + section + section article {
+    border-radius: 18px !important;
+    border-color: rgba(148,163,184,.18) !important;
+    padding: 5px !important;
+    box-shadow: 0 7px 20px rgba(30,30,47,.045);
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+
+  .banner-purple + section + section + section + section article:active {
+    transform: scale(.985);
+  }
+
+  .banner-purple + section + section + section + section article > div:first-child {
+    height: 132px !important;
+    border-radius: 14px !important;
+  }
+
+  .banner-purple + section + section + section + section article > div:last-child {
+    padding: 9px 7px 7px !important;
+  }
+
+  .banner-purple + section + section + section + section article h3 {
+    font-size: 12px !important;
+    line-height: 1.5 !important;
+  }
+
+  .banner-purple + section + section + section + section article button {
+    border-radius: 10px !important;
+  }
+
+  .banner-purple + section + section + section + section article .text-\[12px\] {
+    font-size: 13px !important;
+  }
 }
