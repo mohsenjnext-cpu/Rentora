@@ -5,6 +5,7 @@ class PiNetworkService {
     this.isInitialized = false;
     this.isSandbox = false;
     this.isSdkAuthenticated = false;
+    this.authPromise = null;
   }
 
   hasPiSdk() {
@@ -45,46 +46,56 @@ class PiNetworkService {
 
   async authenticate(customIncompleteHandler = null) {
     if (!this.hasPiSdk()) throw new Error('NOT_IN_PI_BROWSER');
-    await this.init();
-    const apiBase = getApiBaseUrl();
-    if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
-    const onIncompletePayment = customIncompleteHandler || (async (payment) => {
-      if (!payment?.identifier) return;
+    if (this.authPromise) return this.authPromise;
+
+    this.authPromise = (async () => {
       try {
-        const raw = localStorage.getItem('rentora_live_v1_session');
-        const session = raw ? JSON.parse(raw) : null;
-        if (!session?.sessionToken) return;
-        await fetch(`${apiBase}/api/payments/incomplete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.sessionToken}` },
-          body: JSON.stringify({ payment })
+        await this.init();
+        const apiBase = getApiBaseUrl();
+        if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
+        const onIncompletePayment = customIncompleteHandler || (async (payment) => {
+          if (!payment?.identifier) return;
+          try {
+            const raw = localStorage.getItem('rentora_live_v1_session');
+            const session = raw ? JSON.parse(raw) : null;
+            if (!session?.sessionToken) return;
+            await fetch(`${apiBase}/api/payments/incomplete`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.sessionToken}` },
+              body: JSON.stringify({ payment })
+            });
+          } catch (_) {}
         });
-      } catch (_) {}
-    });
 
-    const authResult = await Promise.race([
-      window.Pi.authenticate(['payments', 'username'], onIncompletePayment),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('پاسخی از Pi Browser دریافت نشد.')), 35000))
-    ]);
+        const authResult = await Promise.race([
+          window.Pi.authenticate(['payments', 'username'], onIncompletePayment),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('پاسخی از Pi Browser دریافت نشد. لطفاً مجدداً تلاش کنید.')), 35000))
+        ]);
 
-    const accessToken = authResult?.accessToken;
-    const sdkUser = authResult?.user;
-    if (!accessToken || !sdkUser?.uid || !sdkUser?.username) throw new Error('اطلاعات معتبر از Pi Browser دریافت نشد.');
+        const accessToken = authResult?.accessToken;
+        const sdkUser = authResult?.user;
+        if (!accessToken || !sdkUser?.uid || !sdkUser?.username) throw new Error('اطلاعات معتبر از Pi Browser دریافت نشد.');
 
-    this.isSdkAuthenticated = true;
+        this.isSdkAuthenticated = true;
 
-    const response = await fetch(`${apiBase}/api/auth/pi-login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        accessToken,
-        user: sdkUser,
-        kycStatus: (sdkUser?.kyc_status === true || sdkUser?.kyc_status === 'verified' || sdkUser?.is_kyc === true) ? 'verified' : undefined
-      })
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data?.sessionToken || !data?.user?.uid) throw new Error(data?.error || 'احراز هویت Pi در سرور رد شد.');
-    return { accessToken, uid: data.user.uid, username: data.user.username, sessionToken: data.sessionToken, isOfficialSdk: true, kycStatus: data.user.kycStatus || 'unknown', user: data.user };
+        const response = await fetch(`${apiBase}/api/auth/pi-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            accessToken,
+            user: sdkUser,
+            kycStatus: (sdkUser?.kyc_status === true || sdkUser?.kyc_status === 'verified' || sdkUser?.is_kyc === true) ? 'verified' : undefined
+          })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data?.sessionToken || !data?.user?.uid) throw new Error(data?.error || 'احراز هویت Pi در سرور رد شد.');
+        return { accessToken, uid: data.user.uid, username: data.user.username, sessionToken: data.sessionToken, isOfficialSdk: true, kycStatus: data.user.kycStatus || 'unknown', user: data.user };
+      } finally {
+        this.authPromise = null;
+      }
+    })();
+
+    return this.authPromise;
   }
 
   getSessionHeaders() {
@@ -135,9 +146,6 @@ class PiNetworkService {
   async createPayment({ paymentData, callbacks, paymentIntentId }) {
     await this.init();
     if (!this.hasPiSdk() || typeof window.Pi.createPayment !== 'function') throw new Error('پرداخت Pi فقط در Pi Browser رسمی امکان‌پذیر است.');
-
-    // Ensure Pi SDK in active window has authenticated with 'payments' scope
-    await this.ensureSdkAuthenticated();
 
     const serverIntent = await this.ensurePaymentIntent(paymentIntentId, paymentData?.metadata?.rentalId);
     const amount = serverIntent.amount;

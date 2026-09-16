@@ -87,11 +87,6 @@ export function PiAuthProvider({ children }) {
     const apiBase = getApiBaseUrl();
     if (!apiBase) return;
 
-    // If running in Pi Browser, ensure Pi SDK has authenticated session for payments
-    if (piService.hasPiSdk()) {
-      piService.ensureSdkAuthenticated().catch(() => {});
-    }
-
     fetch(`${apiBase}/api/auth/me`, {
       method: 'GET',
       headers: {

@@ -51,11 +51,18 @@ function piApiKey(env) {
   if (!key) throw Object.assign(new Error('Pi server API key is not configured'), { status: 503 });
   return key;
 }
+function piErrorMessage(data, fallback = 'Pi network error') {
+  if (!data) return fallback;
+  if (typeof data === 'string') return data;
+  return data.error_message || data.error || data.message || data.detail || fallback;
+}
 async function piFetch(env, path, options = {}) {
   const base = String(env.PI_API_URL || 'https://api.minepi.com/v2').replace(/\/$/, '');
   const headers = new Headers(options.headers || {});
-  const key = piApiKey(env);
-  headers.set('Authorization', key.startsWith('Key ') ? key : `Key ${key}`);
+  if (!headers.has('Authorization')) {
+    const key = piApiKey(env);
+    headers.set('Authorization', key.startsWith('Key ') ? key : `Key ${key}`);
+  }
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   return fetch(`${base}${path}`, { ...options, headers });
 }

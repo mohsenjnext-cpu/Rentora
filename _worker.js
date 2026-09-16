@@ -170,7 +170,17 @@ function detectBypassAttempt(rawText) {
   return { isBlocked: false };
 }
 
-async function piFetch(env, path, options = {}) { if (!env?.PI_API_KEY) throw new Error('Pi server API key is not configured'); const base = String(env.PI_API_URL || 'https://api.minepi.com/v2').replace(/\/$/, ''); const headers = new Headers(options.headers || {}); headers.set('Authorization', `Key ${env.PI_API_KEY}`); if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json'); return fetch(`${base}${path}`, { ...options, headers }); }
+async function piFetch(env, path, options = {}) {
+  const key = env?.PI_API_KEY || env?.PI_SERVER_API_KEY;
+  if (!key) throw new Error('Pi server API key is not configured');
+  const base = String(env.PI_API_URL || 'https://api.minepi.com/v2').replace(/\/$/, '');
+  const headers = new Headers(options.headers || {});
+  if (!headers.has('Authorization')) {
+    headers.set('Authorization', key.startsWith('Key ') ? key : `Key ${key}`);
+  }
+  if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  return fetch(`${base}${path}`, { ...options, headers });
+}
 async function verifyPiAccessToken(env, accessToken) { if (!accessToken || !env?.PI_API_KEY) throw new Error('Pi authentication is unavailable'); const base = String(env.PI_API_URL || 'https://api.minepi.com/v2').replace(/\/$/, ''); const response = await fetch(`${base}/me`, { headers: { Authorization: `Bearer ${accessToken}` } }); const data = await response.json().catch(() => ({})); if (!response.ok || !data?.uid || !data?.username) throw new Error('Pi authentication rejected'); return data; }
 async function createSession(env, user) { const token = randomToken('sess'); const hash = await sha256(token); await env.RENTORA_KV.put(`session:${hash}`, JSON.stringify({ uid: user.pi_uid, username: user.username, role: user.role }), { expirationTtl: SESSION_TTL }); return token; }
 async function getSession(request, env) { const header = request.headers.get('Authorization') || ''; if (!header.startsWith('Bearer ')) return null; const token = header.slice(7).trim(); if (!token) return null; const hash = await sha256(token); const raw = await env.RENTORA_KV.get(`session:${hash}`); if (!raw) return null; try { return JSON.parse(raw); } catch (_) { return null; } }
