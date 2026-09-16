@@ -1,9 +1,0 @@
-name: Rentora workflow diagnostic
-on:
-  push:
-    branches: [main]
-jobs:
-  diagnostic:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "workflow-ok"
