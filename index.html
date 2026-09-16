@@ -65,6 +65,115 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Rentora mobile header visual refinement. Behavior remains in Header.jsx. -->
+    <style>
+      @media (max-width: 767px) {
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] {
+          height: 56px !important;
+          min-height: 56px !important;
+          padding-left: 12px !important;
+          padding-right: 12px !important;
+          background: rgba(255, 255, 255, 0.96) !important;
+          border-bottom: 1px solid rgba(226, 232, 240, 0.75) !important;
+          box-shadow: 0 2px 14px rgba(38, 33, 92, 0.06) !important;
+        }
+
+        .dark [class*="md:hidden"][class*="sticky"][class*="top-0"] {
+          background: rgba(14, 13, 27, 0.96) !important;
+          border-bottom-color: rgba(51, 65, 85, 0.7) !important;
+          box-shadow: 0 2px 16px rgba(0, 0, 0, 0.18) !important;
+        }
+
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] > button:first-child,
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] > div:last-child > button {
+          transition: transform 160ms ease, background-color 160ms ease;
+        }
+
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] > button:first-child {
+          width: 36px;
+          height: 36px;
+          padding: 0 !important;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 12px !important;
+          background: #EEEDFE;
+          color: #26215C;
+        }
+
+        .dark [class*="md:hidden"][class*="sticky"][class*="top-0"] > button:first-child {
+          background: #1E1B3D;
+          color: #EEEDFE;
+        }
+
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] > button:first-child:active,
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] > div:last-child > button:active {
+          transform: scale(0.94);
+        }
+
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] > div:nth-child(2) {
+          position: absolute;
+          left: 50%;
+          transform: translateX(-50%);
+          max-width: 48%;
+          white-space: nowrap;
+        }
+
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] > div:nth-child(2) > div:first-child {
+          gap: 7px !important;
+        }
+
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] > div:nth-child(2) > div:first-child > div:first-child {
+          width: 28px !important;
+          height: 28px !important;
+          border-radius: 9px !important;
+          padding: 5px !important;
+          box-shadow: 0 3px 10px rgba(38, 33, 92, 0.16);
+        }
+
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] > div:nth-child(2) span {
+          font-size: 14px !important;
+          letter-spacing: -0.02em;
+        }
+
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] > div:last-child {
+          gap: 2px !important;
+        }
+
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] > div:last-child > button {
+          width: 34px;
+          height: 34px;
+          padding: 0 !important;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 10px !important;
+        }
+
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] > div:last-child > button:hover {
+          background: #EEEDFE !important;
+        }
+
+        .dark [class*="md:hidden"][class*="sticky"][class*="top-0"] > div:last-child > button:hover {
+          background: #1E1B3D !important;
+        }
+
+        [class*="md:hidden"][class*="sticky"][class*="top-0"] > div:last-child > button:last-child {
+          width: 32px;
+          height: 32px;
+          margin-left: 2px;
+          border-radius: 10px !important;
+          border-color: #DDD9FF !important;
+          box-shadow: 0 2px 8px rgba(38, 33, 92, 0.08);
+        }
+
+        .dark [class*="md:hidden"][class*="sticky"][class*="top-0"] > div:last-child > button:last-child {
+          border-color: #37325F !important;
+          box-shadow: none;
+        }
+      }
+    </style>
   </head>
   <body class="bg-[#FAFAFC] dark:bg-[#0E0D1B] text-[#111827] dark:text-[#F3F4F6] antialiased selection:bg-[#534AB7]/20 selection:text-[#26215C] transition-colors duration-200">
     <div id="root">
