@@ -46,7 +46,13 @@ class PiNetworkService {
     return true;
   }
 
-  async authenticate(customIncompleteHandler = null) {
+  async requestWalletScope() {
+    if (!this.hasPiSdk()) throw new Error('NOT_IN_PI_BROWSER');
+    this.isSdkAuthenticated = false;
+    return await this.authenticate(null, ['payments', 'username', 'wallet_address']);
+  }
+
+  async authenticate(customIncompleteHandler = null, scopes = ['payments', 'username', 'wallet_address']) {
     if (!this.hasPiSdk()) throw new Error('NOT_IN_PI_BROWSER');
     if (this.authPromise) return this.authPromise;
 
@@ -69,7 +75,7 @@ class PiNetworkService {
         });
 
         const authResult = await Promise.race([
-          window.Pi.authenticate(['payments', 'username'], onIncompletePayment),
+          window.Pi.authenticate(scopes, onIncompletePayment),
           new Promise((_, reject) => setTimeout(() => reject(new Error('پاسخی از Pi Browser دریافت نشد. لطفاً مجدداً تلاش کنید.')), 35000))
         ]);
 

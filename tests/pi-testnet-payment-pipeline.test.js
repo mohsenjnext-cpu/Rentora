@@ -178,6 +178,6 @@ test('Pi SDK Configuration: index.html configures sandbox: false for Pi Testnet'
 test('Pi SDK Payment Scopes: piService ensures payments scope before createPayment', async () => {
   const fs = await import('node:fs/promises');
   const serviceCode = await fs.readFile('src/services/piService.js', 'utf-8');
-  assert.ok(serviceCode.includes("['payments', 'username']"), "piService must request ['payments', 'username'] scopes");
+  assert.ok(serviceCode.includes("['payments', 'username'") || serviceCode.includes("'payments'") && serviceCode.includes("'username'"), "piService must request payments and username scopes");
   assert.ok(serviceCode.includes('ensureSdkAuthenticated'), 'piService must ensure SDK authentication before createPayment');
 });

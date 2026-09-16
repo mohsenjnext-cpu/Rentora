@@ -4,6 +4,7 @@ import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import { getApiBaseUrl } from '../services/apiConfig';
 import { cloudSyncService } from '../services/cloudSyncService';
+import { piService } from '../services/piService';
 import EmptyState from '../components/EmptyState';
 import { 
   LayoutDashboard, 
@@ -76,6 +77,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
   const [isSubmittingPayout, setIsSubmittingPayout] = useState(false);
   const [payoutSuccessMsg, setPayoutSuccessMsg] = useState('');
   const [payoutErrorMsg, setPayoutErrorMsg] = useState('');
+  const [needsWalletAuth, setNeedsWalletAuth] = useState(false);
 
   const loadAdminServerData = async () => {
     setLoadingAdminData(true);
@@ -156,6 +158,26 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     setTimeout(() => setSaveSuccessNotice(false), 2500);
   };
 
+  const handleAuthorizeWalletScope = async () => {
+    setIsSubmittingPayout(true);
+    setPayoutErrorMsg('');
+    setPayoutSuccessMsg('');
+    try {
+      await piService.requestWalletScope();
+      setNeedsWalletAuth(false);
+      setPayoutSuccessMsg(l(
+        'مجوز دسترسی به کیف پول با موفقیت ثبت شد. اکنون می‌توانید واریز را انجام دهید.',
+        'Wallet address authorized successfully. You can now submit payout.',
+        'تم منح الإذن بنجاح. يمكنك الآن السحب.',
+        '钱包权限已授权成功，现在可以发起提现。'
+      ));
+    } catch (err) {
+      setPayoutErrorMsg(err.message || 'خطا در ثبت مجوز در Pi Browser');
+    } finally {
+      setIsSubmittingPayout(false);
+    }
+  };
+
   const handleRequestPayout = async (e) => {
     e.preventDefault();
     setPayoutErrorMsg('');
@@ -183,11 +205,23 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
       ));
       setPayoutAmount('');
       setPayoutMemo('');
+      setNeedsWalletAuth(false);
       await loadAdminServerData();
       await refreshApp();
       setTimeout(() => setPayoutSuccessMsg(''), 7000);
     } catch (err) {
-      setPayoutErrorMsg(err.message || l('خطا در واریز به حساب پای', 'Payout transfer failed', 'فشل التحويل', '提现失败'));
+      const msg = String(err?.message || '');
+      if (msg.includes('wallet_address') || msg.includes('scope') || msg.includes('public key')) {
+        setNeedsWalletAuth(true);
+        setPayoutErrorMsg(l(
+          'جهت واریز مستقیم به کیف پول شما، نیاز به تایید یکباره مجوز آدرس کیف پول در Pi Browser است. لطفاً روی دکمه سبز زیر کلیک کنید.',
+          'To transfer directly to your wallet, please grant the wallet_address scope in Pi Browser. Click the green button below.',
+          'يتطلب التحويل منح إذن عنوان المحفظة. يرجى الضغط بالأسفل.',
+          '转账需授权钱包地址权限，请点击下方按钮完成授权。'
+        ));
+      } else {
+        setPayoutErrorMsg(msg || l('خطا در واریز به حساب پای', 'Payout transfer failed', 'فشل التحويل', '提现失败'));
+      }
     } finally {
       setIsSubmittingPayout(false);
     }
@@ -485,23 +519,54 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={isSubmittingPayout || availableTreasuryBalance <= 0}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#0F6E56] hover:bg-[#0B5441] text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50 transition"
-              >
-                {isSubmittingPayout ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{l('در حال صدور تراکنش واریز به کیف پول پای...', 'Processing Pi A2U payout...', 'جارٍ التحويل...', '正在向 Pi 钱包转账...')}</span>
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="w-4 h-4 text-emerald-300" />
-                    <span>{l(`واریز به کیف پول پای (@${currentUser?.username || 'admin'})`, `Withdraw to Pi Wallet (@${currentUser?.username || 'admin'})`, `تحويل إلى محفظة باي (@${currentUser?.username || 'admin'})`, `立即提现到 Pi 钱包 (@${currentUser?.username || 'admin'})`)}</span>
-                  </>
-                )}
-              </button>
+              {needsWalletAuth ? (
+                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 space-y-2">
+                  <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed font-semibold">
+                    {l(
+                      'شبکه پای برای ارسال وجه از برنامه به کیف پول شما (A2U)، نیازمند تایید دسترسی به آدرس عمومی کیف پول است. روی دکمه سبز زیر کلیک کنید و مجوز را تایید نمایید:',
+                      'Pi Network requires wallet address authorization to transfer funds to your wallet. Please click below to grant access in Pi Browser:',
+                      'تتطلب شبكة باي منح الإذن بعنوان المحفظة لإتمام التحويل. اضغط بالأسفل:',
+                      'Pi 官方网络要求授权钱包地址权限方可打款，请点击下方按钮授权：'
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleAuthorizeWalletScope}
+                    disabled={isSubmittingPayout}
+                    className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#0F6E56] hover:bg-[#0B5441] text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50 transition"
+                  >
+                    {isSubmittingPayout ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>{l('در حال تایید در Pi Browser...', 'Authorizing in Pi Browser...', 'جارٍ التحقق...', '正在授权...')}</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-4 h-4 text-emerald-300" />
+                        <span>{l('تایید مجوز کیف پول در Pi Browser (Wallet Address Scope)', 'Authorize Wallet Address in Pi Browser', 'منح إذن المحفظة في متصفح باي', '在 Pi 浏览器中授权钱包地址')}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isSubmittingPayout || availableTreasuryBalance <= 0}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#0F6E56] hover:bg-[#0B5441] text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-md disabled:opacity-50 transition"
+                >
+                  {isSubmittingPayout ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>{l('در حال صدور تراکنش واریز به کیف پول پای...', 'Processing Pi A2U payout...', 'جارٍ التحويل...', '正在向 Pi 钱包转账...')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="w-4 h-4 text-emerald-300" />
+                      <span>{l(`واریز به کیف پول پای (@${currentUser?.username || 'admin'})`, `Withdraw to Pi Wallet (@${currentUser?.username || 'admin'})`, `تحويل إلى محفظة باي (@${currentUser?.username || 'admin'})`, `立即提现到 Pi 钱包 (@${currentUser?.username || 'admin'})`)}</span>
+                    </>
+                  )}
+                </button>
+              )}
             </form>
           </div>
 
