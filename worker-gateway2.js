@@ -310,7 +310,18 @@ export default {
       if (request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users')) return await adminRoute(request, env, path);
       return legacyWorker.fetch(request, env, ctx);
     } catch (err) {
-      return json({ error: err?.message || 'Server error' }, Number(err?.status) || 500, request, env);
+      console.error('Gateway error', err);
+      const msg = String(err?.message || '');
+      let status = Number(err?.status) || 500;
+      let displayMessage = err?.message || 'Server error';
+      if (msg.includes('already reserved') || msg.includes('overlap')) {
+        status = 409;
+        displayMessage = 'این کالا برای تاریخ‌های انتخابی در دسترس نیست یا قبلاً رزرو شده است.';
+      } else if (msg.includes('UNIQUE constraint')) {
+        status = 409;
+        displayMessage = 'این درخواست قبلاً ثبت شده است.';
+      }
+      return json({ error: displayMessage }, status, request, env);
     }
   }
 };

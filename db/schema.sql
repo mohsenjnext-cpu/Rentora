@@ -173,7 +173,7 @@ WHEN NEW.status IN ('pending_payment','paid','confirmed','active')
       AND r.status IN ('pending_payment','paid','confirmed','active')
       AND julianday(r.end_date) > julianday(NEW.start_date)
       AND julianday(r.start_date) < julianday(NEW.end_date)
-      AND (r.status <> 'pending_payment' OR julianday(r.created_at) >= julianday('now','-30 minutes'))
+      AND (r.status <> 'pending_payment' OR (r.renter_user_id <> NEW.renter_user_id AND julianday(r.created_at) >= julianday('now','-10 minutes')))
   )
 BEGIN
   SELECT RAISE(ABORT, 'listing is already reserved for the requested dates');
@@ -190,7 +190,7 @@ WHEN NEW.status IN ('pending_payment','paid','confirmed','active')
       AND r.status IN ('pending_payment','paid','confirmed','active')
       AND julianday(r.end_date) > julianday(NEW.start_date)
       AND julianday(r.start_date) < julianday(NEW.end_date)
-      AND (r.status <> 'pending_payment' OR julianday(r.created_at) >= julianday('now','-30 minutes'))
+      AND (r.status <> 'pending_payment' OR (r.renter_user_id <> NEW.renter_user_id AND julianday(r.created_at) >= julianday('now','-10 minutes')))
   )
 BEGIN
   SELECT RAISE(ABORT, 'listing is already reserved for the requested dates');
