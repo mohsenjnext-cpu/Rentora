@@ -156,6 +156,16 @@ export default {
         }
         return new Response(null, { status: 204, headers });
       }
+      if (request.method === 'GET' && path === '/api/health') {
+        const checks = {
+          piApiKeyConfigured: Boolean(env?.PI_API_KEY || env?.PI_SERVER_API_KEY),
+          piApiUrlConfigured: Boolean(env?.PI_API_URL),
+          databaseBound: Boolean(env?.RENTORA_DB),
+          sessionStoreBound: Boolean(env?.RENTORA_KV),
+        };
+        const healthy = Object.values(checks).every(Boolean);
+        return json({ ok: healthy, checks }, healthy ? 200 : 503, request, env);
+      }
       if (request.method === 'POST' && path === '/api/payments/approve') return await approvePayment(request, env);
       if (request.method === 'POST' && path === '/api/payments/complete') return await completePayment(request, env);
       if (request.method === 'GET' && (path === '/api/auth/me' || path === '/api/admin/overview' || path === '/api/admin/users')) return await adminRoute(request, env, path);
