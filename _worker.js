@@ -428,6 +428,27 @@ export default {
         if (!amount || isNaN(amount)) return errorResponse('مبلغ تسویه نامعتبر است.', 400, env, undefined, origin);
 
         try {
+          try {
+            const incRes = await piFetch(env, '/payments/incomplete_server_payments');
+            if (incRes.ok) {
+              const incData = await incRes.json().catch(() => ({}));
+              const incompleteList = incData?.incomplete_server_payments || (Array.isArray(incData) ? incData : []);
+              for (const p of incompleteList) {
+                const pid = p?.identifier || p?.id;
+                if (!pid) continue;
+                const txid = p?.transaction?.txid;
+                if (p?.status?.transaction_verified && txid) {
+                  await piFetch(env, `/payments/${encodeURIComponent(pid)}/complete`, { method: 'POST', body: JSON.stringify({ txid }) }).catch(() => {});
+                  await env.RENTORA_DB.prepare(
+                    "INSERT INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, 'admin_payout', 'completed', ?7) ON CONFLICT(pi_payment_id) DO NOTHING"
+                  ).bind(`tx_${crypto.randomUUID()}`, null, pid, txid, user.id, Number(p?.amount || 0), now()).run().catch(() => {});
+                } else {
+                  await piFetch(env, `/payments/${encodeURIComponent(pid)}/cancel`, { method: 'POST', body: '{}' }).catch(() => {});
+                }
+              }
+            }
+          } catch (_) {}
+
           const paymentPayload = {
             amount: Number(amount.toFixed(4)),
             memo: String(body?.memo || `Rentora Treasury Payout to @${user.username}`).slice(0, 120),
@@ -440,11 +461,35 @@ export default {
             uid: user.pi_uid
           };
 
-          const piRes = await piFetch(env, '/payments', {
+          let piRes = await piFetch(env, '/payments', {
             method: 'POST',
             body: JSON.stringify({ payment: paymentPayload })
           });
-          const created = await piRes.json().catch(() => ({}));
+          let created = await piRes.json().catch(() => ({}));
+
+          if (!piRes.ok && (created?.error_message || '').includes('complete the ongoing payment')) {
+            const incRes = await piFetch(env, '/payments/incomplete_server_payments');
+            if (incRes.ok) {
+              const incData = await incRes.json().catch(() => ({}));
+              const incompleteList = incData?.incomplete_server_payments || (Array.isArray(incData) ? incData : []);
+              for (const p of incompleteList) {
+                const pid = p?.identifier || p?.id;
+                if (pid) {
+                  const txid = p?.transaction?.txid;
+                  if (p?.status?.transaction_verified && txid) {
+                    await piFetch(env, `/payments/${encodeURIComponent(pid)}/complete`, { method: 'POST', body: JSON.stringify({ txid }) }).catch(() => {});
+                  } else {
+                    await piFetch(env, `/payments/${encodeURIComponent(pid)}/cancel`, { method: 'POST', body: '{}' }).catch(() => {});
+                  }
+                }
+              }
+            }
+            piRes = await piFetch(env, '/payments', {
+              method: 'POST',
+              body: JSON.stringify({ payment: paymentPayload })
+            });
+            created = await piRes.json().catch(() => ({}));
+          }
 
           if (!piRes.ok && !created?.identifier) {
             return jsonResponse({

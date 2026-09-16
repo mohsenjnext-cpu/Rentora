@@ -335,6 +335,49 @@ async function handleIncompletePayment(request, env) {
   }
 }
 
+async function autoResolveIncompleteServerPayments(env, user) {
+  try {
+    const res = await piFetch(env, '/payments/incomplete_server_payments');
+    if (!res.ok) return;
+    const data = await res.json().catch(() => ({}));
+    const incompleteList = data?.incomplete_server_payments || (Array.isArray(data) ? data : []);
+
+    for (const payment of incompleteList) {
+      const pid = payment?.identifier || payment?.id;
+      if (!pid) continue;
+
+      const txid = payment?.transaction?.txid;
+      if (payment?.status?.transaction_verified && txid) {
+        await piFetch(env, `/payments/${encodeURIComponent(pid)}/complete`, {
+          method: 'POST',
+          body: JSON.stringify({ txid })
+        }).catch(() => {});
+
+        if (env?.RENTORA_DB) {
+          await env.RENTORA_DB.prepare(
+            "INSERT INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, 'admin_payout', 'completed', ?7) ON CONFLICT(pi_payment_id) DO NOTHING"
+          ).bind(
+            `tx_${crypto.randomUUID()}`,
+            null,
+            pid,
+            txid,
+            user?.id || 'admin',
+            Number(payment?.amount || 0),
+            now()
+          ).run().catch(() => {});
+        }
+      } else {
+        await piFetch(env, `/payments/${encodeURIComponent(pid)}/cancel`, {
+          method: 'POST',
+          body: '{}'
+        }).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.warn('autoResolveIncompleteServerPayments warning:', err);
+  }
+}
+
 async function adminRoute(request, env, path) {
   const user = await requireUser(request, env);
   if (!(adminAllowed(user.pi_uid, env) || adminAllowed(user.username, env))) return json({ error: 'Admin access required' }, 403, request, env);
@@ -375,6 +418,8 @@ async function adminRoute(request, env, path) {
     if (!amount || isNaN(amount)) return json({ error: 'مبلغ تسویه نامعتبر است.' }, 400, request, env);
 
     try {
+      await autoResolveIncompleteServerPayments(env, user);
+
       const paymentPayload = {
         amount: Number(amount.toFixed(4)),
         memo: String(body?.memo || `Rentora Treasury Payout to @${user.username}`).slice(0, 120),
@@ -387,11 +432,20 @@ async function adminRoute(request, env, path) {
         uid: user.pi_uid
       };
 
-      const piRes = await piFetch(env, '/payments', {
+      let piRes = await piFetch(env, '/payments', {
         method: 'POST',
         body: JSON.stringify({ payment: paymentPayload })
       });
-      const created = await piRes.json().catch(() => ({}));
+      let created = await piRes.json().catch(() => ({}));
+
+      if (!piRes.ok && (created?.error_message || '').includes('complete the ongoing payment')) {
+        await autoResolveIncompleteServerPayments(env, user);
+        piRes = await piFetch(env, '/payments', {
+          method: 'POST',
+          body: JSON.stringify({ payment: paymentPayload })
+        });
+        created = await piRes.json().catch(() => ({}));
+      }
 
       if (!piRes.ok && !created?.identifier) {
         return json({
