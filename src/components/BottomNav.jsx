@@ -16,21 +16,35 @@ export default function BottomNav({ currentTab, onNavigate }) {
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 h-12 bg-white/98 dark:bg-[#121124]/98 backdrop-blur-md border-t border-[#E4E4EC] dark:border-slate-800/80 pb-safe">
-      <div className="max-w-md mx-auto h-full grid grid-cols-4 px-2">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = currentTab === item.id;
-          return (
-            <button key={item.id} type="button" onClick={() => onNavigate(item.id)} className={`relative flex flex-col items-center justify-center gap-0.5 cursor-pointer active:scale-95 transition-transform ${isActive ? 'text-[#534AB7] dark:text-[#AFA9EC]' : 'text-[#8A8A9B] dark:text-slate-500'}`}>
-              <span className="relative">
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'stroke-[2.4]' : 'stroke-[1.8]'}`} />
-                {item.badge > 0 && <span className="absolute -top-1.5 -right-2 min-w-3.5 h-3.5 rounded-full bg-rose-500 text-white text-[7px] font-bold flex items-center justify-center px-0.5">{item.badge}</span>}
-              </span>
-              <span className={`text-[9px] leading-none ${isActive ? 'font-bold' : 'font-medium'}`}>{item.label}</span>
-            </button>
-          );
-        })}
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none pb-2.5 px-3">
+      <div className="max-w-md mx-auto h-[62px] rounded-[22px] bg-white/96 dark:bg-[#151426]/96 backdrop-blur-xl border border-slate-200/70 dark:border-slate-700/70 shadow-[0_10px_35px_rgba(30,30,47,0.14)] dark:shadow-[0_10px_35px_rgba(0,0,0,0.35)] pointer-events-auto px-1.5">
+        <div className="h-full grid grid-cols-4 gap-1">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = currentTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onNavigate(item.id)}
+                className={`relative flex flex-col items-center justify-center gap-1 rounded-[17px] transition-all duration-200 active:scale-95 cursor-pointer ${isActive ? 'text-[#26215C] dark:text-[#EEEDFE]' : 'text-[#8A8A9B] dark:text-slate-500'}`}
+              >
+                {isActive && <span className="absolute inset-x-3 top-1.5 h-8 rounded-[13px] bg-[#EEEDFE] dark:bg-[#292550]" />}
+                <span className="relative z-10">
+                  <Icon className={`w-[18px] h-[18px] ${isActive ? 'stroke-[2.4]' : 'stroke-[1.8]'}`} />
+                  {item.badge > 0 && (
+                    <span className="absolute -top-2 -right-2 min-w-[16px] h-[16px] rounded-full bg-rose-500 text-white text-[8px] font-bold flex items-center justify-center px-1 border-2 border-white dark:border-[#151426]">
+                      {item.badge}
+                    </span>
+                  )}
+                </span>
+                <span className={`relative z-10 text-[9px] leading-none ${isActive ? 'font-bold' : 'font-medium'}`}>
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
