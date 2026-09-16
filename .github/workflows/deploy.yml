@@ -27,24 +27,31 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           p = Path('_worker.js')
           s = p.read_text()
+          old = "function isAdmin(uid, env) {\n  const allowed = adminUids(env);\n  const id = String(uid || '').trim().toLowerCase();\n  return Boolean(id && (allowed.includes(id) || id === 'avina60' || id === 'mohsenjnext' || id === 'admin_user'));\n}"
+          new = "function isAdmin(uid, env) {\n  const allowed = adminUids(env);\n  const id = String(uid || '').trim().toLowerCase();\n  return Boolean(id && (allowed.includes(id) || id === 'avina60' || id === 'mohsenjnext' || id === 'admin_user'));\n}\nfunction isAdminIdentity(user, env) {\n  if (!user) return false;\n  return isAdmin(user.pi_uid, env) || isAdmin(user.username, env);\n}"
+          if old in s and 'function isAdminIdentity' not in s:
+              s = s.replace(old, new, 1)
+          s = s.replace("if (!isAdmin(auth.user.pi_uid, env) || auth.user.role !== 'admin')", "if (!isAdminIdentity(auth.user, env) || auth.user.role !== 'admin')")
+          s = s.replace("const isAdminUser = isAdmin(user.pi_uid, env) && user.role === 'admin';", "const isAdminUser = isAdminIdentity(user, env) && user.role === 'admin';")
 
-          if 'function isAdminIdentity(user, env)' not in s:
-              marker = "function isAdmin(uid, env) {\n  const allowed = adminUids(env);\n  const id = String(uid || '').trim().toLowerCase();\n  return Boolean(id && (allowed.includes(id) || id === 'avina60' || id === 'mohsenjnext' || id === 'admin_user'));\n}\n"
-              if marker not in s:
-                  raise SystemExit('admin marker not found')
-              s = s.replace(marker, marker + "function isAdminIdentity(user, env) {\n  if (!user) return false;\n  return isAdmin(user.pi_uid, env) || isAdmin(user.username, env);\n}\n", 1)
-
-          s = s.replace("isAdmin(auth.user.pi_uid, env) && auth.user.role !== 'admin'", "!isAdminIdentity(auth.user, env)")
-          s = s.replace("isAdmin(auth.user.pi_uid, env) || auth.user.role !== 'admin'", "!isAdminIdentity(auth.user, env)")
-          s = s.replace("isAdmin(user.pi_uid, env) && user.role === 'admin'", "isAdminIdentity(user, env)")
-          s = s.replace("isAdmin(user.pi_uid, env) ? user.role === 'admin' : false", "isAdminIdentity(user, env)")
-
-          payment_re = re.compile(r"function validatePiPayment\(payment, intent, user\) \{.*?\n\}", re.S)
-          payment_new = '''function validatePiPayment(payment, intent, user) {
+          old_validate = """function validatePiPayment(payment, intent, user) {
+  const identifier = String(payment?.identifier || payment?.id || '');
+  if (!identifier) throw Object.assign(new Error('Pi payment identifier is missing'), { status: 409 });
+  if (identifier !== String(intent.pi_payment_id || identifier)) throw Object.assign(new Error('Pi payment identifier mismatch'), { status: 409 });
+  const payerUid = payment?.user?.uid || payment?.from_address?.uid;
+  if (!payerUid) throw Object.assign(new Error('Pi payment payer identity is missing'), { status: 409 });
+  if (String(payerUid) !== String(user.pi_uid)) throw Object.assign(new Error('Pi payer mismatch'), { status: 403 });
+  const metadataIntent = payment?.metadata?.paymentIntentId;
+  if (!metadataIntent || String(metadataIntent) !== String(intent.id)) throw Object.assign(new Error('Pi payment metadata binding is missing or invalid'), { status: 409 });
+  const amount = Number(payment?.amount);
+  if (!Number.isFinite(amount) || Math.abs(amount - Number(intent.amount)) > 1e-9) throw Object.assign(new Error('Pi payment amount mismatch'), { status: 409 });
+  if (String(payment?.memo || '') !== String(intent.memo)) throw Object.assign(new Error('Pi payment memo mismatch'), { status: 409 });
+  return String(payment?.status || '').toLowerCase();
+}"""
+          new_validate = """function validatePiPayment(payment, intent, user) {
   const identifier = String(payment?.identifier || payment?.id || '');
   if (!identifier) throw Object.assign(new Error('Pi payment identifier is missing'), { status: 409 });
   if (identifier !== String(intent.pi_payment_id || identifier)) throw Object.assign(new Error('Pi payment identifier mismatch'), { status: 409 });
@@ -62,9 +69,10 @@ jobs:
   if (flags.developer_approved && flags.transaction_verified) return 'complete';
   if (flags.developer_approved) return 'approved';
   return 'pending';
-}'''
-          s, count = payment_re.subn(payment_new, s, count=1)
-          if count != 1:
+}"""
+          if old_validate in s:
+              s = s.replace(old_validate, new_validate, 1)
+          else:
               raise SystemExit('validatePiPayment block not found')
           p.write_text(s)
 
@@ -80,7 +88,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add _worker.js src/services/piService.js
           if ! git diff --cached --quiet; then
-            git commit -m 'fix: apply Pi payment DTO and admin identity'
+            git commit -m 'fix: finalize Pi payment approval and admin identity'
             git push origin HEAD:main
           fi
 
@@ -101,6 +109,7 @@ jobs:
           node --check _worker.js
           node --check worker-entry.js
           node --check worker-gateway.js
+          node --check worker-gateway2.js
 
       - name: Build frontend
         run: npm run build
