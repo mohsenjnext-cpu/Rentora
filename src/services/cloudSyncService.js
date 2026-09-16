@@ -250,7 +250,7 @@ export class CloudSyncService {
     return data.overview;
   }
 
-  async requestAdminPayout(amount, memo) {
+  async requestAdminPayout(amount, memo, walletAddress) {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('API Base URL is not configured');
 
@@ -260,7 +260,7 @@ export class CloudSyncService {
         ...this.getAuthHeaders(),
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ amount: Number(amount), memo: memo || undefined })
+      body: JSON.stringify({ amount: Number(amount), memo: memo || undefined, walletAddress: walletAddress || undefined })
     });
 
     const data = await res.json().catch(() => ({}));

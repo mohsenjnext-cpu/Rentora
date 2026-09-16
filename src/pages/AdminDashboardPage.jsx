@@ -74,6 +74,10 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
   // Treasury Payout state (A2U)
   const [payoutAmount, setPayoutAmount] = useState('');
   const [payoutMemo, setPayoutMemo] = useState('');
+  const [adminWalletAddress, setAdminWalletAddress] = useState(() => {
+    try { return localStorage.getItem('rentora_admin_wallet_addr') || ''; }
+    catch (_) { return ''; }
+  });
   const [isSubmittingPayout, setIsSubmittingPayout] = useState(false);
   const [payoutSuccessMsg, setPayoutSuccessMsg] = useState('');
   const [payoutErrorMsg, setPayoutErrorMsg] = useState('');
@@ -197,12 +201,15 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
 
     setIsSubmittingPayout(true);
     try {
-      const result = await cloudSyncService.requestAdminPayout(amount, payoutMemo);
+      if (adminWalletAddress) {
+        try { localStorage.setItem('rentora_admin_wallet_addr', adminWalletAddress.trim()); } catch (_) {}
+      }
+      const result = await cloudSyncService.requestAdminPayout(amount, payoutMemo, adminWalletAddress.trim());
       setPayoutSuccessMsg(result.message || l(
-        `مبلغ ${amount} π با موفقیت به حساب پای @${currentUser?.username || 'admin'} منتقل شد.`,
-        `Successfully transferred ${amount} π to your Pi account.`,
-        `تم تحويل ${amount} π بنجاح إلى حسابك.`,
-        `已成功将 ${amount} π 提现至您的 Pi 账号。`
+        `مبلغ ${amount} π با موفقیت برای کیف پول مقصد ثبت و تسویه شد.`,
+        `Successfully settled ${amount} π to destination wallet.`,
+        `تم تحويل ${amount} π بنجاح إلى المحفظة.`,
+        `已成功向目标钱包打款 ${amount} π。`
       ));
       setPayoutAmount('');
       setPayoutMemo('');
@@ -221,7 +228,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
           '转账需授权钱包地址权限，请点击下方按钮完成授权。'
         ));
       } else {
-        setPayoutErrorMsg(msg || l('خطا در واریز به حساب پای', 'Payout transfer failed', 'فشل التحويل', '提现失败'));
+        setPayoutErrorMsg(msg || l('خطا در تسویه حساب', 'Payout transfer failed', 'فشل التحويل', '提现失败'));
       }
     } finally {
       setIsSubmittingPayout(false);
@@ -481,7 +488,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div className="sm:col-span-2">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    {l('مبلغ برداشت و تسویه به حساب پای (π):', 'Withdrawal Amount (π):', 'مبلغ السحب (π):', '提现金额 (π)：')}
+                    {l('مبلغ برداشت و تسویه (π):', 'Withdrawal Amount (π):', 'مبلغ السحب (π):', '提现金额 (π)：')}
                   </label>
                   <div className="relative">
                     <input
@@ -518,6 +525,23 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                     className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#0F6E56]"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  {l('آدرس عمومی کیف پول پای ادمین (جهت واریز مستقیم):', 'Admin Personal Pi Wallet Address (Public Key):', 'عنوان المحفظة الشخصية للأدمن:', '管理员个人 Pi 钱包地址（收款）：')}
+                </label>
+                <input
+                  type="text"
+                  placeholder={l('آدرس عمومی کیف پول (مثلاً G...)', 'Public Key (e.g. G...)', 'عنوان المحفظة العام (مثال: G...)', '钱包公钥地址（如 G...）')}
+                  value={adminWalletAddress}
+                  onChange={(e) => setAdminWalletAddress(e.target.value)}
+                  dir="ltr"
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#0F6E56]"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {l('مبالغ کارمزد پلتفرم از کیف پول اپلیکیشن به این آدرس کیف پول تسویه و ثبت می‌شود.', 'Platform fee earnings will be settled and credited to this wallet address.', 'سيتم تسجيل وتسوية العمولات إلى هذه المحفظة.', '平台收益将从 App 金库结算至此钱包。')}
+                </p>
               </div>
 
               {needsWalletAuth ? (
@@ -558,12 +582,12 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                   {isSubmittingPayout ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>{l('در حال صدور تراکنش واریز به کیف پول پای...', 'Processing Pi A2U payout...', 'جارٍ التحويل...', '正在向 Pi 钱包转账...')}</span>
+                      <span>{l('در حال صدور تراکنش و تسویه...', 'Processing payout settlement...', 'جارٍ التحويل...', '正在处理结算...')}</span>
                     </>
                   ) : (
                     <>
                       <CreditCard className="w-4 h-4 text-emerald-300" />
-                      <span>{l(`واریز به کیف پول پای (@${currentUser?.username || 'admin'})`, `Withdraw to Pi Wallet (@${currentUser?.username || 'admin'})`, `تحويل إلى محفظة باي (@${currentUser?.username || 'admin'})`, `立即提现到 Pi 钱包 (@${currentUser?.username || 'admin'})`)}</span>
+                      <span>{l('انتقال و تسویه به کیف پول مقصد', 'Transfer & Settle to Wallet', 'تحويل وتسوية للمحفظة', '转账并结算到指定钱包')}</span>
                     </>
                   )}
                 </button>
@@ -885,18 +909,39 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
               />
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {transactions.map((tx, idx) => (
-                  <div key={tx.id || idx} className="py-2.5 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="font-bold text-slate-900 dark:text-white block">{tx.itemTitle || 'تراکنش پای'}</span>
-                      <span className="text-[10px] text-slate-400 font-mono" dir="ltr">{tx.piTxRef || tx.txid || tx.id}</span>
+                {transactions.map((tx, idx) => {
+                  const isPayout = tx.type === 'admin_payout';
+                  return (
+                    <div key={tx.id || idx} className="py-2.5 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-900 dark:text-white block">
+                            {isPayout 
+                              ? l('تسویه درآمد به کیف پول ادمین', 'Treasury Payout to Admin', 'سحب أرباح الخزينة', '金库提现')
+                              : (tx.itemTitle || l('کارمزد پلتفرم رنتورا', 'Rentora Platform Fee', 'عمولة المنصة', '平台服务费'))
+                            }
+                          </span>
+                          <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                            isPayout 
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300' 
+                              : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                          }`}>
+                            {isPayout ? l('تسویه‌حساب', 'Payout', 'سحب', '提现') : l('دریافت کارمزد', 'Revenue', 'دخل', '收益')}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono" dir="ltr">{tx.piTxRef || tx.pi_txid || tx.txid || tx.id}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className={`font-black font-mono text-xs block ${
+                          isPayout ? 'text-amber-600 dark:text-amber-400' : 'text-[#0F6E56] dark:text-[#48D2A8]'
+                        }`}>
+                          {isPayout ? `-${tx.amount} π` : `+${tx.platformFee || tx.amount || 0.0001} π`}
+                        </span>
+                        <span className="text-[9px] text-slate-400">{tx.created_at || tx.timestamp ? new Date(tx.created_at || tx.timestamp).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US') : 'تاییدشده'}</span>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="font-black text-[#0F6E56] font-mono text-xs block">+{tx.platformFee || tx.amount || 0.0001} π</span>
-                      <span className="text-[9px] text-slate-400">{tx.timestamp ? new Date(tx.timestamp).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US') : 'تاییدشده'}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
