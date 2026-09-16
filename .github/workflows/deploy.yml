@@ -96,3 +96,20 @@ jobs:
 
       - name: Deploy Worker and static assets
         run: npx wrangler deploy
+
+      - name: Verify live Worker and Pi payment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          health_url="https://rentora.mohsenjnext.workers.dev/api/health"
+          for attempt in 1 2 3 4 5; do
+            body="$(curl -sS "$health_url" || true)"
+            echo "Live health response (attempt ${attempt}): ${body}"
+            if printf '%s' "$body" | grep -q '"ok":true'; then
+              echo "Live Worker health and Pi payment configuration are ready."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Live Worker health check failed. Payment configuration is not ready."
+          exit 1
