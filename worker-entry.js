@@ -218,6 +218,14 @@ async function loadRental(env, rentalId) {
 async function createRental(request, env, origin) {
   const user = await requireUser(request, env);
   const body = await readJson(request);
+  const requestedRentalId = String(body?.id || '').trim();
+  if (requestedRentalId) {
+    const existing = await loadRental(env, requestedRentalId);
+    if (existing) {
+      if (existing.renter_user_id !== user.id) return error('Rental ownership denied', 403, env, {}, origin);
+      return json({ success: true, rental: rentalView(existing), idempotent: true }, 200, env, origin);
+    }
+  }
   const listingId = String(body?.listingId || body?.itemId || '').trim();
   const startDate = dateOnly(body?.startDate);
   const endDate = dateOnly(body?.endDate);
