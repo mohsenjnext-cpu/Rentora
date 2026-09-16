@@ -38,7 +38,7 @@ import {
 
 export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, onEditItem }) {
   const { lang, dir, t, l } = useLanguage();
-  const { isAdmin, currentUser, toggleUserStatus, moderateListingStatus } = usePiAuth();
+  const { isAdmin, currentUser, toggleUserStatus, moderateListingStatus, logout, loginWithPi } = usePiAuth();
   const { 
     items = [], 
     rentals = [], 
@@ -163,12 +163,13 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     setPayoutErrorMsg('');
     setPayoutSuccessMsg('');
     try {
-      await piService.requestWalletScope();
+      if (logout) await logout();
+      if (loginWithPi) await loginWithPi();
       setNeedsWalletAuth(false);
       setPayoutSuccessMsg(l(
-        'مجوز دسترسی به کیف پول با موفقیت ثبت شد. اکنون می‌توانید واریز را انجام دهید.',
-        'Wallet address authorized successfully. You can now submit payout.',
-        'تم منح الإذن بنجاح. يمكنك الآن السحب.',
+        'مجوز دسترسی به کیف پول با موفقیت تایید شد! اکنون می‌توانید واریز را انجام دهید.',
+        'Wallet address authorized successfully! You can now submit payout.',
+        'تم منح الإذن بنجاح! يمكنك الآن السحب.',
         '钱包权限已授权成功，现在可以发起提现。'
       ));
     } catch (err) {
