@@ -2,9 +2,9 @@ name: Temporary repair admin and Pi payment flow
 on:
   push:
     branches: [main]
+
 jobs:
   repair:
-    if: ${{ !contains(github.event.head_commit.message, 'fix: finalize Pi payment approval and admin identity') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -65,8 +65,7 @@ jobs:
           p.write_text(s)
 
           p = Path('src/services/piService.js')
-          s = p.read_text()
-          s = s.replace("window.Pi.authenticate(['payments', 'username'], onIncompletePayment)", "window.Pi.authenticate(['username', 'payments'], onIncompletePayment)")
+          s = p.read_text().replace("window.Pi.authenticate(['payments', 'username'], onIncompletePayment)", "window.Pi.authenticate(['username', 'payments'], onIncompletePayment)")
           p.write_text(s)
           PY
       - name: Validate
