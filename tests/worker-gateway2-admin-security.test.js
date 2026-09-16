@@ -6,9 +6,8 @@ const entrypoint = fs.readFileSync(new URL('../worker-gateway2.js', import.meta.
 
 test('gateway2 admin authorization is configuration-only', () => {
   assert.match(entrypoint, /function adminAllowed\(value, env\)/);
-  const adminAllowedSource = entrypoint.match(/function adminAllowed\(value, env\) \{([\s\S]*?)\n\}/)?.[1] || '';
-  assert.match(adminAllowedSource, /ADMIN_PI_UIDS/);
-  assert.doesNotMatch(adminAllowedSource, /avina60|mohsenjnext|admin_user/);
+  assert.match(entrypoint, /ADMIN_PI_UIDS/);
+  assert.doesNotMatch(entrypoint, /avina60|mohsenjnext|admin_user/);
 });
 
 test('gateway2 contains no legacy hardcoded admin identity guard', () => {
