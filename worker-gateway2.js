@@ -46,22 +46,37 @@ async function readJson(request) {
   if (!text) return {};
   try { return JSON.parse(text); } catch { throw Object.assign(new Error('Invalid JSON'), { status: 400 }); }
 }
+function sanitizePiApiKey(raw) {
+  if (!raw) return '';
+  let key = String(raw).trim();
+  key = key.replace(/^["']+|["']+$/g, '').trim();
+  if (/^key\s+/i.test(key)) {
+    key = key.replace(/^key\s+/i, '').trim();
+  } else if (/^bearer\s+/i.test(key)) {
+    key = key.replace(/^bearer\s+/i, '').trim();
+  }
+  return key;
+}
+
 function piApiKey(env) {
-  const key = env?.PI_API_KEY || env?.PI_SERVER_API_KEY;
+  const raw = env?.PI_API_KEY || env?.PI_SERVER_API_KEY;
+  const key = sanitizePiApiKey(raw);
   if (!key) throw Object.assign(new Error('Pi server API key is not configured'), { status: 503 });
   return key;
 }
+
 function piErrorMessage(data, fallback = 'Pi network error') {
   if (!data) return fallback;
   if (typeof data === 'string') return data;
   return data.error_message || data.error || data.message || data.detail || fallback;
 }
+
 async function piFetch(env, path, options = {}) {
   const base = String(env.PI_API_URL || 'https://api.minepi.com/v2').replace(/\/$/, '');
   const headers = new Headers(options.headers || {});
   if (!headers.has('Authorization')) {
     const key = piApiKey(env);
-    headers.set('Authorization', key.startsWith('Key ') ? key : `Key ${key}`);
+    headers.set('Authorization', `Key ${key}`);
   }
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   return fetch(`${base}${path}`, { ...options, headers });
@@ -356,13 +371,39 @@ export default {
         return new Response(null, { status: 204, headers });
       }
       if (request.method === 'GET' && path === '/api/health') {
+        const rawKey = env?.PI_API_KEY || env?.PI_SERVER_API_KEY;
+        const sanitizedKey = sanitizePiApiKey(rawKey);
+        let piKeyValid = false;
+        let piKeyError = null;
+
+        if (sanitizedKey) {
+          try {
+            const piRes = await fetch('https://api.minepi.com/v2/payments/probe_health_check', {
+              headers: { Authorization: `Key ${sanitizedKey}` }
+            });
+            if (piRes.status === 404) {
+              piKeyValid = true;
+            } else if (piRes.status === 401 || piRes.status === 403) {
+              const errBody = await piRes.json().catch(() => ({}));
+              piKeyError = errBody.error_message || errBody.error || errBody.message || 'Invalid API Key';
+            } else {
+              piKeyValid = piRes.ok;
+            }
+          } catch (e) {
+            piKeyError = e.message;
+          }
+        }
+
         const checks = {
-          piApiKeyConfigured: Boolean(env?.PI_API_KEY || env?.PI_SERVER_API_KEY),
+          piApiKeyConfigured: Boolean(sanitizedKey),
+          piApiKeyLength: sanitizedKey ? sanitizedKey.length : 0,
+          piApiKeyValid: piKeyValid,
+          piKeyError: piKeyError || undefined,
           piApiUrlConfigured: Boolean(env?.PI_API_URL),
           databaseBound: Boolean(env?.RENTORA_DB),
           sessionStoreBound: Boolean(env?.RENTORA_KV),
         };
-        const healthy = Object.values(checks).every(Boolean);
+        const healthy = Boolean(checks.piApiKeyConfigured && checks.databaseBound && checks.sessionStoreBound);
         return json({ ok: healthy, checks }, healthy ? 200 : 503, request, env);
       }
       if (request.method === 'POST' && path === '/api/payments/incomplete') return await handleIncompletePayment(request, env);

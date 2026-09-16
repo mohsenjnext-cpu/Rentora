@@ -170,13 +170,26 @@ function detectBypassAttempt(rawText) {
   return { isBlocked: false };
 }
 
+function sanitizePiApiKey(raw) {
+  if (!raw) return '';
+  let key = String(raw).trim();
+  key = key.replace(/^["']+|["']+$/g, '').trim();
+  if (/^key\s+/i.test(key)) {
+    key = key.replace(/^key\s+/i, '').trim();
+  } else if (/^bearer\s+/i.test(key)) {
+    key = key.replace(/^bearer\s+/i, '').trim();
+  }
+  return key;
+}
+
 async function piFetch(env, path, options = {}) {
-  const key = env?.PI_API_KEY || env?.PI_SERVER_API_KEY;
+  const rawKey = env?.PI_API_KEY || env?.PI_SERVER_API_KEY;
+  const key = sanitizePiApiKey(rawKey);
   if (!key) throw new Error('Pi server API key is not configured');
   const base = String(env.PI_API_URL || 'https://api.minepi.com/v2').replace(/\/$/, '');
   const headers = new Headers(options.headers || {});
   if (!headers.has('Authorization')) {
-    headers.set('Authorization', key.startsWith('Key ') ? key : `Key ${key}`);
+    headers.set('Authorization', `Key ${key}`);
   }
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   return fetch(`${base}${path}`, { ...options, headers });
