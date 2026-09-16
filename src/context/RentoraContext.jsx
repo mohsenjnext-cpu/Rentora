@@ -95,6 +95,10 @@ export function RentoraProvider({ children }) {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    cloudSyncService.fetchSharedData(true).catch(() => {});
+  }, [currentUser]);
+
   // Background polling for conversations and marketplace data
   useEffect(() => {
     if (typeof window === 'undefined') return;

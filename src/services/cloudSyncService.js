@@ -606,7 +606,7 @@ export class CloudSyncService {
         const mergedUsers = Array.from(mergedUsersMap.values());
         this.saveCachedUsers(mergedUsers);
 
-        const currentHash = `${remoteItems.length}_${remoteRentals.length}_${mergedUsers.length}`;
+        const currentHash = JSON.stringify({ items: remoteItems.map(i => [i.id, i.updatedAt || i.createdAt || '', i.status || '']), rentals: remoteRentals.map(r => [r.id, r.updatedAt || r.createdAt || '', r.status || '', r.paymentStatus || '']), users: mergedUsers.map(u => [u.id || u.uid || u.username || '', u.updatedAt || u.joinedDate || '']) });
 
         const result = {
           items: remoteItems,
