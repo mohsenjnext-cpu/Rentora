@@ -468,7 +468,7 @@ export default {
             "INSERT INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, 'admin_payout', 'completed', ?7)"
           ).bind(
             `tx_${crypto.randomUUID()}`,
-            `payout_${paymentId || crypto.randomUUID()}`,
+            null,
             paymentId || `a2u_${crypto.randomUUID()}`,
             created?.transaction?.txid || approvedData?.transaction?.txid || `txid_a2u_${Date.now()}`,
             user.id,

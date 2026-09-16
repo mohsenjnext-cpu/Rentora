@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS payment_intents (
 
 CREATE TABLE IF NOT EXISTS transactions (
   id TEXT PRIMARY KEY,
-  payment_intent_id TEXT NOT NULL REFERENCES payment_intents(id),
+  payment_intent_id TEXT REFERENCES payment_intents(id),
   pi_payment_id TEXT NOT NULL UNIQUE,
   pi_txid TEXT NOT NULL UNIQUE,
   user_id TEXT NOT NULL REFERENCES users(id),
