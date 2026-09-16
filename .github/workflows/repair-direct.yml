@@ -9,12 +9,15 @@ permissions:
 
 jobs:
   repair:
-    if: ${{ !contains(github.event.head_commit.message, 'fix: apply Pi payment DTO and admin identity') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Patch source
         run: |
+          if git log -1 --pretty=%B | grep -Fq 'fix: apply Pi payment DTO and admin identity'; then
+            echo 'Repair commit already applied.'
+            exit 0
+          fi
           node <<'NODE'
           const fs = require('fs');
           let s = fs.readFileSync('_worker.js', 'utf8');
