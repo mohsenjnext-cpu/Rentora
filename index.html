@@ -56,6 +56,7 @@
       try {
         if (window.Pi && typeof window.Pi.init === 'function') {
           window.Pi.init({ version: "2.0", sandbox: false });
+          window.__PI_INITIALIZED__ = true;
         }
       } catch (e) {}
     </script>

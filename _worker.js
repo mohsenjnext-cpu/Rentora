@@ -526,7 +526,29 @@ export default {
         await env.RENTORA_KV.put(`payment-complete:${intent.id}`, JSON.stringify({ paymentId: body.paymentId, txid: body.txid, at: now() }), { expirationTtl: 60 * 60 * 24 * 30 });
         return jsonResponse({ completed: true, paymentId: body.paymentId, txid: body.txid, data: completion }, 200, env, origin);
       }
-      if (method === 'POST' && path === '/api/payments/incomplete') { const { user } = await requireUser(request, env); const body = await readJson(request); const payment = body.payment || {}; if (payment.identifier) await env.RENTORA_KV.put(`incomplete-payment:${payment.identifier}`, JSON.stringify({ uid: user.pi_uid, payment, at: now() }), { expirationTtl: 60 * 60 * 24 * 7 }); return jsonResponse({ handled: true }, 200, env, origin); }
+      if (method === 'POST' && path === '/api/payments/incomplete') {
+        const body = await readJson(request);
+        const paymentObj = body?.payment || {};
+        const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
+        const txid = String(body?.txid || paymentObj?.transaction?.txid || '').trim();
+        if (!paymentId) return jsonResponse({ handled: false, error: 'paymentId is required' }, 400, env, origin);
+        try {
+          const response = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
+          const payment = await response.json().catch(() => ({}));
+          if (response.ok) {
+            const resolvedTxid = txid || payment?.transaction?.txid;
+            if (payment?.status?.developer_completed) {
+              await env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE pi_payment_id=?3").bind(resolvedTxid || null, now(), paymentId).run().catch(() => {});
+            } else if (payment?.status?.transaction_verified && resolvedTxid) {
+              await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, { method: 'POST', body: JSON.stringify({ txid: resolvedTxid }) }).catch(() => {});
+              await env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE pi_payment_id=?3").bind(resolvedTxid, now(), paymentId).run().catch(() => {});
+            } else if (!payment?.status?.developer_approved) {
+              await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, { method: 'POST', body: '{}' }).catch(() => {});
+            }
+          }
+        } catch (_) {}
+        return jsonResponse({ handled: true }, 200, env, origin);
+      }
       if (method === 'POST' && path === '/api/sync/item') { const { user } = await requireUser(request, env); const item = await readJson(request);
         if (!item?.id || !String(item.title || '').trim()) return errorResponse('Invalid listing', 400, env, undefined, origin);
         const cInfo = item.contactInfo || (item.phoneContact ? { contactPhone: item.phoneContact } : null);

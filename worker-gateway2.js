@@ -262,6 +262,64 @@ async function completePayment(request, env) {
 
   return json({ completed: true, paymentId: body.paymentId, txid: body.txid, traceId }, 200, request, env);
 }
+
+async function handleIncompletePayment(request, env) {
+  const traceId = 'incomp_' + crypto.randomUUID().slice(0, 8);
+  const body = await readJson(request);
+  const paymentObj = body?.payment || {};
+  const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
+  const txid = String(body?.txid || paymentObj?.transaction?.txid || '').trim();
+  
+  if (!paymentId) {
+    return json({ handled: false, error: 'paymentId is required' }, 400, request, env);
+  }
+
+  try {
+    const response = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
+    const payment = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error(`[Incomplete ${traceId}] Pi GET payment ${paymentId} failed:`, response.status, payment);
+      return json({ handled: false, error: 'Unable to fetch Pi payment' }, 502, request, env);
+    }
+
+    const status = normalizeStatus(payment?.status);
+    const resolvedTxid = txid || payment?.transaction?.txid;
+
+    if (status.developer_completed) {
+      if (env?.RENTORA_DB) {
+        await env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE pi_payment_id=?3").bind(resolvedTxid || null, now(), paymentId).run().catch(() => {});
+      }
+      return json({ handled: true, status: 'completed', paymentId, traceId }, 200, request, env);
+    }
+
+    if (payment?.status?.transaction_verified && resolvedTxid) {
+      const compRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ txid: resolvedTxid })
+      });
+      const compData = await compRes.json().catch(() => ({}));
+      if (env?.RENTORA_DB) {
+        await env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE pi_payment_id=?3").bind(resolvedTxid, now(), paymentId).run().catch(() => {});
+      }
+      return json({ handled: true, status: 'completed', paymentId, txid: resolvedTxid, traceId }, 200, request, env);
+    }
+
+    if (!status.developer_approved) {
+      const appRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, {
+        method: 'POST',
+        body: '{}'
+      });
+      const appData = await appRes.json().catch(() => ({}));
+      return json({ handled: true, status: 'approved', paymentId, traceId }, 200, request, env);
+    }
+
+    return json({ handled: true, status: 'pending', paymentId, traceId }, 200, request, env);
+  } catch (err) {
+    console.error(`[Incomplete ${traceId}] error:`, err);
+    return json({ handled: false, error: err.message, traceId }, 500, request, env);
+  }
+}
+
 async function adminRoute(request, env, path) {
   const user = await requireUser(request, env);
   if (!(adminAllowed(user.pi_uid, env) || adminAllowed(user.username, env))) return json({ error: 'Admin access required' }, 403, request, env);
@@ -307,6 +365,7 @@ export default {
         const healthy = Object.values(checks).every(Boolean);
         return json({ ok: healthy, checks }, healthy ? 200 : 503, request, env);
       }
+      if (request.method === 'POST' && path === '/api/payments/incomplete') return await handleIncompletePayment(request, env);
       if (request.method === 'POST' && path === '/api/payments/approve') return await approvePayment(request, env);
       if (request.method === 'POST' && path === '/api/payments/complete') return await completePayment(request, env);
       if (request.method === 'GET' && path === '/api/auth/me') {

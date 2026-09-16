@@ -83,11 +83,11 @@ export default function PiAuthModal() {
           </p>
         </div>
 
-        {/* Network Badge: Pi Testnet / Sandbox Only */}
+        {/* Network Badge: Official Pi Testnet */}
         <div className="mb-3.5 p-2 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900/60 rounded-xl flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300 font-bold">
             <FlaskConical className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-            <span>{l('شبکه تست‌نت پای (Pi Testnet / Sandbox)', 'Pi Testnet / Sandbox Mode', 'شبكة باي التجريبية (Testnet)', 'Pi Testnet 测试网模式')}</span>
+            <span>{l('شبکه رسمی تست‌نت پای (Pi Testnet)', 'Pi Testnet Mode', 'شبكة باي التجريبية (Pi Testnet)', 'Pi Testnet 官方测试网')}</span>
           </div>
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 border border-purple-300 dark:border-purple-700">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>

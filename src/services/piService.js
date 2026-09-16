@@ -19,18 +19,20 @@ class PiNetworkService {
   }
 
   async init() {
-    // Rentora is a Pi Testnet app, not a Pi Sandbox app. The Pi SDK's sandbox
-    // mode targets sandbox.minepi.com and must not be mixed with Testnet server
-    // payments. The Developer Portal app network remains the source of truth.
     this.isSandbox = false;
     if (!this.hasPiSdk() || typeof window.Pi.init !== 'function') return false;
-    if (this.isInitialized) return true;
+    if (this.isInitialized || window.__PI_INITIALIZED__) {
+      this.isInitialized = true;
+      return true;
+    }
     try {
       window.Pi.init({ version: '2.0', sandbox: false });
       this.isInitialized = true;
+      window.__PI_INITIALIZED__ = true;
       return true;
     } catch (_) {
       this.isInitialized = true;
+      window.__PI_INITIALIZED__ = true;
       return true;
     }
   }
@@ -56,15 +58,14 @@ class PiNetworkService {
         const onIncompletePayment = customIncompleteHandler || (async (payment) => {
           if (!payment?.identifier) return;
           try {
-            const raw = localStorage.getItem('rentora_live_v1_session');
-            const session = raw ? JSON.parse(raw) : null;
-            if (!session?.sessionToken) return;
             await fetch(`${apiBase}/api/payments/incomplete`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.sessionToken}` },
-              body: JSON.stringify({ payment })
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ payment, paymentId: payment.identifier, txid: payment.transaction?.txid })
             });
-          } catch (_) {}
+          } catch (e) {
+            console.warn('Incomplete payment handling error:', e);
+          }
         });
 
         const authResult = await Promise.race([
