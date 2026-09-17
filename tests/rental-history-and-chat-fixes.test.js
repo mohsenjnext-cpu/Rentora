@@ -239,3 +239,93 @@ test('Chat Scroll & Polling Stability: Hash comparison avoids re-render during u
   const updatedHash = withNewMsg.map(m => `${m.id}_${m.createdAt}`).join('|');
   assert.notEqual(currentHash, updatedHash, 'New message changes hash and triggers state update');
 });
+
+test('Chat Auto-Scroll: Preserves scroll when reading older messages vs snaps when near bottom', () => {
+  // Test near bottom logic
+  const checkNearBottom = (scrollHeight, scrollTop, clientHeight, threshold = 100) => {
+    return scrollHeight - scrollTop - clientHeight <= threshold;
+  };
+
+  // Case 1: User is at the bottom of 1000px content in 400px container
+  const atBottom = checkNearBottom(1000, 600, 400); // 1000 - 600 - 400 = 0 <= 100
+  assert.equal(atBottom, true, 'User at bottom should be recognized as nearBottom');
+
+  // Case 2: User is scrolled up reading older messages (e.g. scrollTop = 200)
+  const scrolledUp = checkNearBottom(1000, 200, 400); // 1000 - 200 - 400 = 400 > 100
+  assert.equal(scrolledUp, false, 'User reading older messages must NOT be marked as nearBottom');
+
+  // Simulation of message arrival:
+  const shouldAutoScroll = (isNearBottom, isSentByMe) => {
+    return isNearBottom || isSentByMe;
+  };
+
+  // If another user sends a message while current user is reading history:
+  assert.equal(shouldAutoScroll(false, false), false, 'Incoming message when scrolled up MUST NOT trigger auto-scroll');
+
+  // If another user sends a message while current user is at bottom:
+  assert.equal(shouldAutoScroll(true, false), true, 'Incoming message when at bottom MUST trigger auto-scroll');
+
+  // If current user sends a message regardless of position:
+  assert.equal(shouldAutoScroll(false, true), true, 'Self-sent message MUST trigger auto-scroll to view sent message');
+});
+
+test('Chat Message Deduplication: Sending & polling merge strictly by message ID', () => {
+  const existing = [
+    { id: 'msg_101', text: 'سلام', createdAt: '2026-09-17T10:00:00Z' },
+    { id: 'msg_102', text: 'قیمت چند است؟', createdAt: '2026-09-17T10:01:00Z' }
+  ];
+
+  // Optimistically added / sent message
+  const newlySent = { id: 'msg_103', text: 'روزانه ۵ پای', createdAt: '2026-09-17T10:02:00Z' };
+
+  // Combine
+  const dedupedMap = new Map();
+  existing.forEach(m => dedupedMap.set(m.id, m));
+  dedupedMap.set(newlySent.id, newlySent);
+
+  assert.equal(dedupedMap.size, 3);
+
+  // Subsequent polling returns all 3 messages from backend
+  const polled = [
+    { id: 'msg_101', text: 'سلام', createdAt: '2026-09-17T10:00:00Z' },
+    { id: 'msg_102', text: 'قیمت چند است؟', createdAt: '2026-09-17T10:01:00Z' },
+    { id: 'msg_103', text: 'روزانه ۵ پای', createdAt: '2026-09-17T10:02:00Z' }
+  ];
+
+  polled.forEach(m => dedupedMap.set(m.id, m));
+  assert.equal(dedupedMap.size, 3, 'Polling must not duplicate already-rendered sent message');
+});
+
+test('Chat Conversation Switching: Stale response protection isolates conversation messages', async () => {
+  let activeConvId = 'conv_A';
+
+  const fetchSimulation = async (id, delayMs, result) => {
+    await new Promise(r => setTimeout(r, delayMs));
+    return { id, messages: result };
+  };
+
+  // User starts loading Conv A (slow response 50ms)
+  const reqA = fetchSimulation('conv_A', 50, [{ id: 'msg_A1', text: 'پیام مکالمه الف' }]);
+
+  // User immediately switches to Conv B (fast response 10ms)
+  activeConvId = 'conv_B';
+  const reqB = fetchSimulation('conv_B', 10, [{ id: 'msg_B1', text: 'پیام مکالمه ب' }]);
+
+  const resB = await reqB;
+  let activeMessages = [];
+  if (activeConvId === resB.id) {
+    activeMessages = resB.messages;
+  }
+
+  assert.equal(activeMessages.length, 1);
+  assert.equal(activeMessages[0].id, 'msg_B1');
+
+  // Slow response A arrives afterwards
+  const resA = await reqA;
+  if (activeConvId === resA.id) {
+    // Should NOT execute because activeConvId is now conv_B
+    activeMessages = resA.messages;
+  }
+
+  assert.equal(activeMessages[0].id, 'msg_B1', 'Stale response from Conv A must not overwrite Conv B messages');
+});

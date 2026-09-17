@@ -59,6 +59,9 @@ export default function ChatModal({
   const isNearBottomRef = useRef(true);
   const lastMessagesHashRef = useRef('');
   const prevMessagesCountRef = useRef(0);
+  const activeConvIdRef = useRef(activeConvId);
+  activeConvIdRef.current = activeConvId;
+  const isFetchingRef = useRef(false);
 
   const activeItem = itemContext || initialItem;
   const activeRental = rentalContext || initialRental;
@@ -77,7 +80,7 @@ export default function ChatModal({
   const handleContainerScroll = () => {
     const el = chatScrollContainerRef.current;
     if (!el) return;
-    const threshold = 80;
+    const threshold = 100;
     const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
     isNearBottomRef.current = isAtBottom;
   };
@@ -180,17 +183,28 @@ export default function ChatModal({
     };
   }, [isOpen, activeItem?.id, activeRental?.id, isAuthenticated, currentUser, isItemOwner]);
 
-  // Load messages whenever activeConvId changes
+  // Load messages whenever activeConvId changes with stale request protection
   const loadMessages = useCallback(async (convId, silent = false) => {
     if (!convId || !isAuthenticated) return;
+    if (isFetchingRef.current && silent) return;
+
+    isFetchingRef.current = true;
     if (!silent) setIsLoadingMessages(true);
     try {
       const data = await fetchConversationMessages(convId);
+      // Discard stale response if active conversation changed during fetch
+      if (activeConvIdRef.current !== convId) return;
+
       if (data && Array.isArray(data.messages)) {
         const hash = data.messages.map(m => `${m.id}_${m.createdAt}`).join('|');
         if (hash !== lastMessagesHashRef.current) {
           lastMessagesHashRef.current = hash;
-          setMessages(data.messages);
+          // Deduplicate messages strictly by id
+          const dedupedMap = new Map();
+          data.messages.forEach(m => {
+            if (m && m.id) dedupedMap.set(m.id, m);
+          });
+          setMessages(Array.from(dedupedMap.values()));
           if (markConversationAsRead) {
             markConversationAsRead(convId);
           }
@@ -199,6 +213,7 @@ export default function ChatModal({
     } catch (err) {
       console.warn('Fetch messages error:', err.message);
     } finally {
+      isFetchingRef.current = false;
       if (!silent) setIsLoadingMessages(false);
     }
   }, [fetchConversationMessages, isAuthenticated, markConversationAsRead]);
@@ -208,6 +223,7 @@ export default function ChatModal({
       lastMessagesHashRef.current = '';
       prevMessagesCountRef.current = 0;
       isNearBottomRef.current = true;
+      setMessages([]);
       loadMessages(activeConvId, false);
       if (markConversationAsRead) {
         markConversationAsRead(activeConvId);
@@ -234,18 +250,22 @@ export default function ChatModal({
   useEffect(() => {
     if (isOpen && messages.length > 0) {
       if (prevMessagesCountRef.current === 0) {
-        // Initial load: instant jump to bottom of chat list only
-        scrollToBottom(false);
+        // Initial load: instant jump to bottom of chat list only after paint
+        requestAnimationFrame(() => {
+          scrollToBottom(false);
+        });
       } else if (messages.length > prevMessagesCountRef.current) {
         const lastMsg = messages[messages.length - 1];
         const isSentByMe = (lastMsg?.senderUsername || '').toLowerCase() === myUsername;
         // Only auto-scroll if user was near the bottom or user sent this message
         if (isNearBottomRef.current || isSentByMe) {
-          scrollToBottom(true);
+          requestAnimationFrame(() => {
+            scrollToBottom(true);
+          });
         }
       }
       prevMessagesCountRef.current = messages.length;
-    } else {
+    } else if (!isOpen || messages.length === 0) {
       prevMessagesCountRef.current = 0;
     }
   }, [isOpen, messages, myUsername]);
@@ -301,8 +321,15 @@ export default function ChatModal({
 
       const newMsg = await sendConversationMessage(targetId, { text });
       if (newMsg) {
-        setMessages(prev => [...prev, newMsg]);
-        setTimeout(() => scrollToBottom(true), 50);
+        setMessages(prev => {
+          const dedupedMap = new Map();
+          prev.forEach(m => { if (m?.id) dedupedMap.set(m.id, m); });
+          if (newMsg.id) dedupedMap.set(newMsg.id, newMsg);
+          return Array.from(dedupedMap.values());
+        });
+        requestAnimationFrame(() => {
+          scrollToBottom(true);
+        });
       }
     } catch (e) {
       setFilterWarningMessage(e.message || 'خطا در ارسال پیام.');
@@ -334,11 +361,11 @@ export default function ChatModal({
   return (
     <div 
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-xs animate-fadeIn select-none"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-xs animate-fadeIn select-none touch-none"
     >
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-white dark:bg-[#151426] rounded-2xl w-full max-w-lg h-[88vh] max-h-[640px] flex flex-col border border-slate-200 dark:border-slate-800 shadow-2xl animate-scaleIn overflow-hidden"
+        className="bg-white dark:bg-[#151426] rounded-2xl w-full max-w-lg h-[90dvh] sm:h-[88vh] max-h-[640px] flex flex-col border border-slate-200 dark:border-slate-800 shadow-2xl animate-scaleIn overflow-hidden touch-auto"
       >
         
         {/* ========================================================= */}
@@ -380,6 +407,8 @@ export default function ChatModal({
               <img
                 src={otherUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${otherUser.username || 'pioneer'}`}
                 alt=""
+                width="36"
+                height="36"
                 className="w-9 h-9 rounded-xl bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 shrink-0 object-cover"
               />
               <div className="min-w-0">
@@ -517,6 +546,8 @@ export default function ChatModal({
                       <img
                         src={partner.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${partner.username || 'pioneer'}`}
                         alt=""
+                        width="40"
+                        height="40"
                         className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-700 object-cover shrink-0"
                       />
                       <div className="min-w-0">
@@ -611,6 +642,8 @@ export default function ChatModal({
                         <img
                           src={msg.senderAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${msg.senderUsername || 'pioneer'}`}
                           alt=""
+                          width="24"
+                          height="24"
                           className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-slate-700 object-cover shrink-0 mb-1"
                         />
                       )}
