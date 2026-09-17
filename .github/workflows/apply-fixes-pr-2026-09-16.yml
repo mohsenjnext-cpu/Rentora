@@ -1,0 +1,43 @@
+name: Apply verified marketplace fixes PR
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          fetch-depth: 0
+
+      - name: Apply fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('worker-entry.js'); s=p.read_text(); old=".bind(id, listingId, user.id, startDate, endDate, quote.rentalTotal, quote.deposit, quote.platformFee, JSON.stringify(metadata), createdAt, createdAt).run();"; new=".bind(id, listingId, user.id, startDate, endDate, quote.rentalTotal, quote.deposit, quote.platformFee, JSON.stringify(metadata), createdAt).run();"; assert old in s; p.write_text(s.replace(old,new,1))
+          p=Path('src/services/cloudSyncService.js'); s=p.read_text(); old="const currentHash = `${remoteItems.length}_${remoteRentals.length}_${mergedUsers.length}`;"; new="const currentHash = JSON.stringify({ items: remoteItems.map(i => [i.id, i.updatedAt || i.createdAt || '', i.status || '']), rentals: remoteRentals.map(r => [r.id, r.updatedAt || r.createdAt || '', r.status || '', r.paymentStatus || '']), users: mergedUsers.map(u => [u.id || u.uid || u.username || '', u.updatedAt || u.joinedDate || '']) });"; assert old in s; p.write_text(s.replace(old,new,1))
+          p=Path('src/context/RentoraContext.jsx'); s=p.read_text(); old="    return () => unsubscribe();\n  }, []);"; new="    return () => unsubscribe();\n  }, []);\n\n  useEffect(() => {\n    cloudSyncService.fetchSharedData(true).catch(() => {});\n  }, [currentUser]);"; assert old in s; p.write_text(s.replace(old,new,1))
+          p=Path('src/pages/AdminDashboardPage.jsx'); s=p.read_text(); old="""      const [overviewData, usersData] = await Promise.all([\n        cloudSyncService.fetchAdminOverview().catch(() => null),\n        cloudSyncService.fetchAdminUsers().catch(() => [])\n      ]);\n      if (overviewData) setAdminOverview(overviewData);\n      if (Array.isArray(usersData) && usersData.length > 0) {\n        setAdminUsers(usersData);\n      }"""; new="""      const [overviewData, usersData] = await Promise.all([\n        cloudSyncService.fetchAdminOverview(),\n        cloudSyncService.fetchAdminUsers()\n      ]);\n      setAdminOverview(overviewData || null);\n      setAdminUsers(Array.isArray(usersData) ? usersData : []);"""; assert old in s; s=s.replace(old,new,1)
+          start=s.index("    const userMap = new Map();", s.index("const allRealUsers")); end=s.index("    return Array.from(userMap.values());", start)+len("    return Array.from(userMap.values());"); s=s[:start]+"    // The admin API is the sole source of truth.\n    if (Array.isArray(adminUsers)) return adminUsers;\n    return [];"+s[end:]; p.write_text(s)
+          PY
+          node --check worker-entry.js
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add worker-entry.js src/services/cloudSyncService.js src/context/RentoraContext.jsx src/pages/AdminDashboardPage.jsx
+          git commit -m 'fix: repair cross-device sync admin users and D1 bindings' || exit 0
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
+      - name: Remove temporary workflows
+        run: |
+          git rm -f .github/workflows/apply-fixes-2026-09-16.yml .github/workflows/apply-fixes-pr-2026-09-16.yml || true
+          git commit -m 'chore: remove temporary fix workflows' || exit 0
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
