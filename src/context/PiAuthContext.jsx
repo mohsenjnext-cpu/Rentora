@@ -110,6 +110,7 @@ export function PiAuthProvider({ children }) {
             ...prev,
             ...data.user,
             role: data.user.role || (verifiedAdmin ? 'admin' : 'user'),
+            kycStatus: data.user.kycStatus === 'verified' ? 'verified' : 'unverified',
             sessionToken: prev.sessionToken
           } : null);
         }
@@ -148,7 +149,7 @@ export function PiAuthProvider({ children }) {
         displayName: authData.user?.displayName || authData.username,
         sessionToken: authData.sessionToken,
         role: authData.user?.role || 'user',
-        kycStatus: authData.user?.kycStatus || 'unknown',
+        kycStatus: authData.user?.kycStatus === 'verified' ? 'verified' : 'unverified',
         isOfficialSdk: true,
         piWalletConnected: true,
         status: authData.user?.status || 'active'

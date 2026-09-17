@@ -207,7 +207,7 @@ function parseMetadata(value) { if (!value) return {}; try { return JSON.parse(v
 function userView(row, env) {
   const meta = parseMetadata(row.metadata);
   const isAdm = env ? (isAdmin(row.pi_uid, env) || isAdmin(row.username, env)) : row.role === 'admin';
-  const isVerifiedPioneer = meta.kycStatus === 'verified' || row.kyc_status === 'verified' || meta.isOfficialSdk === true || isAdm;
+  const isVerifiedPioneer = meta.kycStatus === 'verified' || row.kyc_status === 'verified';
   return {
     ...meta,
     id: row.id,
@@ -643,17 +643,22 @@ export default {
           piUser?.kyc_status === 'verified' ||
           piUser?.is_kyc === true ||
           piUser?.kyc === true ||
-          piUser?.verified === true ||
+          piUser?.credentials?.kyc === true ||
           body?.user?.kyc_status === true ||
+          body?.user?.kyc_status === 'verified' ||
           body?.user?.is_kyc === true ||
+          body?.user?.kyc === true ||
+          body?.user?.credentials?.kyc === true ||
           body?.kycStatus === 'verified' ||
-          isAdminUser ||
           (Array.isArray(piUser?.roles) && (
             piUser.roles.includes('kyc') ||
             piUser.roles.includes('kyced') ||
-            piUser.roles.includes('pioneer_kyc') ||
-            piUser.roles.includes('verified') ||
-            piUser.roles.includes('pioneer')
+            piUser.roles.includes('pioneer_kyc')
+          )) ||
+          (Array.isArray(body?.user?.roles) && (
+            body.user.roles.includes('kyc') ||
+            body.user.roles.includes('kyced') ||
+            body.user.roles.includes('pioneer_kyc')
           ))
         );
         const kycStatus = isKyced ? 'verified' : 'unverified';

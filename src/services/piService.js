@@ -85,18 +85,39 @@ class PiNetworkService {
 
         this.isSdkAuthenticated = true;
 
+        const isUserKyc = Boolean(
+          sdkUser?.kyc_status === true ||
+          sdkUser?.kyc_status === 'verified' ||
+          sdkUser?.is_kyc === true ||
+          sdkUser?.kyc === true ||
+          sdkUser?.credentials?.kyc === true ||
+          (Array.isArray(sdkUser?.roles) && (
+            sdkUser.roles.includes('kyc') ||
+            sdkUser.roles.includes('kyced') ||
+            sdkUser.roles.includes('pioneer_kyc')
+          ))
+        );
+
         const response = await fetch(`${apiBase}/api/auth/pi-login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             accessToken,
             user: sdkUser,
-            kycStatus: (sdkUser?.kyc_status === true || sdkUser?.kyc_status === 'verified' || sdkUser?.is_kyc === true) ? 'verified' : undefined
+            kycStatus: isUserKyc ? 'verified' : 'unverified'
           })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || !data?.sessionToken || !data?.user?.uid) throw new Error(data?.error || 'احراز هویت Pi در سرور رد شد.');
-        return { accessToken, uid: data.user.uid, username: data.user.username, sessionToken: data.sessionToken, isOfficialSdk: true, kycStatus: data.user.kycStatus || 'unknown', user: data.user };
+        return {
+          accessToken,
+          uid: data.user.uid,
+          username: data.user.username,
+          sessionToken: data.sessionToken,
+          isOfficialSdk: true,
+          kycStatus: data.user.kycStatus === 'verified' ? 'verified' : 'unverified',
+          user: data.user
+        };
       } finally {
         this.authPromise = null;
       }
