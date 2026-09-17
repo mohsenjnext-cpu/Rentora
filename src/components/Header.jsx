@@ -306,7 +306,9 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
           >
             <MessageSquare className="w-4 h-4 stroke-[1.8] text-[#534AB7]" />
             {totalUnreadCount > 0 && (
-              <span className="absolute top-0 right-0 w-2 h-2 bg-rose-500 rounded-full animate-pulse"></span>
+              <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] bg-rose-500 text-white rounded-full text-[8px] font-bold flex items-center justify-center px-0.5 border border-white dark:border-[#0E0D1B]">
+                {totalUnreadCount}
+              </span>
             )}
           </button>
 

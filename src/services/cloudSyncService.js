@@ -704,7 +704,13 @@ export class CloudSyncService {
       const saved = localStorage.getItem(STORAGE_RENTALS_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          const dedupedMap = new Map();
+          parsed.forEach(r => {
+            if (r && r.id) dedupedMap.set(r.id, r);
+          });
+          return Array.from(dedupedMap.values());
+        }
       }
       return [];
     } catch (e) {
@@ -714,7 +720,12 @@ export class CloudSyncService {
 
   saveCachedRentals(rentals) {
     try {
-      localStorage.setItem(STORAGE_RENTALS_KEY, JSON.stringify(rentals || []));
+      const list = Array.isArray(rentals) ? rentals : [];
+      const dedupedMap = new Map();
+      list.forEach(r => {
+        if (r && r.id) dedupedMap.set(r.id, r);
+      });
+      localStorage.setItem(STORAGE_RENTALS_KEY, JSON.stringify(Array.from(dedupedMap.values())));
     } catch (e) {}
   }
 

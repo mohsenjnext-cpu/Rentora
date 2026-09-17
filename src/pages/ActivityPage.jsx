@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
@@ -27,7 +27,9 @@ import {
   MessageCircle,
   Lock,
   Copy,
-  Check
+  Check,
+  Trash2,
+  AlertOctagon
 } from 'lucide-react';
 
 export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
@@ -49,6 +51,18 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
   const [isLoadingContact, setIsLoadingContact] = useState(false);
   const [contactError, setContactError] = useState('');
   const [copiedPhone, setCopiedPhone] = useState(false);
+  const [isClearHistoryModalOpen, setIsClearHistoryModalOpen] = useState(false);
+  const [clearSuccessNotice, setClearSuccessNotice] = useState(false);
+
+  const clearedKey = currentUser ? `rentora_cleared_history_${currentUser.username || currentUser.uid}` : null;
+  const [clearedHistoryTime, setClearedHistoryTime] = useState(() => {
+    if (!clearedKey) return 0;
+    try {
+      return Number(localStorage.getItem(clearedKey)) || 0;
+    } catch (_) {
+      return 0;
+    }
+  });
 
   const handleOpenContactModal = async (rental) => {
     setSelectedContactRental(rental);
@@ -74,50 +88,73 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
   };
   const [processingId, setProcessingId] = useState(null);
 
-  if (!isAuthenticated) {
-    return (
-      <div className="py-16 text-center max-w-md mx-auto space-y-4 animate-fadeIn select-none">
-        <div className="w-12 h-12 mx-auto rounded-xl bg-[#EEEDFE] dark:bg-[#26215C] text-[#26215C] dark:text-[#EEEDFE] flex items-center justify-center">
-          <Clock className="w-6 h-6 stroke-[1.8]" />
-        </div>
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-          {t('activityTitle')}
-        </h2>
-        <p className="text-xs text-slate-500">
-          {t('activitySubtitle')}
-        </p>
-        <button
-          type="button"
-          onClick={() => setAuthModalOpen(true)}
-          className="btn-primary px-5 py-2.5 text-xs font-bold cursor-pointer"
-        >
-          {t('navLogin')}
-        </button>
-      </div>
+  const myUsername = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
+
+  // Deduplicated rentals belonging to the current user
+  const myRentals = useMemo(() => {
+    if (!currentUser) return [];
+    const myUid = currentUser.uid || currentUser.id;
+    const raw = (rentals || []).filter(r => {
+      const renter = (r.renterUsername || r.renter_username || '').toLowerCase().replace('@', '').trim();
+      const renterUid = r.renterUid || r.renter_pi_uid;
+      return (renter && renter === myUsername) || (myUid && renterUid === myUid);
+    });
+
+    // Authoritative deduplication by unique ID / bookingNumber
+    const seenIds = new Set();
+    const deduped = [];
+    for (const r of raw) {
+      const id = r.id || r.rental_id || r.bookingNumber;
+      if (id && !seenIds.has(id)) {
+        seenIds.add(id);
+        deduped.push(r);
+      }
+    }
+    return deduped;
+  }, [rentals, myUsername, currentUser]);
+
+  const activeRentals = useMemo(() => {
+    return myRentals.filter(r =>
+      r.status === RENTAL_STATES.CONFIRMED ||
+      r.status === RENTAL_STATES.ACTIVE ||
+      r.status === RENTAL_STATES.PAYMENT_PENDING ||
+      r.status === RENTAL_STATES.REQUESTED ||
+      r.status === RENTAL_STATES.ACCEPTED
     );
-  }
+  }, [myRentals]);
 
-  const myUsername = (currentUser?.username || '').toLowerCase().replace('@', '');
+  const historyRentals = useMemo(() => {
+    return myRentals.filter(r => {
+      const isHistoryStatus = (
+        r.status === RENTAL_STATES.COMPLETED ||
+        r.status === RENTAL_STATES.CANCELLED ||
+        r.status === RENTAL_STATES.REJECTED ||
+        r.status === RENTAL_STATES.DISPUTED
+      );
+      if (!isHistoryStatus) return false;
 
-  // Filter rentals where current user is the renter
-  const myRentals = (rentals || []).filter(r =>
-    r.renterUsername?.toLowerCase() === myUsername
-  );
+      if (clearedHistoryTime > 0) {
+        const itemTime = r.updatedAt ? new Date(r.updatedAt).getTime() : (r.createdAt ? new Date(r.createdAt).getTime() : 0);
+        if (itemTime > 0 && itemTime <= clearedHistoryTime) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [myRentals, clearedHistoryTime]);
 
-  const activeRentals = myRentals.filter(r =>
-    r.status === RENTAL_STATES.CONFIRMED ||
-    r.status === RENTAL_STATES.ACTIVE ||
-    r.status === RENTAL_STATES.PAYMENT_PENDING ||
-    r.status === RENTAL_STATES.REQUESTED ||
-    r.status === RENTAL_STATES.ACCEPTED
-  );
-
-  const historyRentals = myRentals.filter(r =>
-    r.status === RENTAL_STATES.COMPLETED ||
-    r.status === RENTAL_STATES.CANCELLED ||
-    r.status === RENTAL_STATES.REJECTED ||
-    r.status === RENTAL_STATES.DISPUTED
-  );
+  const handleClearHistory = () => {
+    const nowTime = Date.now();
+    if (clearedKey) {
+      try {
+        localStorage.setItem(clearedKey, String(nowTime));
+      } catch (_) {}
+    }
+    setClearedHistoryTime(nowTime);
+    setIsClearHistoryModalOpen(false);
+    setClearSuccessNotice(true);
+    setTimeout(() => setClearSuccessNotice(false), 3000);
+  };
 
   const handleConfirmHandover = async (rentalId) => {
     setProcessingId(rentalId);
@@ -279,6 +316,31 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
       {/* History Tab */}
       {activeTab === 'history' && (
         <div className="space-y-3">
+          {/* Action Bar when history exists */}
+          {historyRentals.length > 0 && (
+            <div className="flex items-center justify-between px-1 py-1">
+              <span className="text-xs text-slate-500 font-medium">
+                {historyRentals.length} {l('مورد در سوابق', 'records in history', 'سجلات في الأرشيف', '条历史记录')}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsClearHistoryModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/60 dark:border-rose-800/60 transition cursor-pointer"
+                title={t('btnClearHistory')}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{t('btnClearHistory')}</span>
+              </button>
+            </div>
+          )}
+
+          {clearSuccessNotice && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2 text-emerald-700 dark:text-emerald-400 text-xs font-bold animate-fadeIn">
+              <Check className="w-4 h-4 shrink-0" />
+              <span>{t('clearHistorySuccess')}</span>
+            </div>
+          )}
+
           {historyRentals.length === 0 ? (
             <div className="p-8 text-center rounded-xl rentora-card space-y-2">
               <Package className="w-8 h-8 mx-auto text-slate-300 stroke-[1.5]" />
@@ -344,6 +406,48 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
               );
             })
           )}
+        </div>
+      )}
+
+      {/* Clear History Confirmation Modal */}
+      {isClearHistoryModalOpen && (
+        <div
+          onClick={() => setIsClearHistoryModalOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fadeIn select-none"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-[#1A1930] rounded-2xl p-5 max-w-sm w-full border border-slate-200 dark:border-slate-700 shadow-2xl space-y-4 animate-scaleIn text-center"
+          >
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
+              <AlertOctagon className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                {t('clearHistoryConfirmTitle')}
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                {t('clearHistoryConfirmDesc')}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={handleClearHistory}
+                className="flex-1 py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{t('btnClearHistory')}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsClearHistoryModalOpen(false)}
+                className="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                {t('btnCancel')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

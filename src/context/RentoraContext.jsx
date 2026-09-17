@@ -32,6 +32,42 @@ export function RentoraProvider({ children }) {
   const isInitialLoadDoneRef = useRef(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const getReadTimestampsKey = useCallback(() => {
+    const userIdentifier = currentUser?.username || currentUser?.uid || currentUser?.id;
+    return userIdentifier ? `rentora_chat_reads_${userIdentifier.toLowerCase().replace('@', '').trim()}` : null;
+  }, [currentUser]);
+
+  const getReadTimestamps = useCallback(() => {
+    const key = getReadTimestampsKey();
+    if (!key) return {};
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      return {};
+    }
+  }, [getReadTimestampsKey]);
+
+  const markConversationAsRead = useCallback((convId) => {
+    if (!convId || !currentUser) return;
+    const key = getReadTimestampsKey();
+    const nowIso = new Date().toISOString();
+    if (key) {
+      try {
+        const reads = getReadTimestamps();
+        reads[convId] = nowIso;
+        localStorage.setItem(key, JSON.stringify(reads));
+      } catch (_) {}
+    }
+
+    setConversations(prev => prev.map(c => {
+      if (c.id === convId) {
+        return { ...c, unreadCount: 0 };
+      }
+      return c;
+    }));
+  }, [currentUser, getReadTimestampsKey, getReadTimestamps]);
+
   // Load conversations from server when authenticated
   const refreshConversations = useCallback(async () => {
     if (!currentUser) {
@@ -40,39 +76,33 @@ export function RentoraProvider({ children }) {
     }
     try {
       const list = await cloudSyncService.fetchConversations();
-      setConversations(list);
+      const readMap = getReadTimestamps();
+      const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
 
-      // Check for incoming new messages to trigger chime / notifications
-      const myName = (currentUser?.username || '').toLowerCase();
-      list.forEach(c => {
-        if (c.lastMessageText && c.lastMessageAt && c.otherUser) {
-          const msgKey = `${c.id}_${c.lastMessageAt}`;
-          if (!knownMsgIdsRef.current.has(msgKey)) {
-            knownMsgIdsRef.current.add(msgKey);
-            const sender = (c.otherUser?.username || '').toLowerCase();
-            if (isInitialLoadDoneRef.current && sender && sender !== myName) {
-              const notif = {
-                id: msgKey,
-                senderUsername: c.otherUser.username,
-                text: c.lastMessageText,
-                itemTitle: c.listing?.title || 'گفتگوی رنتورا',
-                itemId: c.listingId,
-                threadId: c.id,
-                recipientUsername: c.otherUser.username
-              };
-              setLatestNotification(notif);
-              playNotificationChime();
-              triggerVibration();
-              showNativeNotification(`Rentora - @${c.otherUser.username}`, c.lastMessageText);
-            }
-          }
-        }
+      const enrichedList = (list || []).map(c => {
+        const lastMsgTime = c.lastMessageAt ? new Date(c.lastMessageAt).getTime() : (c.createdAt ? new Date(c.createdAt).getTime() : 0);
+        const lastReadTime = readMap[c.id] ? new Date(readMap[c.id]).getTime() : 0;
+        const sender = (c.otherUser?.username || '').toLowerCase().replace('@', '').trim();
+        // Unread if message exists, sent by other user, and created after last read timestamp
+        const isUnread = Boolean(
+          c.lastMessageText &&
+          lastMsgTime > 0 &&
+          lastMsgTime > lastReadTime &&
+          sender &&
+          sender !== myName
+        );
+        return {
+          ...c,
+          unreadCount: isUnread ? 1 : 0
+        };
       });
-      return list;
+
+      setConversations(enrichedList);
+      return enrichedList;
     } catch (e) {
       return [];
     }
-  }, [currentUser]);
+  }, [currentUser, getReadTimestamps]);
 
   useEffect(() => {
     refreshConversations().finally(() => {
@@ -559,6 +589,7 @@ export function RentoraProvider({ children }) {
       chats: conversations,
       chatThreads: conversations,
       refreshConversations,
+      markConversationAsRead,
       getOrCreateConversation,
       fetchConversationMessages,
       sendConversationMessage,

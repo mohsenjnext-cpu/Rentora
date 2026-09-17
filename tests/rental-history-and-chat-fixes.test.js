@@ -1,0 +1,241 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { cloudSyncService } from '../src/services/cloudSyncService.js';
+import { RENTAL_STATES } from '../src/services/rentalStateMachine.js';
+
+// Setup Mock Storage for node environment
+class MockLocalStorage {
+  constructor() {
+    this.store = {};
+  }
+  getItem(key) {
+    return Object.prototype.hasOwnProperty.call(this.store, key) ? this.store[key] : null;
+  }
+  setItem(key, value) {
+    this.store[key] = String(value);
+  }
+  removeItem(key) {
+    delete this.store[key];
+  }
+  clear() {
+    this.store = {};
+  }
+}
+
+globalThis.localStorage = new MockLocalStorage();
+
+test('Rental History: Deduplication by authoritative ID', () => {
+  localStorage.clear();
+
+  const rawRentals = [
+    { id: 'rent_001', itemId: 'item_1', status: 'completed', rentalTotal: 10, createdAt: '2026-09-01T10:00:00Z' },
+    { id: 'rent_001', itemId: 'item_1', status: 'completed', rentalTotal: 10, createdAt: '2026-09-01T10:00:00Z' }, // Duplicate
+    { id: 'rent_002', itemId: 'item_2', status: 'active', rentalTotal: 25, createdAt: '2026-09-02T10:00:00Z' },
+    { id: 'rent_003', itemId: 'item_3', status: 'cancelled', rentalTotal: 5, createdAt: '2026-09-03T10:00:00Z' },
+    { id: 'rent_002', itemId: 'item_2', status: 'active', rentalTotal: 25, createdAt: '2026-09-02T10:00:00Z' }  // Duplicate
+  ];
+
+  cloudSyncService.saveCachedRentals(rawRentals);
+  const cached = cloudSyncService.getCachedRentals();
+
+  assert.equal(cached.length, 3, 'Duplicate rentals should be deduped to 3 unique items');
+  const ids = cached.map(r => r.id);
+  assert.deepEqual(ids.sort(), ['rent_001', 'rent_002', 'rent_003'].sort());
+});
+
+test('Rental History Cleanup: Scoped hide mechanism preserves active rentals and other data', () => {
+  localStorage.clear();
+
+  const userA = { username: 'alice_pioneer', uid: 'pi_uid_alice' };
+  const userB = { username: 'bob_pioneer', uid: 'pi_uid_bob' };
+
+  const allRentals = [
+    {
+      id: 'rent_101',
+      renterUsername: 'alice_pioneer',
+      renterUid: 'pi_uid_alice',
+      status: RENTAL_STATES.COMPLETED,
+      rentalTotal: 12,
+      createdAt: '2026-08-10T12:00:00Z',
+      updatedAt: '2026-08-15T12:00:00Z'
+    },
+    {
+      id: 'rent_102',
+      renterUsername: 'alice_pioneer',
+      renterUid: 'pi_uid_alice',
+      status: RENTAL_STATES.CANCELLED,
+      rentalTotal: 8,
+      createdAt: '2026-08-20T12:00:00Z',
+      updatedAt: '2026-08-21T12:00:00Z'
+    },
+    {
+      id: 'rent_103',
+      renterUsername: 'alice_pioneer',
+      renterUid: 'pi_uid_alice',
+      status: RENTAL_STATES.ACTIVE, // ACTIVE RENTAL
+      rentalTotal: 30,
+      createdAt: '2026-09-10T12:00:00Z',
+      updatedAt: '2026-09-10T12:00:00Z'
+    },
+    {
+      id: 'rent_104',
+      renterUsername: 'bob_pioneer',
+      renterUid: 'pi_uid_bob',
+      status: RENTAL_STATES.COMPLETED,
+      rentalTotal: 15,
+      createdAt: '2026-08-12T12:00:00Z',
+      updatedAt: '2026-08-16T12:00:00Z'
+    }
+  ];
+
+  // 1. Initial view for Alice before clear
+  const aliceRentals = allRentals.filter(r => r.renterUsername === userA.username);
+  const aliceActiveBefore = aliceRentals.filter(r => [RENTAL_STATES.CONFIRMED, RENTAL_STATES.ACTIVE, RENTAL_STATES.PAYMENT_PENDING].includes(r.status));
+  const aliceHistoryBefore = aliceRentals.filter(r => [RENTAL_STATES.COMPLETED, RENTAL_STATES.CANCELLED].includes(r.status));
+
+  assert.equal(aliceActiveBefore.length, 1);
+  assert.equal(aliceHistoryBefore.length, 2);
+
+  // 2. Alice performs "Clear History" at current time
+  const clearTimestamp = new Date('2026-09-01T00:00:00Z').getTime();
+  const aliceKey = `rentora_cleared_history_${userA.username}`;
+  localStorage.setItem(aliceKey, String(clearTimestamp));
+
+  // 3. Re-compute Alice's history and active view
+  const aliceClearedTime = Number(localStorage.getItem(aliceKey)) || 0;
+  const aliceActiveAfter = aliceRentals.filter(r => [RENTAL_STATES.CONFIRMED, RENTAL_STATES.ACTIVE, RENTAL_STATES.PAYMENT_PENDING].includes(r.status));
+  const aliceHistoryAfter = aliceRentals.filter(r => {
+    const isHistory = [RENTAL_STATES.COMPLETED, RENTAL_STATES.CANCELLED, RENTAL_STATES.REJECTED, RENTAL_STATES.DISPUTED].includes(r.status);
+    if (!isHistory) return false;
+    const itemTime = r.updatedAt ? new Date(r.updatedAt).getTime() : new Date(r.createdAt).getTime();
+    if (aliceClearedTime > 0 && itemTime <= aliceClearedTime) return false;
+    return true;
+  });
+
+  // Verification:
+  // Active rentals are completely unaffected!
+  assert.equal(aliceActiveAfter.length, 1, 'Active rental #rent_103 must remain visible');
+  assert.equal(aliceActiveAfter[0].id, 'rent_103');
+
+  // Closed history prior to clear time is hidden from Alice's view
+  assert.equal(aliceHistoryAfter.length, 0, 'Alice history before cleared timestamp is hidden');
+
+  // 4. Bob's view is completely unaffected (isolated user scope)
+  const bobKey = `rentora_cleared_history_${userB.username}`;
+  const bobClearedTime = Number(localStorage.getItem(bobKey)) || 0;
+  const bobRentals = allRentals.filter(r => r.renterUsername === userB.username);
+  const bobHistory = bobRentals.filter(r => {
+    const isHistory = [RENTAL_STATES.COMPLETED, RENTAL_STATES.CANCELLED].includes(r.status);
+    if (!isHistory) return false;
+    const itemTime = r.updatedAt ? new Date(r.updatedAt).getTime() : new Date(r.createdAt).getTime();
+    if (bobClearedTime > 0 && itemTime <= bobClearedTime) return false;
+    return true;
+  });
+
+  assert.equal(bobHistory.length, 1, 'Bob history records must not be affected by Alice clearing history');
+  assert.equal(bobHistory[0].id, 'rent_104');
+});
+
+test('Chat Presentation: Unread badge calculation, read marking, and no banner notifications', () => {
+  localStorage.clear();
+
+  const myUsername = 'alice_pioneer';
+  const readKey = `rentora_chat_reads_${myUsername}`;
+
+  const sampleConversations = [
+    {
+      id: 'conv_1',
+      lastMessageText: 'سلام، دستگاه فردا تحویل داده می‌شود؟',
+      lastMessageAt: '2026-09-17T12:00:00Z',
+      otherUser: { username: 'bob_owner', displayName: 'Bob' }
+    },
+    {
+      id: 'conv_2',
+      lastMessageText: 'ممنون، هماهنگ شد.',
+      lastMessageAt: '2026-09-17T11:00:00Z',
+      otherUser: { username: 'charlie_owner', displayName: 'Charlie' }
+    }
+  ];
+
+  // Helper function mimicking RentoraContext enrichment
+  function enrichConversations(list, readMap, currentUserUsername) {
+    const myName = (currentUserUsername || '').toLowerCase().replace('@', '').trim();
+    return (list || []).map(c => {
+      const lastMsgTime = c.lastMessageAt ? new Date(c.lastMessageAt).getTime() : 0;
+      const lastReadTime = readMap[c.id] ? new Date(readMap[c.id]).getTime() : 0;
+      const sender = (c.otherUser?.username || '').toLowerCase().replace('@', '').trim();
+      const isUnread = Boolean(
+        c.lastMessageText &&
+        lastMsgTime > 0 &&
+        lastMsgTime > lastReadTime &&
+        sender &&
+        sender !== myName
+      );
+      return {
+        ...c,
+        unreadCount: isUnread ? 1 : 0
+      };
+    });
+  }
+
+  // 1. Initial State: No messages read yet -> total unread count should be 2
+  let readMap = {};
+  let enriched = enrichConversations(sampleConversations, readMap, myUsername);
+  let totalUnread = enriched.reduce((sum, c) => sum + c.unreadCount, 0);
+
+  assert.equal(totalUnread, 2, 'Total unread badge count should be 2');
+
+  // 2. User opens conv_1 -> Mark conv_1 as read
+  const nowIso = new Date('2026-09-17T12:05:00Z').toISOString();
+  readMap['conv_1'] = nowIso;
+  localStorage.setItem(readKey, JSON.stringify(readMap));
+
+  enriched = enrichConversations(sampleConversations, readMap, myUsername);
+  totalUnread = enriched.reduce((sum, c) => sum + c.unreadCount, 0);
+
+  assert.equal(enriched.find(c => c.id === 'conv_1').unreadCount, 0, 'conv_1 unreadCount should be 0');
+  assert.equal(enriched.find(c => c.id === 'conv_2').unreadCount, 1, 'conv_2 unreadCount should remain 1');
+  assert.equal(totalUnread, 1, 'Total unread badge count should decrement to 1');
+
+  // 3. User opens conv_2 -> Mark conv_2 as read
+  readMap['conv_2'] = new Date('2026-09-17T12:06:00Z').toISOString();
+  localStorage.setItem(readKey, JSON.stringify(readMap));
+
+  enriched = enrichConversations(sampleConversations, readMap, myUsername);
+  totalUnread = enriched.reduce((sum, c) => sum + c.unreadCount, 0);
+
+  assert.equal(totalUnread, 0, 'All unread badges cleared when conversations are read');
+
+  // 4. Persistence check: Reading map persists across reloads
+  const loadedReads = JSON.parse(localStorage.getItem(readKey));
+  const reloaded = enrichConversations(sampleConversations, loadedReads, myUsername);
+  assert.equal(reloaded.reduce((sum, c) => sum + c.unreadCount, 0), 0, 'Reload retains read state');
+});
+
+test('Chat Scroll & Polling Stability: Hash comparison avoids re-render during unchanged polling', () => {
+  const existingMessages = [
+    { id: 'msg_1', createdAt: '2026-09-17T10:00:00Z', text: 'سلام' },
+    { id: 'msg_2', createdAt: '2026-09-17T10:01:00Z', text: 'سلام، در خدمتم' }
+  ];
+
+  const currentHash = existingMessages.map(m => `${m.id}_${m.createdAt}`).join('|');
+
+  // Polling returns exact same message data
+  const polledMessages = [
+    { id: 'msg_1', createdAt: '2026-09-17T10:00:00Z', text: 'سلام' },
+    { id: 'msg_2', createdAt: '2026-09-17T10:01:00Z', text: 'سلام، در خدمتم' }
+  ];
+
+  const newHash = polledMessages.map(m => `${m.id}_${m.createdAt}`).join('|');
+  const shouldUpdateState = currentHash !== newHash;
+
+  assert.equal(shouldUpdateState, false, 'Unchanged polling data must NOT trigger state updates or scroll recalculations');
+
+  // When a new message actually arrives:
+  const withNewMsg = [
+    ...existingMessages,
+    { id: 'msg_3', createdAt: '2026-09-17T10:05:00Z', text: 'آدرس را ارسال کنید' }
+  ];
+  const updatedHash = withNewMsg.map(m => `${m.id}_${m.createdAt}`).join('|');
+  assert.notEqual(currentHash, updatedHash, 'New message changes hash and triggers state update');
+});

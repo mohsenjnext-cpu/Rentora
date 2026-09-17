@@ -263,9 +263,18 @@ async function listAll(env, auth) {
     usersQuery
   ]);
 
+  const seenRentalIds = new Set();
+  const dedupedRentals = [];
+  for (const row of (rentals.results || [])) {
+    if (row && row.id && !seenRentalIds.has(row.id)) {
+      seenRentalIds.add(row.id);
+      dedupedRentals.push(rentalView(row));
+    }
+  }
+
   const out = {
     items: (items.results || []).map(listingView),
-    rentals: (rentals.results || []).map(rentalView),
+    rentals: dedupedRentals,
     transactions: transactions.results || [],
     users: (users.results || []).map((u) => userView(u, env)),
     reviews: [],

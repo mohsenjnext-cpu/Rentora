@@ -39,6 +39,7 @@ export default function ChatModal({
   const { 
     conversations = [],
     refreshConversations,
+    markConversationAsRead,
     getOrCreateConversation,
     fetchConversationMessages,
     sendConversationMessage,
@@ -53,7 +54,11 @@ export default function ChatModal({
   const [isSending, setIsSending] = useState(false);
   const [convToDelete, setConvToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const messagesEndRef = useRef(null);
+  
+  const chatScrollContainerRef = useRef(null);
+  const isNearBottomRef = useRef(true);
+  const lastMessagesHashRef = useRef('');
+  const prevMessagesCountRef = useRef(0);
 
   const activeItem = itemContext || initialItem;
   const activeRental = rentalContext || initialRental;
@@ -69,10 +74,26 @@ export default function ChatModal({
     )
   );
 
+  const handleContainerScroll = () => {
+    const el = chatScrollContainerRef.current;
+    if (!el) return;
+    const threshold = 80;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
+    isNearBottomRef.current = isAtBottom;
+  };
+
   const scrollToBottom = (smooth = true) => {
+    const el = chatScrollContainerRef.current;
+    if (!el) return;
     try {
-      messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
-    } catch (e) {}
+      if (smooth) {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      } else {
+        el.scrollTop = el.scrollHeight;
+      }
+    } catch (_) {
+      el.scrollTop = el.scrollHeight;
+    }
   };
 
   // Find active conversation from loaded conversations or from messages response
@@ -91,6 +112,8 @@ export default function ChatModal({
       setActiveConvId(null);
       setMessages([]);
       setFilterWarningMessage('');
+      lastMessagesHashRef.current = '';
+      prevMessagesCountRef.current = 0;
       return;
     }
 
@@ -164,23 +187,37 @@ export default function ChatModal({
     try {
       const data = await fetchConversationMessages(convId);
       if (data && Array.isArray(data.messages)) {
-        setMessages(data.messages);
+        const hash = data.messages.map(m => `${m.id}_${m.createdAt}`).join('|');
+        if (hash !== lastMessagesHashRef.current) {
+          lastMessagesHashRef.current = hash;
+          setMessages(data.messages);
+          if (markConversationAsRead) {
+            markConversationAsRead(convId);
+          }
+        }
       }
     } catch (err) {
       console.warn('Fetch messages error:', err.message);
     } finally {
       if (!silent) setIsLoadingMessages(false);
     }
-  }, [fetchConversationMessages, isAuthenticated]);
+  }, [fetchConversationMessages, isAuthenticated, markConversationAsRead]);
 
   useEffect(() => {
     if (activeConvId) {
+      lastMessagesHashRef.current = '';
+      prevMessagesCountRef.current = 0;
+      isNearBottomRef.current = true;
       loadMessages(activeConvId, false);
-      scrollToBottom(false);
+      if (markConversationAsRead) {
+        markConversationAsRead(activeConvId);
+      }
     } else {
       setMessages([]);
+      lastMessagesHashRef.current = '';
+      prevMessagesCountRef.current = 0;
     }
-  }, [activeConvId, loadMessages]);
+  }, [activeConvId, loadMessages, markConversationAsRead]);
 
   // Fast polling for active conversation messages while modal is open
   useEffect(() => {
@@ -193,12 +230,25 @@ export default function ChatModal({
     return () => clearInterval(interval);
   }, [isOpen, activeConvId, isAuthenticated, loadMessages]);
 
-  // Scroll to bottom when new messages arrive
+  // Smooth scroll to bottom when new messages arrive without jumping if scrolled up
   useEffect(() => {
     if (isOpen && messages.length > 0) {
-      scrollToBottom(true);
+      if (prevMessagesCountRef.current === 0) {
+        // Initial load: instant jump to bottom of chat list only
+        scrollToBottom(false);
+      } else if (messages.length > prevMessagesCountRef.current) {
+        const lastMsg = messages[messages.length - 1];
+        const isSentByMe = (lastMsg?.senderUsername || '').toLowerCase() === myUsername;
+        // Only auto-scroll if user was near the bottom or user sent this message
+        if (isNearBottomRef.current || isSentByMe) {
+          scrollToBottom(true);
+        }
+      }
+      prevMessagesCountRef.current = messages.length;
+    } else {
+      prevMessagesCountRef.current = 0;
     }
-  }, [isOpen, messages.length]);
+  }, [isOpen, messages, myUsername]);
 
   if (!isOpen) return null;
 
@@ -507,7 +557,12 @@ export default function ChatModal({
           /* ========================================================= */
           /* BODY: ACTIVE CONVERSATION MESSAGES                        */
           /* ========================================================= */
-          <div className="flex-1 overflow-y-auto p-3.5 space-y-3 bg-slate-50/50 dark:bg-[#121124]/50">
+          <div 
+            ref={chatScrollContainerRef}
+            onScroll={handleContainerScroll}
+            style={{ overscrollBehavior: 'contain', overflowAnchor: 'auto' }}
+            className="flex-1 overflow-y-auto p-3.5 space-y-3 bg-slate-50/50 dark:bg-[#121124]/50"
+          >
             {isLoadingMessages ? (
               <div className="h-full flex items-center justify-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#534AB7]"></div>
@@ -548,7 +603,7 @@ export default function ChatModal({
 
                 return (
                   <div
-                    key={msg.id || idx}
+                    key={msg.id || `msg_${msg.createdAt || idx}`}
                     className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                   >
                     <div className="flex items-end gap-1.5 max-w-[85%]">
@@ -577,7 +632,6 @@ export default function ChatModal({
                 );
               })
             )}
-            <div ref={messagesEndRef} />
           </div>
         )}
 

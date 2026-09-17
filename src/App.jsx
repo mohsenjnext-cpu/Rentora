@@ -17,7 +17,6 @@ import HelpCenterModal from './components/HelpCenterModal';
 import SecurityModal from './components/SecurityModal';
 import SupportModal from './components/SupportModal';
 import ChatModal from './components/ChatModal';
-import NotificationToast from './components/NotificationToast';
 import { requestNotificationPermission } from './services/notificationService';
 
 // Pages
@@ -35,7 +34,7 @@ import SettingsPage from './pages/SettingsPage';
 function MainApp() {
   const { dir } = useLanguage();
   const { isAdmin, currentUser } = usePiAuth();
-  const { items, latestNotification, clearLatestNotification } = useRentora();
+  const { items } = useRentora();
   const [currentTab, setCurrentTab] = useState('home');
   const [previousTab, setPreviousTab] = useState('discover');
   const [selectedItem, setSelectedItem] = useState(null);
@@ -169,7 +168,6 @@ function MainApp() {
       <ChatModal isOpen={isChatModalOpen} onClose={() => { setIsChatModalOpen(false); setChatTargetItem(null); setChatTargetRental(null); }} initialItem={chatTargetItem} initialRental={chatTargetRental} onDirectRent={(item) => { setIsChatModalOpen(false); handleRentItem(item); }} onOpenPublicProfile={handleOpenPublicProfile} />
       {directBookingItem && <BookingModal item={directBookingItem} isOpen={isDirectBookingOpen} onClose={() => { setIsDirectBookingOpen(false); setDirectBookingItem(null); }} onBookingSuccess={() => { setIsDirectBookingOpen(false); setDirectBookingItem(null); setCurrentTab('activity'); }} />}
       <BottomNav currentTab={currentTab} onNavigate={handleNavigate} />
-      <NotificationToast notification={latestNotification} onClose={clearLatestNotification} onOpenChat={(notif) => { handleOpenChat({ id: notif.itemId || notif.threadId, recipientUsername: notif.senderUsername, title: notif.itemTitle }); }} />
     </div>
   );
 }
