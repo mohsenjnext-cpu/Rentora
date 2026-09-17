@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { usePiAuth } from '../context/PiAuthContext';
+import { useRentora } from '../context/RentoraContext';
 import { 
   X, 
   PlusCircle, 
@@ -42,6 +43,9 @@ export default function Sidebar({
     setAuthModalOpen, 
     setIsWalletModalOpen 
   } = usePiAuth();
+  const { chats = [] } = useRentora();
+
+  const totalUnreadCount = (chats || []).reduce((sum, c) => sum + (c.unreadCount || 0), 0);
 
   const [langMenuOpen, setLangMenuOpen] = useState(false);
 
@@ -246,10 +250,17 @@ export default function Sidebar({
               if (typeof onOpenChat === 'function') onOpenChat();
               if (typeof setMobileOpen === 'function') setMobileOpen(false);
             }}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#1C1B30] transition-colors cursor-pointer"
+            className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#1C1B30] transition-colors cursor-pointer"
           >
-            <MessageSquare className="w-4 h-4 stroke-[1.8] text-[#534AB7]" />
-            <span>{t('chatTitle')}</span>
+            <div className="flex items-center gap-2.5">
+              <MessageSquare className="w-4 h-4 stroke-[1.8] text-[#534AB7]" />
+              <span>{t('chatTitle')}</span>
+            </div>
+            {totalUnreadCount > 0 && (
+              <span className="min-w-[18px] h-[18px] rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center px-1">
+                {totalUnreadCount}
+              </span>
+            )}
           </button>
 
           {/* 5. حساب کاربری و پروفایل */}
