@@ -74,6 +74,10 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
   // Treasury Payout state (A2U)
   const [payoutAmount, setPayoutAmount] = useState('');
   const [payoutMemo, setPayoutMemo] = useState('');
+  const [adminWalletAddress, setAdminWalletAddress] = useState(() => {
+    try { return localStorage.getItem('rentora_admin_wallet_addr') || ''; }
+    catch (_) { return ''; }
+  });
   const [isSubmittingPayout, setIsSubmittingPayout] = useState(false);
   const [payoutSuccessMsg, setPayoutSuccessMsg] = useState('');
   const [payoutTxid, setPayoutTxid] = useState('');
@@ -199,7 +203,10 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
 
     setIsSubmittingPayout(true);
     try {
-      const result = await cloudSyncService.requestAdminPayout(amount, payoutMemo);
+      if (adminWalletAddress) {
+        try { localStorage.setItem('rentora_admin_wallet_addr', adminWalletAddress.trim()); } catch (_) {}
+      }
+      const result = await cloudSyncService.requestAdminPayout(amount, payoutMemo, adminWalletAddress.trim());
       setPayoutSuccessMsg(result.message || l(
         `مبلغ ${amount} π با موفقیت به حساب پای @${currentUser?.username || 'admin'} واریز شد.`,
         `Successfully transferred ${amount} π to your Pi account.`,
@@ -311,7 +318,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                 {t('adminTitle')}
               </h1>
               <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-[#EEEDFE] text-[#26215C] dark:bg-[#26215C] dark:text-[#EEEDFE]">
-                Master Admin
+                {l('مدیر ارشد', 'Master Admin', 'المدير العام', '主管理员')}
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
@@ -386,7 +393,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
         <div className="p-3 rounded-xl rentora-card space-y-1">
           <span className="text-[10px] text-slate-400 font-medium">{t('adminStatsTreasuryRev')}</span>
           <div className="text-lg font-black text-[#0F6E56] dark:text-[#48D2A8] font-mono">
-            {Number(totalCommissionRevenue).toFixed(4)} π
+            {Number(availableTreasuryBalance).toFixed(4)} π
           </div>
         </div>
       </div>
@@ -523,12 +530,29 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                   </label>
                   <input
                     type="text"
-                    placeholder="Rentora Treasury Payout"
+                    placeholder={l('تسویه درآمد صندوق رنتورا', 'Rentora Treasury Payout', 'سحب أرباح الخزينة', 'Rentora 金库提现')}
                     value={payoutMemo}
                     onChange={(e) => setPayoutMemo(e.target.value)}
                     className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#0F6E56]"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  {l('آدرس عمومی کیف پول پای ادمین (جهت واریز و ثبت):', 'Admin Pi Wallet Public Address (Optional Destination Key):', 'عنوان محفظة باي العامة للأدمن:', '管理员 Pi 钱包公钥地址：')}
+                </label>
+                <input
+                  type="text"
+                  placeholder={l('آدرس عمومی کیف پول پای (مثلاً G...)', 'Public Pi Wallet Key (e.g. G...)', 'عنوان المحفظة العام (مثال: G...)', '钱包公钥地址（如 G...）')}
+                  value={adminWalletAddress}
+                  onChange={(e) => setAdminWalletAddress(e.target.value)}
+                  dir="ltr"
+                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#0F6E56]"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {l('مبالغ کارمزد پلتفرم از کیف پول اپلیکیشن به حساب پای شما تسویه و ثبت می‌شود.', 'Platform fee earnings will be settled from the App Wallet directly to your Pi account.', 'سيتم تحويل عمولات المنصة من محفظة التطبيق إلى حسابك.', '平台收益将从 App 金库直接结算至您的 Pi 账号。')}
+                </p>
               </div>
 
               {needsWalletAuth ? (
@@ -722,7 +746,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                             </span>
                             <span className="font-mono text-slate-400 text-[10px]">@{u.username}</span>
                             {u.role === 'admin' && (
-                              <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-[#26215C] text-white">Admin</span>
+                              <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-[#26215C] text-white">{l('ادمین', 'Admin', 'أدمن', '管理员')}</span>
                             )}
                           </div>
                           <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
@@ -730,7 +754,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                               {isUserActive ? l('فعال', 'Active', 'نشط', '正常') : l('مسدود', 'Suspended', 'محظور', '已冻结')}
                             </span>
                             <span>•</span>
-                            <span>{u.kycStatus === 'verified' ? 'KYC Verified' : 'Unverified'}</span>
+                            <span>{u.kycStatus === 'verified' ? l('احراز هویت شده (KYC)', 'KYC Verified', 'موثق (KYC)', 'KYC 已实名') : l('احراز هویت نشده', 'Unverified', 'غير موثق', '未认证')}</span>
                           </div>
                         </div>
                       </div>
@@ -787,7 +811,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                         <div className="min-w-0">
                           <h4 className="font-bold text-slate-900 dark:text-white truncate">{it.title}</h4>
                           <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                            <span className="font-mono text-[#0F6E56] font-bold">{it.pricePerDay} π / روز</span>
+                            <span className="font-mono text-[#0F6E56] font-bold">{it.pricePerDay} π / {l('روز', 'day', 'يوم', '天')}</span>
                             <span>•</span>
                             <span className="font-mono text-slate-500">@{it.ownerUsername}</span>
                             <span>•</span>
@@ -859,10 +883,10 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                   <div key={rep.id || idx} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-rose-600 dark:text-rose-400">{rep.reason || 'گزارش تخلف'}</span>
+                        <span className="font-bold text-rose-600 dark:text-rose-400">{rep.reason || l('گزارش تخلف', 'Violation Report', 'بلاغ مخالفة', '违规举报')}</span>
                         <span className="text-[10px] text-slate-400 font-mono">@{rep.reporterUsername}</span>
                       </div>
-                      <p className="text-slate-600 dark:text-slate-300 mt-1">{rep.description || rep.details || 'توضیحاتی ثبت نشده است.'}</p>
+                      <p className="text-slate-600 dark:text-slate-300 mt-1">{rep.description || rep.details || l('توضیحاتی ثبت نشده است.', 'No details provided.', 'لا توجد تفاصيل.', '未提供详细说明。')}</p>
                     </div>
                     <button
                       type="button"
@@ -924,7 +948,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                         }`}>
                           {isPayout ? `-${tx.amount} π` : `+${tx.platformFee || tx.amount || 0.0001} π`}
                         </span>
-                        <span className="text-[9px] text-slate-400">{tx.created_at || tx.timestamp ? new Date(tx.created_at || tx.timestamp).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US') : 'تاییدشده'}</span>
+                        <span className="text-[9px] text-slate-400">{tx.created_at || tx.timestamp ? new Date(tx.created_at || tx.timestamp).toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-US') : l('تاییدشده', 'Confirmed', 'مؤكد', '已确认')}</span>
                       </div>
                     </div>
                   );

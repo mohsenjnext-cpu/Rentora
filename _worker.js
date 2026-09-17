@@ -194,6 +194,10 @@ async function piFetch(env, path, options = {}) {
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   return fetch(`${base}${path}`, { ...options, headers });
 }
+function piErrorMessage(data, fallback = 'Pi network error') {
+  if (!data) return fallback;
+  return data.error_message || data.error || data.message || data.detail || fallback;
+}
 async function verifyPiAccessToken(env, accessToken) { if (!accessToken || !env?.PI_API_KEY) throw new Error('Pi authentication is unavailable'); const base = String(env.PI_API_URL || 'https://api.minepi.com/v2').replace(/\/$/, ''); const response = await fetch(`${base}/me`, { headers: { Authorization: `Bearer ${accessToken}` } }); const data = await response.json().catch(() => ({})); if (!response.ok || !data?.uid || !data?.username) throw new Error('Pi authentication rejected'); return data; }
 async function createSession(env, user) { const token = randomToken('sess'); const hash = await sha256(token); await env.RENTORA_KV.put(`session:${hash}`, JSON.stringify({ uid: user.pi_uid, username: user.username, role: user.role }), { expirationTtl: SESSION_TTL }); return token; }
 async function getSession(request, env) { const header = request.headers.get('Authorization') || ''; if (!header.startsWith('Bearer ')) return null; const token = header.slice(7).trim(); if (!token) return null; const hash = await sha256(token); const raw = await env.RENTORA_KV.get(`session:${hash}`); if (!raw) return null; try { return JSON.parse(raw); } catch (_) { return null; } }
@@ -465,13 +469,15 @@ export default {
             }
           } catch (_) {}
 
+          const targetWallet = String(body?.walletAddress || '').trim();
           const paymentPayload = {
             amount,
-            memo: String(body?.memo || `Rentora Treasury Payout to @${user.username}`).slice(0, 120),
+            memo: String(body?.memo || `Rentora Treasury Payout to ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username}`).slice(0, 120),
             metadata: {
               type: 'admin_treasury_payout',
               adminUid: user.pi_uid,
               adminUsername: user.username,
+              targetWallet: targetWallet || undefined,
               requestedAt: now()
             },
             uid: user.pi_uid
@@ -539,7 +545,7 @@ export default {
               pending: true,
               paymentId,
               amount,
-              recipient: user.username,
+              recipient: targetWallet || user.username,
               message: `تراکنش واریز مبلغ ${amount} π در شبکه پای تایید شد و پس از اجرای بلاک‌چین نهایی می‌گردد.`
             }, 202, env, origin);
           }
@@ -571,8 +577,8 @@ export default {
             paymentId,
             txid,
             amount,
-            recipient: user.username,
-            message: `مبلغ ${amount} π با موفقیت به حساب پای @${user.username} واریز گردید.`
+            recipient: targetWallet || user.username,
+            message: `مبلغ ${amount} π با موفقیت به حساب پای ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username} واریز گردید.`
           }, 200, env, origin);
         } catch (err) {
           console.error('Payout error', err);

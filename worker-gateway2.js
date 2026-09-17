@@ -434,13 +434,15 @@ async function adminRoute(request, env, path) {
     try {
       await autoResolveIncompleteServerPayments(env, user);
 
+      const targetWallet = String(body?.walletAddress || '').trim();
       const paymentPayload = {
         amount,
-        memo: String(body?.memo || `Rentora Treasury Payout to @${user.username}`).slice(0, 120),
+        memo: String(body?.memo || `Rentora Treasury Payout to ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username}`).slice(0, 120),
         metadata: {
           type: 'admin_treasury_payout',
           adminUid: user.pi_uid,
           adminUsername: user.username,
+          targetWallet: targetWallet || undefined,
           requestedAt: now()
         },
         uid: user.pi_uid
@@ -493,7 +495,7 @@ async function adminRoute(request, env, path) {
           pending: true,
           paymentId,
           amount,
-          recipient: user.username,
+          recipient: targetWallet || user.username,
           message: `تراکنش واریز مبلغ ${amount} π در شبکه پای تایید شد و پس از اجرای بلاک‌چین نهایی می‌گردد.`
         }, 202, request, env);
       }
@@ -525,8 +527,8 @@ async function adminRoute(request, env, path) {
         paymentId,
         txid,
         amount,
-        recipient: user.username,
-        message: `مبلغ ${amount} π با موفقیت به حساب پای @${user.username} واریز گردید.`
+        recipient: targetWallet || user.username,
+        message: `مبلغ ${amount} π با موفقیت به حساب پای ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username} واریز گردید.`
       }, 200, request, env);
     } catch (err) {
       console.error('Payout error', err);

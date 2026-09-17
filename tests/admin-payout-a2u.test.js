@@ -247,3 +247,127 @@ test('Admin A2U Payout: successful official Pi A2U flow completes and saves to D
     globalThis.fetch = originalFetch;
   }
 });
+
+test('Admin A2U Payout: Pi API failure returns 502 and does NOT insert settlement or reduce balance', async () => {
+  const db = createMockDb();
+  const kv = createMockKv();
+  const token = await setupSession(kv, db.users[0]);
+
+  const env = {
+    RENTORA_DB: db,
+    RENTORA_KV: kv,
+    PI_API_KEY: 'test_api_key_valid_64_characters_long_1234567890abcdef1234567890abcdef',
+    ADMIN_PI_UIDS: 'uid_admin_123'
+  };
+
+  const initialTxCount = db.transactions.length;
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const urlStr = String(url);
+    if (urlStr.includes('/payments/incomplete_server_payments')) {
+      return new Response(JSON.stringify({ incomplete_server_payments: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.endsWith('/payments') && opts.method === 'POST') {
+      return new Response(JSON.stringify({
+        error_message: 'Pi Network A2U service temporarily unavailable',
+        error_code: 'service_unavailable'
+      }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+    return originalFetch(url, opts);
+  };
+
+  try {
+    const req = new Request('http://localhost/api/admin/payout', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ amount: 5, memo: 'Failing payout attempt' })
+    });
+
+    const res = await worker.fetch(req, env);
+    assert.equal(res.status, 502);
+    const data = await res.json();
+    assert.match(data.error, /Pi Network|شبکه پای/);
+
+    // Verify NO transaction was inserted in D1
+    assert.equal(db.transactions.length, initialTxCount);
+    const payoutTx = db.transactions.find(t => t.type === 'admin_payout');
+    assert.equal(payoutTx, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Admin A2U Payout: payout with destination wallet address records metadata and returns real txid', async () => {
+  const db = createMockDb();
+  const kv = createMockKv();
+  const token = await setupSession(kv, db.users[0]);
+
+  const env = {
+    RENTORA_DB: db,
+    RENTORA_KV: kv,
+    PI_API_KEY: 'test_api_key_valid_64_characters_long_1234567890abcdef1234567890abcdef',
+    ADMIN_PI_UIDS: 'uid_admin_123'
+  };
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const urlStr = String(url);
+    if (urlStr.includes('/payments/incomplete_server_payments')) {
+      return new Response(JSON.stringify({ incomplete_server_payments: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.endsWith('/payments') && opts.method === 'POST') {
+      const payload = JSON.parse(opts.body);
+      assert.equal(payload.payment.metadata.targetWallet, 'GD5XYZ9876543210ABCDEF');
+      return new Response(JSON.stringify({
+        identifier: 'pi_pay_a2u_wallet_101',
+        amount: 8,
+        status: { developer_approved: false, developer_completed: false }
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.includes('/payments/pi_pay_a2u_wallet_101/approve')) {
+      return new Response(JSON.stringify({
+        identifier: 'pi_pay_a2u_wallet_101',
+        amount: 8,
+        status: { developer_approved: true, transaction_verified: true },
+        transaction: { txid: 'real_chain_txid_wallet_202' }
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.includes('/payments/pi_pay_a2u_wallet_101/complete')) {
+      return new Response(JSON.stringify({
+        identifier: 'pi_pay_a2u_wallet_101',
+        amount: 8,
+        status: { developer_completed: true }
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return originalFetch(url, opts);
+  };
+
+  try {
+    const req = new Request('http://localhost/api/admin/payout', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ amount: 8, walletAddress: 'GD5XYZ9876543210ABCDEF', memo: 'Direct settlement' })
+    });
+
+    const res = await worker.fetch(req, env);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.success, true);
+    assert.equal(data.txid, 'real_chain_txid_wallet_202');
+    assert.equal(data.amount, 8);
+
+    const payoutTx = db.transactions.find(t => t.pi_payment_id === 'pi_pay_a2u_wallet_101');
+    assert.ok(payoutTx);
+    assert.equal(payoutTx.pi_txid, 'real_chain_txid_wallet_202');
+    assert.equal(payoutTx.amount, 8);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
