@@ -19,7 +19,7 @@ function isOriginAllowed(origin, requestUrl, env) {
     if (origin === requestOrigin) return true;
   } catch (_) {}
   const configured = (env?.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
-  if (configured.length === 0 || configured.includes('*') || configured.includes(origin)) return true;
+  if (configured.includes(origin)) return true;
   return false;
 }
 function jsonResponse(data, status, env, origin) {
@@ -37,7 +37,7 @@ function adminUids(env) { return String(env?.ADMIN_PI_UIDS || '').split(',').map
 function isAdmin(uid, env) {
   const allowed = adminUids(env);
   const id = String(uid || '').trim().toLowerCase();
-  return Boolean(id && (allowed.includes(id) || id === 'avina60' || id === 'mohsenjnext' || id === 'admin_user'));
+  return Boolean(id && allowed.includes(id));
 }
 function detectImageFormat(bytes) {
   if (bytes.length >= 3 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'image/jpeg';
