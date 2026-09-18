@@ -665,7 +665,7 @@ export default {
           databaseBound: Boolean(env?.RENTORA_DB),
           sessionStoreBound: Boolean(env?.RENTORA_KV),
         };
-        const healthy = Boolean(checks.piApiKeyConfigured && checks.databaseBound && checks.sessionStoreBound);
+        const healthy = Boolean(checks.piApiKeyConfigured && checks.piApiKeyValid && checks.databaseBound && checks.sessionStoreBound);
         return json({ ok: healthy, checks }, healthy ? 200 : 503, request, env);
       }
       if (request.method === 'POST' && path === '/api/payments/incomplete') return await handleIncompletePayment(request, env);
