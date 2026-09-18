@@ -302,7 +302,6 @@ async function completePayment(request, env) {
 
 async function handleIncompletePayment(request, env) {
   const traceId = 'incomp_' + crypto.randomUUID().slice(0, 8);
-  const user = await requireUser(request, env);
   const body = await readJson(request);
   const paymentObj = body?.payment || {};
   const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
@@ -326,10 +325,14 @@ async function handleIncompletePayment(request, env) {
     if (!intentId) return json({ handled: false, error: 'Pi payment metadata binding is missing' }, 409, request, env);
 
     const intent = await env.RENTORA_DB.prepare(
-      'SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1'
-    ).bind(intentId, user.id).first();
-    if (!intent || intent.pi_payment_id !== paymentId) {
+      'SELECT * FROM payment_intents WHERE id=?1 AND pi_payment_id=?2 LIMIT 1'
+    ).bind(intentId, paymentId).first();
+    if (!intent) {
       return json({ handled: false, error: 'Payment intent binding not found' }, 409, request, env);
+    }
+    const user = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE id=?1 LIMIT 1').bind(intent.user_id).first();
+    if (!user || user.status !== 'active') {
+      return json({ handled: false, error: 'Payment owner is not active' }, 403, request, env);
     }
     if (intent.status === 'completed') return json({ handled: true, status: 'completed', paymentId, idempotent: true, traceId }, 200, request, env);
 
