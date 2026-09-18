@@ -6,6 +6,7 @@ const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8'
 const piAuthContext = fs.readFileSync(new URL('../src/context/PiAuthContext.jsx', import.meta.url), 'utf8');
 const workerGateway = fs.readFileSync(new URL('../worker-gateway.js', import.meta.url), 'utf8');
 const workerEntry = fs.readFileSync(new URL('../worker-entry.js', import.meta.url), 'utf8');
+const viteConfig = fs.readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
 
 
 function section(start, end) {
@@ -121,4 +122,10 @@ test('legacy gateway admin authorization is Pi UID-only', () => {
 test('frontend admin UI trusts only server-verified admin state', () => {
   assert.doesNotMatch(piAuthContext, /isServerVerifiedAdmin \|\| currentUser\?\.role === 'admin'/);
   assert.match(piAuthContext, /const isActuallyAdmin = Boolean\(\s*currentUser\?\.sessionToken &&\s*isServerVerifiedAdmin\s*\);/);
+});
+
+
+test('Vite dev config contains no simulated Pi auth or payment backend', () => {
+  assert.doesNotMatch(viteConfig, /sandbox_simulator|sess_sim_|approved: true|completed: true/);
+  assert.doesNotMatch(viteConfig, /piPlatformApiPlugin|api\/auth\/pi-login|api\/payments\/(approve|complete)/);
 });
