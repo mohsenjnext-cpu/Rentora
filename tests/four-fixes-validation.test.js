@@ -38,21 +38,10 @@ function resolveKycStatusFromLogin(piUser, body) {
     piUser?.is_kyc === true ||
     piUser?.kyc === true ||
     piUser?.credentials?.kyc === true ||
-    body?.user?.kyc_status === true ||
-    body?.user?.kyc_status === 'verified' ||
-    body?.user?.is_kyc === true ||
-    body?.user?.kyc === true ||
-    body?.user?.credentials?.kyc === true ||
-    body?.kycStatus === 'verified' ||
     (Array.isArray(piUser?.roles) && (
       piUser.roles.includes('kyc') ||
       piUser.roles.includes('kyced') ||
       piUser.roles.includes('pioneer_kyc')
-    )) ||
-    (Array.isArray(body?.user?.roles) && (
-      body.user.roles.includes('kyc') ||
-      body.user.roles.includes('kyced') ||
-      body.user.roles.includes('pioneer_kyc')
     ))
   );
   return isKyced ? 'verified' : 'unverified';

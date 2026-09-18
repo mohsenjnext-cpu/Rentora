@@ -12,6 +12,13 @@ const MAX_BODY_BYTES = 16 * 1024;
 
 function now() { return new Date().toISOString(); }
 function cleanUsername(value) { return String(value || '').replace(/^@/, '').trim().toLowerCase(); }
+const PI_ECOSYSTEM_ORIGIN_SUFFIXES = ['.minepi.com', '.pinet.com', '.pi.app'];
+const PI_ECOSYSTEM_ORIGIN_HOSTS = ['minepi.com', 'pinet.com'];
+function isPiEcosystemOrigin(origin) {
+  let host;
+  try { const parsed = new URL(origin); if (parsed.protocol !== 'https:') return false; host = parsed.hostname.toLowerCase(); } catch (_) { return false; }
+  return PI_ECOSYSTEM_ORIGIN_HOSTS.includes(host) || PI_ECOSYSTEM_ORIGIN_SUFFIXES.some((suffix) => host.endsWith(suffix));
+}
 function isOriginAllowed(origin, requestUrl, env) {
   if (!origin) return true;
   try {
@@ -19,7 +26,8 @@ function isOriginAllowed(origin, requestUrl, env) {
     if (origin === requestOrigin) return true;
   } catch (_) {}
   const configured = (env?.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
-  if (configured.length === 0 || configured.includes('*') || configured.includes(origin)) return true;
+  if (configured.includes('*') || configured.includes(origin)) return true;
+  if (configured.length === 0) return isPiEcosystemOrigin(origin);
   return false;
 }
 function jsonResponse(data, status, env, origin) {
@@ -677,21 +685,10 @@ export default {
           piUser?.is_kyc === true ||
           piUser?.kyc === true ||
           piUser?.credentials?.kyc === true ||
-          body?.user?.kyc_status === true ||
-          body?.user?.kyc_status === 'verified' ||
-          body?.user?.is_kyc === true ||
-          body?.user?.kyc === true ||
-          body?.user?.credentials?.kyc === true ||
-          body?.kycStatus === 'verified' ||
           (Array.isArray(piUser?.roles) && (
             piUser.roles.includes('kyc') ||
             piUser.roles.includes('kyced') ||
             piUser.roles.includes('pioneer_kyc')
-          )) ||
-          (Array.isArray(body?.user?.roles) && (
-            body.user.roles.includes('kyc') ||
-            body.user.roles.includes('kyced') ||
-            body.user.roles.includes('pioneer_kyc')
           ))
         );
         const kycStatus = isKyced ? 'verified' : 'unverified';

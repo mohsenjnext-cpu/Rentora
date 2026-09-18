@@ -546,7 +546,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
 
               <div>
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  {l('آدرس عمومی کیف پول پای ادمین (جهت واریز و ثبت):', 'Admin Pi Wallet Public Address (Optional Destination Key):', 'عنوان محفظة باي العامة للأدمن:', '管理员 Pi 钱包公钥地址：')}
+                  {l('آدرس عمومی کیف پول پای ادمین (فقط برای ثبت در سوابق):', 'Admin Pi Wallet Public Address (Recorded for audit only):', 'عنوان محفظة باي العامة للأدمن (للسجل فقط):', '管理员 Pi 钱包公钥地址（仅用于记录）：')}
                 </label>
                 <input
                   type="text"
@@ -557,7 +557,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                   className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#0F6E56]"
                 />
                 <p className="text-[10px] text-slate-400 mt-1">
-                  {l('مبالغ کارمزد پلتفرم از کیف پول اپلیکیشن به حساب پای شما تسویه و ثبت می‌شود.', 'Platform fee earnings will be settled from the App Wallet directly to your Pi account.', 'سيتم تحويل عمولات المنصة من محفظة التطبيق إلى حسابك.', '平台收益将从 App 金库直接结算至您的 Pi 账号。')}
+                  {l('واریز A2U همیشه به کیف پول حساب پای ادمین واردشده انجام می‌شود؛ این آدرس فقط در سوابق تراکنش ثبت می‌گردد.', 'A2U payouts always settle to the Pi account of the signed-in admin. This address is only stored with the transaction record.', 'يتم التحويل دائماً إلى حساب باي الخاص بالأدمن الحالي، ويُحفظ هذا العنوان في سجل العملية فقط.', 'A2U 打款始终结算至当前登录管理员的 Pi 账号，此地址仅随交易记录保存。')}
                 </p>
               </div>
 

@@ -26,32 +26,32 @@ function computeUserView(row, env) {
 }
 
 // Helper function mirroring _worker.js /api/auth/pi-login KYC extraction
-function resolveKycStatusFromLogin(piUser, body) {
+function resolveKycStatusFromLogin(piUser) {
   const isKyced = Boolean(
     piUser?.kyc_status === true ||
     piUser?.kyc_status === 'verified' ||
     piUser?.is_kyc === true ||
     piUser?.kyc === true ||
     piUser?.credentials?.kyc === true ||
-    body?.user?.kyc_status === true ||
-    body?.user?.kyc_status === 'verified' ||
-    body?.user?.is_kyc === true ||
-    body?.user?.kyc === true ||
-    body?.user?.credentials?.kyc === true ||
-    body?.kycStatus === 'verified' ||
     (Array.isArray(piUser?.roles) && (
       piUser.roles.includes('kyc') ||
       piUser.roles.includes('kyced') ||
       piUser.roles.includes('pioneer_kyc')
-    )) ||
-    (Array.isArray(body?.user?.roles) && (
-      body.user.roles.includes('kyc') ||
-      body.user.roles.includes('kyced') ||
-      body.user.roles.includes('pioneer_kyc')
     ))
   );
   return isKyced ? 'verified' : 'unverified';
 }
+
+test('KYC 0: client-supplied KYC claims never grant verified status', () => {
+  const piUser = { uid: 'uid_mallory', username: 'mallory', kyc_status: false, roles: ['pioneer'] };
+  const hostileBody = {
+    kycStatus: 'verified',
+    user: { kyc_status: 'verified', is_kyc: true, kyc: true, credentials: { kyc: true }, roles: ['kyc'] }
+  };
+
+  const status = resolveKycStatusFromLogin(piUser, hostileBody);
+  assert.equal(status, 'unverified', 'Only the Pi /me response may establish KYC status');
+});
 
 test('KYC 1: Verified account A with kyc_status=true resolves to "verified"', () => {
   const verifiedPiUser = {
