@@ -116,3 +116,9 @@ test('legacy gateway admin authorization is Pi UID-only', () => {
   assert.doesNotMatch(workerGateway, /allowed\.includes\(uName\)/);
   assert.doesNotMatch(workerGateway, /uName === 'avina60'|uName === 'mohsenjnext'/);
 });
+
+
+test('frontend admin UI trusts only server-verified admin state', () => {
+  assert.doesNotMatch(piAuthContext, /isServerVerifiedAdmin \|\| currentUser\?\.role === 'admin'/);
+  assert.match(piAuthContext, /const isActuallyAdmin = Boolean\(\s*currentUser\?\.sessionToken &&\s*isServerVerifiedAdmin\s*\);/);
+});
