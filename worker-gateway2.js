@@ -402,7 +402,7 @@ async function autoResolveIncompleteServerPayments(env, user) {
 
 async function adminRoute(request, env, path) {
   const user = await requireUser(request, env);
-  if (!(adminAllowed(user.pi_uid, env) || adminAllowed(user.username, env))) return json({ error: 'Admin access required' }, 403, request, env);
+  if (!(adminAllowed(user.pi_uid, env))) return json({ error: 'Admin access required' }, 403, request, env);
   if (path === '/api/admin/users') {
     const rows = await env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
     return json({ success: true, users: (rows.results || []).map((row) => userView(row, env)) }, 200, request, env);
@@ -631,7 +631,7 @@ export default {
       if (request.method === 'POST' && path === '/api/payments/complete') return await completePayment(request, env);
       if (request.method === 'GET' && path === '/api/auth/me') {
         const user = await requireUser(request, env);
-        const isAdmin = adminAllowed(user.pi_uid, env) || adminAllowed(user.username, env);
+        const isAdmin = adminAllowed(user.pi_uid, env);
         return json({ authenticated: true, user: { ...userView(user, env), isAdmin }, isAdmin }, 200, request, env);
       }
       if ((request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users')) || (request.method === 'POST' && path === '/api/admin/payout')) return await adminRoute(request, env, path);
