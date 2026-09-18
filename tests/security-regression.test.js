@@ -92,3 +92,10 @@ test('worker CORS is fail-closed for cross-origin requests', () => {
   assert.doesNotMatch(worker, /configured\.length === 0.*return true/);
   assert.doesNotMatch(worker, /configured\.includes\('\*'\).*return true/);
 });
+
+
+test('worker admin authorization never derives privilege from username', () => {
+  assert.doesNotMatch(worker, /isAdmin\(row\.pi_uid, env\) \|\| isAdmin\(row\.username, env\)/);
+  assert.doesNotMatch(worker, /isAdmin\(user\.pi_uid, env\) \|\| isAdmin\(user\.username, env\)/);
+  assert.doesNotMatch(worker, /isAdmin\(uid, env\) \|\| isAdmin\(username, env\)/);
+});
