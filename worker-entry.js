@@ -8,7 +8,7 @@ function isOriginAllowed(origin, requestUrl, env) {
   if (!origin) return true;
   try { if (origin === new URL(requestUrl).origin) return true; } catch (_) {}
   const configured = (env?.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
-  return configured.length === 0 || configured.includes('*') || configured.includes(origin);
+  return configured.includes(origin);
 }
 function json(data, status, env, origin) {
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
