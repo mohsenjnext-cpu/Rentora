@@ -12,6 +12,13 @@ const MAX_BODY_BYTES = 16 * 1024;
 
 function now() { return new Date().toISOString(); }
 function cleanUsername(value) { return String(value || '').replace(/^@/, '').trim().toLowerCase(); }
+const PI_ECOSYSTEM_ORIGIN_SUFFIXES = ['.minepi.com', '.pinet.com', '.pi.app'];
+const PI_ECOSYSTEM_ORIGIN_HOSTS = ['minepi.com', 'pinet.com'];
+function isPiEcosystemOrigin(origin) {
+  let host;
+  try { const parsed = new URL(origin); if (parsed.protocol !== 'https:') return false; host = parsed.hostname.toLowerCase(); } catch (_) { return false; }
+  return PI_ECOSYSTEM_ORIGIN_HOSTS.includes(host) || PI_ECOSYSTEM_ORIGIN_SUFFIXES.some((suffix) => host.endsWith(suffix));
+}
 function isOriginAllowed(origin, requestUrl, env) {
   if (!origin) return true;
   try {
@@ -19,7 +26,8 @@ function isOriginAllowed(origin, requestUrl, env) {
     if (origin === requestOrigin) return true;
   } catch (_) {}
   const configured = (env?.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
-  if (configured.length === 0 || configured.includes('*') || configured.includes(origin)) return true;
+  if (configured.includes('*') || configured.includes(origin)) return true;
+  if (configured.length === 0) return isPiEcosystemOrigin(origin);
   return false;
 }
 function jsonResponse(data, status, env, origin) {
@@ -37,7 +45,7 @@ function adminUids(env) { return String(env?.ADMIN_PI_UIDS || '').split(',').map
 function isAdmin(uid, env) {
   const allowed = adminUids(env);
   const id = String(uid || '').trim().toLowerCase();
-  return Boolean(id && (allowed.includes(id) || id === 'avina60' || id === 'mohsenjnext' || id === 'admin_user'));
+  return Boolean(id && allowed.includes(id));
 }
 function detectImageFormat(bytes) {
   if (bytes.length >= 3 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'image/jpeg';
@@ -206,7 +214,7 @@ async function requireAdmin(request, env) { const auth = await requireUser(reque
 function parseMetadata(value) { if (!value) return {}; try { return JSON.parse(value); } catch (_) { return {}; } }
 function userView(row, env) {
   const meta = parseMetadata(row.metadata);
-  const isAdm = env ? (isAdmin(row.pi_uid, env) || isAdmin(row.username, env)) : row.role === 'admin';
+  const isAdm = env ? isAdmin(row.pi_uid, env) : row.role === 'admin';
   const isVerifiedPioneer = meta.kycStatus === 'verified' || row.kyc_status === 'verified';
   return {
     ...meta,
@@ -251,7 +259,7 @@ function transactionView(row) {
 
 async function listAll(env, auth) {
   const user = auth?.user || null;
-  const isAdminUser = user ? (isAdmin(user.pi_uid, env) || isAdmin(user.username, env)) : false;
+  const isAdminUser = user ? isAdmin(user.pi_uid, env) : false;
 
   let itemsQuery;
   if (isAdminUser) {
@@ -650,6 +658,22 @@ export default {
         const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
         return jsonResponse({ success: true, user: userView(updated, env) }, 200, env, origin);
       }
+      if (method === 'POST' && path.startsWith('/api/admin/users/') && path.endsWith('/kyc')) {
+        const targetUserId = path.slice('/api/admin/users/'.length, -'/kyc'.length).trim();
+        if (!targetUserId) return errorResponse('Missing target user ID', 400, env, undefined, origin);
+        await requireAdmin(request, env);
+        const body = await readJson(request);
+        const kycStatus = String(body?.status || '').trim().toLowerCase();
+        if (!['verified', 'unverified'].includes(kycStatus)) {
+          return errorResponse("Status must be 'verified' or 'unverified'", 400, env, undefined, origin);
+        }
+        const target = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1 OR pi_uid=?1 OR lower(username)=lower(?1) LIMIT 1").bind(targetUserId).first();
+        if (!target) return errorResponse('User not found', 404, env, undefined, origin);
+        const meta = { ...parseMetadata(target.metadata), kycStatus };
+        await env.RENTORA_DB.prepare("UPDATE users SET metadata=?1, updated_at=?2 WHERE id=?3").bind(JSON.stringify(meta), now(), target.id).run();
+        const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
+        return jsonResponse({ success: true, user: userView(updated, env) }, 200, env, origin);
+      }
       if (method === 'POST' && path.startsWith('/api/admin/listings/') && path.endsWith('/status')) {
         const listingId = path.slice('/api/admin/listings/'.length, -'/status'.length).trim();
         if (!listingId) return errorResponse('Missing listing ID', 400, env, undefined, origin);
@@ -670,35 +694,24 @@ export default {
         const piUser = await verifyPiAccessToken(env, body.accessToken);
         const uid = String(piUser.uid);
         const username = cleanUsername(piUser.username);
-        const isAdminUser = isAdmin(uid, env) || isAdmin(username, env);
+        const isAdminUser = isAdmin(uid, env);
         const isKyced = Boolean(
           piUser?.kyc_status === true ||
           piUser?.kyc_status === 'verified' ||
           piUser?.is_kyc === true ||
           piUser?.kyc === true ||
           piUser?.credentials?.kyc === true ||
-          body?.user?.kyc_status === true ||
-          body?.user?.kyc_status === 'verified' ||
-          body?.user?.is_kyc === true ||
-          body?.user?.kyc === true ||
-          body?.user?.credentials?.kyc === true ||
-          body?.kycStatus === 'verified' ||
           (Array.isArray(piUser?.roles) && (
             piUser.roles.includes('kyc') ||
             piUser.roles.includes('kyced') ||
             piUser.roles.includes('pioneer_kyc')
-          )) ||
-          (Array.isArray(body?.user?.roles) && (
-            body.user.roles.includes('kyc') ||
-            body.user.roles.includes('kyced') ||
-            body.user.roles.includes('pioneer_kyc')
           ))
         );
-        const kycStatus = isKyced ? 'verified' : 'unverified';
         const existing = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE pi_uid=?1 LIMIT 1').bind(uid).first();
-        const role = (isAdmin(uid, env) || isAdmin(username, env)) ? 'admin' : 'user';
+        const role = isAdmin(uid, env) ? 'admin' : 'user';
         const userId = existing?.id || `usr_${crypto.randomUUID()}`;
         const oldMeta = parseMetadata(existing?.metadata);
+        const kycStatus = (isKyced || oldMeta.kycStatus === 'verified') ? 'verified' : 'unverified';
         const loginCount = (Number(oldMeta.loginCount) || 0) + 1;
         const newMeta = {
           ...oldMeta,

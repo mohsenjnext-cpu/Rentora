@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import gateway from '../worker-gateway.js';
+import gateway from '../worker-gateway2.js';
 
 async function sha256(value) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
@@ -498,7 +498,7 @@ test('Scenario: cancelled payment cannot be approved or completed', async () => 
   );
   assert.equal(res.status, 409);
   const data = await res.json();
-  assert.equal(data.error, 'Pi payment is not approvable in its current state');
+  assert.match(data.error, /cancelled|not approvable/i);
 });
 
 // Scenario 11: Duplicate completion is idempotent

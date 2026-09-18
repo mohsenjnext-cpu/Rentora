@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../_worker.js';
-import gateway from '../worker-gateway.js';
+import gateway from '../worker-gateway2.js';
 
 function createMockDb(initialData = {}) {
   const tables = {

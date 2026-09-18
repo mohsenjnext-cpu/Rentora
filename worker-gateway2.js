@@ -26,18 +26,30 @@ async function requireUser(request, env) {
 function userView(row, env) {
   let meta = {};
   try { meta = row.metadata ? JSON.parse(row.metadata) : {}; } catch (_) {}
-  const isAdmin = adminAllowed(row.pi_uid, env) || adminAllowed(row.username, env);
+  const isAdmin = adminAllowed(row.pi_uid, env);
   return { ...meta, id: row.id, uid: row.pi_uid, piUid: row.pi_uid, username: row.username, displayName: row.display_name || row.username, avatar: row.avatar_url || '', role: isAdmin ? 'admin' : 'user', status: row.status || 'active', kycStatus: meta.kycStatus || 'unverified', isOfficialSdk: true, joinedDate: row.created_at?.slice(0, 10) || '' };
+}
+const PI_ECOSYSTEM_ORIGIN_SUFFIXES = ['.minepi.com', '.pinet.com', '.pi.app'];
+const PI_ECOSYSTEM_ORIGIN_HOSTS = ['minepi.com', 'pinet.com'];
+function isPiEcosystemOrigin(origin) {
+  let host;
+  try { const parsed = new URL(origin); if (parsed.protocol !== 'https:') return false; host = parsed.hostname.toLowerCase(); } catch (_) { return false; }
+  return PI_ECOSYSTEM_ORIGIN_HOSTS.includes(host) || PI_ECOSYSTEM_ORIGIN_SUFFIXES.some((suffix) => host.endsWith(suffix));
+}
+function isOriginAllowed(origin, requestUrl, env) {
+  if (!origin) return true;
+  try { if (origin === new URL(requestUrl).origin) return true; } catch (_) {}
+  const configured = String(env?.CORS_ORIGIN || '').split(',').map((v) => v.trim()).filter(Boolean);
+  if (configured.includes('*') || configured.includes(origin)) return true;
+  if (configured.length === 0) return isPiEcosystemOrigin(origin);
+  return false;
 }
 function json(data, status = 200, request = null, env = null) {
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
   const origin = request?.headers?.get('Origin');
-  if (origin) {
-    let allowed = false;
-    try { allowed = origin === new URL(request.url).origin; } catch (_) {}
-    const configured = String(env?.CORS_ORIGIN || '').split(',').map((v) => v.trim()).filter(Boolean);
-    if (configured.length === 0 || configured.includes(origin) || configured.includes('*')) allowed = true;
-    if (allowed) { headers['Access-Control-Allow-Origin'] = origin; headers.Vary = 'Origin'; }
+  if (origin && isOriginAllowed(origin, request.url, env)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers.Vary = 'Origin';
   }
   return new Response(status === 204 ? null : JSON.stringify(data), { status, headers });
 }
@@ -136,9 +148,8 @@ function validatePayment(payment, intent, user) {
   }
 
   const net = String(payment?.network || '').trim().toLowerCase();
-  const isMainnet = net === 'pi mainnet' || net === 'mainnet' || net === 'pimainnet';
-  if (isMainnet) {
-    throw Object.assign(new Error('Mainnet payments are not permitted on Pi Testnet'), { status: 409 });
+  if (net && net !== 'pi testnet' && net !== 'testnet' && net !== 'pitestnet') {
+    throw Object.assign(new Error('Pi payment network mismatch'), { status: 409 });
   }
 
   return normalizeStatus(payment?.status);
@@ -380,7 +391,7 @@ async function autoResolveIncompleteServerPayments(env, user) {
 
 async function adminRoute(request, env, path) {
   const user = await requireUser(request, env);
-  if (!(adminAllowed(user.pi_uid, env) || adminAllowed(user.username, env))) return json({ error: 'Admin access required' }, 403, request, env);
+  if (!adminAllowed(user.pi_uid, env)) return json({ error: 'Admin access required' }, 403, request, env);
   if (path === '/api/admin/users') {
     const rows = await env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
     return json({ success: true, users: (rows.results || []).map((row) => userView(row, env)) }, 200, request, env);
@@ -465,7 +476,8 @@ async function adminRoute(request, env, path) {
 
       if (!piRes.ok || !created?.identifier) {
         const errMsg = piErrorMessage(created, 'ایجاد تراکنش واریز به کاربر در شبکه پای رد شد.');
-        return json({ error: errMsg, details: created }, 502, request, env);
+        console.error('A2U payout creation failed', created);
+        return json({ error: errMsg }, 502, request, env);
       }
 
       const paymentId = created.identifier || created.id;
@@ -477,7 +489,8 @@ async function adminRoute(request, env, path) {
       const approved = await appRes.json().catch(() => ({}));
       if (!appRes.ok && !approved?.status?.developer_approved) {
         const errMsg = piErrorMessage(approved, 'تایید تراکنش واریز در سرور پای ناموفق بود.');
-        return json({ error: errMsg, details: approved, paymentId }, 502, request, env);
+        console.error('A2U payout approval failed', approved);
+        return json({ error: errMsg, paymentId }, 502, request, env);
       }
 
       let paymentInfo = approved;
@@ -495,7 +508,8 @@ async function adminRoute(request, env, path) {
           pending: true,
           paymentId,
           amount,
-          recipient: targetWallet || user.username,
+          recipient: user.username,
+          recordedWalletAddress: targetWallet || undefined,
           message: `تراکنش واریز مبلغ ${amount} π در شبکه پای تایید شد و پس از اجرای بلاک‌چین نهایی می‌گردد.`
         }, 202, request, env);
       }
@@ -507,7 +521,8 @@ async function adminRoute(request, env, path) {
       const compData = await compRes.json().catch(() => ({}));
       if (!compRes.ok && !compData?.status?.developer_completed) {
         const errMsg = piErrorMessage(compData, 'تکمیل نهایی تراکنش در شبکه پای ناموفق بود.');
-        return json({ error: errMsg, details: compData, paymentId, txid }, 502, request, env);
+        console.error('A2U payout completion failed', compData);
+        return json({ error: errMsg, paymentId, txid }, 502, request, env);
       }
 
       await env.RENTORA_DB.prepare(
@@ -527,8 +542,9 @@ async function adminRoute(request, env, path) {
         paymentId,
         txid,
         amount,
-        recipient: targetWallet || user.username,
-        message: `مبلغ ${amount} π با موفقیت به حساب پای ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username} واریز گردید.`
+        recipient: user.username,
+        recordedWalletAddress: targetWallet || undefined,
+        message: `مبلغ ${amount} π با موفقیت به حساب پای @${user.username} واریز گردید.`
       }, 200, request, env);
     } catch (err) {
       console.error('Payout error', err);
@@ -545,11 +561,9 @@ export default {
         const origin = request.headers.get('Origin');
         const headers = { 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers') || 'Content-Type, Authorization', 'Access-Control-Max-Age': '86400' };
         if (origin) {
-          let allowed = false;
-          try { allowed = origin === new URL(request.url).origin; } catch (_) {}
-          const configured = String(env?.CORS_ORIGIN || '').split(',').map((v) => v.trim()).filter(Boolean);
-          if (configured.length === 0 || configured.includes(origin) || configured.includes('*')) allowed = true;
-          if (allowed) headers['Access-Control-Allow-Origin'] = origin;
+          if (!isOriginAllowed(origin, request.url, env)) return new Response(null, { status: 403 });
+          headers['Access-Control-Allow-Origin'] = origin;
+          headers.Vary = 'Origin';
         }
         return new Response(null, { status: 204, headers });
       }
@@ -594,7 +608,7 @@ export default {
       if (request.method === 'POST' && path === '/api/payments/complete') return await completePayment(request, env);
       if (request.method === 'GET' && path === '/api/auth/me') {
         const user = await requireUser(request, env);
-        const isAdmin = adminAllowed(user.pi_uid, env) || adminAllowed(user.username, env);
+        const isAdmin = adminAllowed(user.pi_uid, env);
         return json({ authenticated: true, user: { ...userView(user, env), isAdmin }, isAdmin }, 200, request, env);
       }
       if ((request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users')) || (request.method === 'POST' && path === '/api/admin/payout')) return await adminRoute(request, env, path);

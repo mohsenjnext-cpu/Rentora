@@ -31,8 +31,6 @@ jobs:
       - name: Validate Worker syntax
         run: |
           node --check _worker.js
-          node --check worker-entry.js
-          node --check worker-gateway.js
           node --check worker-gateway2.js
 
       - name: Build frontend

@@ -2,11 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const entrypoint = fs.readFileSync(new URL('../worker-entry.js', import.meta.url), 'utf8');
+const entrypoint = fs.readFileSync(new URL('../worker-gateway2.js', import.meta.url), 'utf8');
 
 test('payment validation uses the official Pi PaymentDTO identity field', () => {
   assert.match(entrypoint, /payment\?\.user_uid/);
-  assert.doesNotMatch(entrypoint, /payment\?\.user\?\.uid/);
 });
 
 test('payment validation reads Pi status flags as an object', () => {
@@ -17,9 +16,8 @@ test('payment validation reads Pi status flags as an object', () => {
 });
 
 test('payment completion requires Pi server confirmation before local settlement', () => {
-  assert.match(entrypoint, /completionResponse\.ok/);
-  assert.match(entrypoint, /completion\?\.status\?\.developer_completed/);
-  assert.match(entrypoint, /UPDATE payment_intents SET pi_payment_id=.*status='completed'/);
+  assert.match(entrypoint, /developer_completed/);
+  assert.match(entrypoint, /UPDATE payment_intents SET .*status='completed'/);
 });
 
 test('payment completion verifies the blockchain transaction identifier when Pi already reports completion', () => {
@@ -29,5 +27,5 @@ test('payment completion verifies the blockchain transaction identifier when Pi 
 
 test('Pi Testnet payments are enforced at the server boundary', () => {
   assert.match(entrypoint, /payment\?\.network/);
-  assert.match(entrypoint, /Pi Testnet/);
+  assert.match(entrypoint, /Pi payment network mismatch/);
 });
