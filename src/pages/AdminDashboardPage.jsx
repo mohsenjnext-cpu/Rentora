@@ -250,6 +250,18 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     }
   };
 
+  const handleToggleUserKyc = async (user) => {
+    const targetStatus = user.kycStatus === 'verified' ? 'unverified' : 'verified';
+    try {
+      const updated = await cloudSyncService.setAdminUserKycStatus(user.id || user.uid, targetStatus);
+      if (updated) {
+        setAdminUsers(prev => prev.map(u => (u.id === user.id || u.uid === user.uid) ? { ...u, kycStatus: updated.kycStatus } : u));
+      }
+    } catch (err) {
+      alert(err.message || 'خطا در تغییر وضعیت احراز هویت کاربر');
+    }
+  };
+
   const handleToggleListingModeration = async (item) => {
     const newStatus = item.status === 'active' ? 'paused' : 'active';
     try {
@@ -765,6 +777,20 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                         </div>
                       </div>
 
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleUserKyc(u)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition flex items-center gap-1 ${
+                            u.kycStatus === 'verified'
+                              ? 'border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                              : 'badge-trust text-[#0F6E56]'
+                          }`}
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>{u.kycStatus === 'verified' ? l('لغو احراز', 'Unverify', 'إلغاء التوثيق', '取消认证') : l('تایید احراز', 'Verify KYC', 'توثيق', '确认认证')}</span>
+                        </button>
+
                       {!isSelf && u.role !== 'admin' && (
                         <button
                           type="button"
@@ -779,6 +805,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                           <span>{isUserActive ? l('مسدودسازی', 'Suspend', 'حظر', '冻结') : l('رفع انسداد', 'Activate', 'تفعيل', '解冻')}</span>
                         </button>
                       )}
+                      </div>
                     </div>
                   );
                 })}

@@ -658,6 +658,22 @@ export default {
         const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
         return jsonResponse({ success: true, user: userView(updated, env) }, 200, env, origin);
       }
+      if (method === 'POST' && path.startsWith('/api/admin/users/') && path.endsWith('/kyc')) {
+        const targetUserId = path.slice('/api/admin/users/'.length, -'/kyc'.length).trim();
+        if (!targetUserId) return errorResponse('Missing target user ID', 400, env, undefined, origin);
+        await requireAdmin(request, env);
+        const body = await readJson(request);
+        const kycStatus = String(body?.status || '').trim().toLowerCase();
+        if (!['verified', 'unverified'].includes(kycStatus)) {
+          return errorResponse("Status must be 'verified' or 'unverified'", 400, env, undefined, origin);
+        }
+        const target = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1 OR pi_uid=?1 OR lower(username)=lower(?1) LIMIT 1").bind(targetUserId).first();
+        if (!target) return errorResponse('User not found', 404, env, undefined, origin);
+        const meta = { ...parseMetadata(target.metadata), kycStatus };
+        await env.RENTORA_DB.prepare("UPDATE users SET metadata=?1, updated_at=?2 WHERE id=?3").bind(JSON.stringify(meta), now(), target.id).run();
+        const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
+        return jsonResponse({ success: true, user: userView(updated, env) }, 200, env, origin);
+      }
       if (method === 'POST' && path.startsWith('/api/admin/listings/') && path.endsWith('/status')) {
         const listingId = path.slice('/api/admin/listings/'.length, -'/status'.length).trim();
         if (!listingId) return errorResponse('Missing listing ID', 400, env, undefined, origin);
@@ -691,11 +707,11 @@ export default {
             piUser.roles.includes('pioneer_kyc')
           ))
         );
-        const kycStatus = isKyced ? 'verified' : 'unverified';
         const existing = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE pi_uid=?1 LIMIT 1').bind(uid).first();
         const role = isAdmin(uid, env) ? 'admin' : 'user';
         const userId = existing?.id || `usr_${crypto.randomUUID()}`;
         const oldMeta = parseMetadata(existing?.metadata);
+        const kycStatus = (isKyced || oldMeta.kycStatus === 'verified') ? 'verified' : 'unverified';
         const loginCount = (Number(oldMeta.loginCount) || 0) + 1;
         const newMeta = {
           ...oldMeta,
