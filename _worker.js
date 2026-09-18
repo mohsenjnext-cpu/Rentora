@@ -206,7 +206,7 @@ async function requireAdmin(request, env) { const auth = await requireUser(reque
 function parseMetadata(value) { if (!value) return {}; try { return JSON.parse(value); } catch (_) { return {}; } }
 function userView(row, env) {
   const meta = parseMetadata(row.metadata);
-  const isAdm = env ? (isAdmin(row.pi_uid, env) || isAdmin(row.username, env)) : row.role === 'admin';
+  const isAdm = env ? (isAdmin(row.pi_uid, env)) : row.role === 'admin';
   const isVerifiedPioneer = meta.kycStatus === 'verified' || row.kyc_status === 'verified';
   return {
     ...meta,
@@ -272,7 +272,7 @@ function transactionView(row) {
 
 async function listAll(env, auth) {
   const user = auth?.user || null;
-  const isAdminUser = user ? (isAdmin(user.pi_uid, env) || isAdmin(user.username, env)) : false;
+  const isAdminUser = user ? (isAdmin(user.pi_uid, env)) : false;
 
   let itemsQuery;
   if (isAdminUser) {
@@ -691,7 +691,7 @@ export default {
         const piUser = await verifyPiAccessToken(env, body.accessToken);
         const uid = String(piUser.uid);
         const username = cleanUsername(piUser.username);
-        const isAdminUser = isAdmin(uid, env) || isAdmin(username, env);
+        const isAdminUser = isAdmin(uid, env);
         const isKyced = Boolean(
           piUser?.kyc_status === true ||
           piUser?.kyc_status === 'verified' ||
@@ -717,7 +717,7 @@ export default {
         );
         const kycStatus = isKyced ? 'verified' : 'unverified';
         const existing = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE pi_uid=?1 LIMIT 1').bind(uid).first();
-        const role = (isAdmin(uid, env) || isAdmin(username, env)) ? 'admin' : 'user';
+        const role = (isAdmin(uid, env)) ? 'admin' : 'user';
         const userId = existing?.id || `usr_${crypto.randomUUID()}`;
         const oldMeta = parseMetadata(existing?.metadata);
         const loginCount = (Number(oldMeta.loginCount) || 0) + 1;
