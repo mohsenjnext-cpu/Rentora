@@ -816,7 +816,6 @@ export default {
         return jsonResponse({ completed: true, paymentId: body.paymentId, txid: body.txid, data: completion }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/payments/incomplete') {
-        const { user } = await requireUser(request, env);
         const body = await readJson(request);
         const paymentObj = body?.payment || {};
         const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
