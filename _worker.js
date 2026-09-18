@@ -770,7 +770,6 @@ export default {
         return jsonResponse({ success: true }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/payments/intent') {
-        const { user } = await requireUser(request, env);
         const body = await readJson(request);
         if (!body.rentalId) return errorResponse('rentalId is required', 400, env, undefined, origin);
         const rental = await env.RENTORA_DB.prepare(`SELECT r.*, l.title, l.id listing_id, l.price_per_day, l.deposit_amount FROM rentals r JOIN listings l ON l.id=r.listing_id WHERE r.id=?1 AND r.renter_user_id=?2 LIMIT 1`).bind(body.rentalId, user.id).first();
@@ -825,9 +824,11 @@ export default {
         if (!paymentId) return jsonResponse({ handled: false, error: 'paymentId is required' }, 400, env, origin);
 
         const intent = await env.RENTORA_DB.prepare(
-          'SELECT * FROM payment_intents WHERE pi_payment_id=?1 AND user_id=?2 LIMIT 1'
-        ).bind(paymentId, user.id).first();
+          'SELECT * FROM payment_intents WHERE pi_payment_id=?1 LIMIT 1'
+        ).bind(paymentId).first();
         if (!intent) return jsonResponse({ handled: false, error: 'Payment intent not found' }, 404, env, origin);
+        const user = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE id=?1 LIMIT 1').bind(intent.user_id).first();
+        if (!user || user.status !== 'active') return jsonResponse({ handled: false, error: 'Payment owner is not active' }, 403, env, origin);
         if (intent.status === 'completed') {
           return jsonResponse({ handled: true, completed: true, idempotent: true }, 200, env, origin);
         }
