@@ -79,3 +79,16 @@ test('frontend sync bridge upgrades legacy identity headers to a signed Bearer s
   assert.match(piAuthContext, /headers\.set\('Authorization', `Bearer \$\{session\.sessionToken\}`\)/);
   assert.match(piAuthContext, /const isPiLogin = url\.includes\('\/api\/auth\/pi-login'\)/);
 });
+
+
+test('worker admin authorization has no hardcoded usernames', () => {
+  assert.match(worker, /function adminUids\(env\)/);
+  assert.match(worker, /allowed\.includes\(id\)/);
+  assert.doesNotMatch(worker, /avina60|mohsenjnext|admin_user/);
+});
+
+test('worker CORS is fail-closed for cross-origin requests', () => {
+  assert.match(worker, /if \(configured\.includes\(origin\)\) return true;/);
+  assert.doesNotMatch(worker, /configured\.length === 0.*return true/);
+  assert.doesNotMatch(worker, /configured\.includes\('\*'\).*return true/);
+});
