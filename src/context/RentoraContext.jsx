@@ -120,12 +120,18 @@ export function RentoraProvider({ children }) {
       if (data) {
         if (Array.isArray(data.items)) setItems(prev => JSON.stringify(prev) === JSON.stringify(data.items) ? prev : data.items);
         if (Array.isArray(data.rentals)) setRentals(prev => JSON.stringify(prev) === JSON.stringify(data.rentals) ? prev : data.rentals);
+        if (Array.isArray(data.transactions)) setTransactions(prev => JSON.stringify(prev) === JSON.stringify(data.transactions) ? prev : data.transactions);
+        if (Array.isArray(data.reports)) setReports(prev => JSON.stringify(prev) === JSON.stringify(data.reports) ? prev : data.reports);
       }
     });
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
+    if (!currentUser) {
+      setTransactions([]);
+      setReports([]);
+    }
     cloudSyncService.fetchSharedData(true).catch(() => {});
   }, [currentUser]);
 
@@ -145,10 +151,12 @@ export function RentoraProvider({ children }) {
   const refreshApp = async () => {
     setIsRefreshing(true);
     try {
-      const data = await cloudSyncService.fetchSharedData();
+      const data = await cloudSyncService.fetchSharedData(true);
       if (data) {
         if (Array.isArray(data.items)) setItems(data.items);
         if (Array.isArray(data.rentals)) setRentals(data.rentals);
+        if (Array.isArray(data.transactions)) setTransactions(data.transactions);
+        if (Array.isArray(data.reports)) setReports(data.reports);
       }
       if (currentUser) await refreshConversations();
       return { success: true };
@@ -159,9 +167,11 @@ export function RentoraProvider({ children }) {
     }
   };
 
-  const purgeDatabase = () => {
+  const purgeDatabase = async () => {
     if (!isAdmin) throw new Error('پاکسازی دیتابیس فقط برای مدیر مجاز است.');
-    throw new Error('پاکسازی دیتابیس باید از API مدیریتی سرور انجام شود.');
+    const result = await cloudSyncService.purgeDatabase();
+    await refreshApp();
+    return result;
   };
 
   const calculatePricing = (arg1, arg2 = 1) => {

@@ -385,7 +385,13 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
       <div className="space-y-2">
         <button
           type="button"
-          onClick={() => onOpenPublicProfile && onOpenPublicProfile(currentUser.username)}
+          onClick={() => {
+            if (typeof onOpenPublicProfile === 'function') {
+              onOpenPublicProfile(currentUser.username);
+            } else if (typeof onNavigate === 'function') {
+              onNavigate('public-profile');
+            }
+          }}
           className="w-full p-3 rounded-xl rentora-card text-xs font-bold text-slate-700 dark:text-slate-300 hover:text-[#534AB7] flex items-center justify-between cursor-pointer"
         >
           <span className="flex items-center gap-2">

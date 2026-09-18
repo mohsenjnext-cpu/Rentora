@@ -383,6 +383,27 @@ export class CloudSyncService {
     return data;
   }
 
+  async purgeDatabase() {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/sync/purge`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      }
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در بازنشانی پایگاه‌داده');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
   // =========================================================================
   // AUTHORITATIVE RENTAL REVIEWS API CLIENT
   // =========================================================================
@@ -632,14 +653,24 @@ export class CloudSyncService {
         const mergedUsers = Array.from(mergedUsersMap.values());
         this.saveCachedUsers(mergedUsers);
 
-        const currentHash = JSON.stringify({ items: remoteItems.map(i => [i.id, i.updatedAt || i.createdAt || '', i.status || '']), rentals: remoteRentals.map(r => [r.id, r.updatedAt || r.createdAt || '', r.status || '', r.paymentStatus || '']), users: mergedUsers.map(u => [u.id || u.uid || u.username || '', u.updatedAt || u.joinedDate || '']) });
+        const remoteTransactions = Array.isArray(data.transactions) ? data.transactions : [];
+        const remoteReports = Array.isArray(data.reports) ? data.reports : [];
+
+        const currentHash = JSON.stringify({
+          items: remoteItems.map(i => [i.id, i.updatedAt || i.createdAt || '', i.status || '']),
+          rentals: remoteRentals.map(r => [r.id, r.updatedAt || r.createdAt || '', r.status || '', r.paymentStatus || '']),
+          users: mergedUsers.map(u => [u.id || u.uid || u.username || '', u.updatedAt || u.joinedDate || '']),
+          transactions: remoteTransactions.map(t => [t.id, t.status, t.amount, t.piTxRef || t.txid || '']),
+          reports: remoteReports.map(rp => [rp.id, rp.status])
+        });
 
         const result = {
           items: remoteItems,
           rentals: remoteRentals,
           users: mergedUsers,
           reviews: [],
-          transactions: data.transactions || []
+          transactions: remoteTransactions,
+          reports: remoteReports
         };
 
         if (currentHash !== this.lastSyncedHash || forceNotify) {

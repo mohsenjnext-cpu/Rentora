@@ -25,12 +25,15 @@ export default function WalletModal({ isOpen, onClose }) {
   if (!show) return null;
 
   const myUsername = (currentUser?.username || '').toLowerCase().replace('@', '');
+  const myUid = currentUser?.uid || currentUser?.piUid;
 
   // Filter verified Pi payments associated with current user
   const myVerifiedPiPayments = (transactions || []).filter(tx => 
-    tx.userUsername?.toLowerCase() === myUsername ||
-    tx.renterUsername?.toLowerCase() === myUsername ||
-    tx.ownerUsername?.toLowerCase() === myUsername
+    (tx.userUsername && tx.userUsername.toLowerCase() === myUsername) ||
+    (tx.userUid && myUid && tx.userUid === myUid) ||
+    (tx.user_pi_uid && myUid && tx.user_pi_uid === myUid) ||
+    (tx.renterUsername && tx.renterUsername.toLowerCase() === myUsername) ||
+    (tx.ownerUsername && tx.ownerUsername.toLowerCase() === myUsername)
   );
 
   // Filter direct P2P rental settlements

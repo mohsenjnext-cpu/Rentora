@@ -294,12 +294,18 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     }
   };
 
-  const handlePurgeDatabase = () => {
-    if (purgeDatabase) {
-      purgeDatabase();
-      setIsPurgeModalOpen(false);
-      setPurgeSuccessNotice(true);
-      setTimeout(() => setPurgeSuccessNotice(false), 3000);
+  const handlePurgeDatabase = async () => {
+    try {
+      if (purgeDatabase) {
+        await purgeDatabase();
+        setIsPurgeModalOpen(false);
+        setPurgeSuccessNotice(true);
+        await loadAdminServerData();
+        await refreshApp();
+        setTimeout(() => setPurgeSuccessNotice(false), 3000);
+      }
+    } catch (err) {
+      alert(err.message || 'خطا در بازنشانی پایگاه‌داده');
     }
   };
 
