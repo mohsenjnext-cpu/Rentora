@@ -723,8 +723,8 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
                     <button
                       type="button"
                       onClick={() => {
-                        const targetRental = selectedRentalContact;
-                        setSelectedRentalContact(null);
+                        const targetRental = selectedContactRental;
+                        setSelectedContactRental(null);
                         onOpenChat(targetRental, 'rental');
                       }}
                       className="w-full py-2.5 px-3 rounded-xl bg-[#534AB7] hover:bg-[#433A9D] text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-xs"
