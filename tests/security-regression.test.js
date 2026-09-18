@@ -129,3 +129,18 @@ test('Vite dev config contains no simulated Pi auth or payment backend', () => {
   assert.doesNotMatch(viteConfig, /sandbox_simulator|sess_sim_|approved: true|completed: true/);
   assert.doesNotMatch(viteConfig, /piPlatformApiPlugin|api\/auth\/pi-login|api\/payments\/(approve|complete)/);
 });
+
+
+test('incomplete Pi callbacks are authenticated and intent-bound', () => {
+  const start = worker.indexOf("path === '/api/payments/incomplete'");
+  const end = worker.indexOf("path === '/api/sync/item'", start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const incomplete = worker.slice(start, end);
+  assert.match(incomplete, /requireUser\(request, env\)/);
+  assert.match(incomplete, /payment_intents WHERE pi_payment_id=\?1 AND user_id=\?2/);
+  assert.match(incomplete, /validatePiPayment\(payment, intent, user\)/);
+  assert.match(incomplete, /UPDATE rentals SET payment_status='completed', status='confirmed'/);
+  assert.match(incomplete, /INSERT OR IGNORE INTO transactions/);
+  assert.doesNotMatch(incomplete, /UPDATE payment_intents SET status='completed'.*WHERE pi_payment_id=\?3/);
+});
