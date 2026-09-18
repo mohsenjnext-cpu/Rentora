@@ -26,7 +26,7 @@ async function requireUser(request, env) {
 function userView(row, env) {
   let meta = {};
   try { meta = row.metadata ? JSON.parse(row.metadata) : {}; } catch (_) {}
-  const isAdmin = adminAllowed(row.pi_uid, env) || adminAllowed(row.username, env);
+  const isAdmin = adminAllowed(row.pi_uid, env);
   const isVerifiedPioneer = meta.kycStatus === 'verified' || row.kyc_status === 'verified';
   return {
     ...meta,
@@ -58,7 +58,7 @@ function json(data, status = 200, request = null, env = null) {
     let allowed = false;
     try { allowed = origin === new URL(request.url).origin; } catch (_) {}
     const configured = String(env?.CORS_ORIGIN || '').split(',').map((v) => v.trim()).filter(Boolean);
-    if (configured.length === 0 || configured.includes(origin) || configured.includes('*')) allowed = true;
+    if (configured.includes(origin)) allowed = true;
     if (allowed) { headers['Access-Control-Allow-Origin'] = origin; headers.Vary = 'Origin'; }
   }
   return new Response(status === 204 ? null : JSON.stringify(data), { status, headers });
