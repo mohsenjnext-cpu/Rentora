@@ -27,7 +27,29 @@ function userView(row, env) {
   let meta = {};
   try { meta = row.metadata ? JSON.parse(row.metadata) : {}; } catch (_) {}
   const isAdmin = adminAllowed(row.pi_uid, env) || adminAllowed(row.username, env);
-  return { ...meta, id: row.id, uid: row.pi_uid, piUid: row.pi_uid, username: row.username, displayName: row.display_name || row.username, avatar: row.avatar_url || '', role: isAdmin ? 'admin' : 'user', status: row.status || 'active', kycStatus: meta.kycStatus || 'unverified', isOfficialSdk: true, joinedDate: row.created_at?.slice(0, 10) || '' };
+  const isVerifiedPioneer = meta.kycStatus === 'verified' || row.kyc_status === 'verified';
+  return {
+    ...meta,
+    id: row.id,
+    uid: row.pi_uid,
+    piUid: row.pi_uid,
+    username: row.username,
+    displayName: row.display_name || row.username,
+    avatar: row.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${row.username}`,
+    bio: meta.bio || '',
+    location: meta.location || '',
+    phoneMasked: meta.phoneMasked || '',
+    role: isAdmin ? 'admin' : 'user',
+    status: row.status || 'active',
+    kycStatus: isVerifiedPioneer ? 'verified' : 'unverified',
+    isOfficialSdk: true,
+    joinedDate: row.created_at?.slice(0, 10) || '',
+    lastLoginAt: meta.lastLoginAt || null,
+    lastLogoutAt: meta.lastLogoutAt || null,
+    loginCount: Number(meta.loginCount || 0),
+    logoutCount: Number(meta.logoutCount || 0),
+    isOnline: Boolean(meta.isOnline)
+  };
 }
 function json(data, status = 200, request = null, env = null) {
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
@@ -386,14 +408,26 @@ async function adminRoute(request, env, path) {
     return json({ success: true, users: (rows.results || []).map((row) => userView(row, env)) }, 200, request, env);
   }
   if (path === '/api/admin/overview') {
-    const [usersCount, listingsCount, rentalsCount, transactionsCount, revRow, payoutRow] = await Promise.all([
+    const [usersCount, listingsCount, rentalsCount, transactionsCount, revRow, payoutRow, reportsCount, usersMetaRows] = await Promise.all([
       env.RENTORA_DB.prepare('SELECT COUNT(*) AS c FROM users').first(),
       env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM listings WHERE status != 'deleted'").first(),
       env.RENTORA_DB.prepare('SELECT COUNT(*) AS c FROM rentals').first(),
       env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)").first(),
       env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)").first(),
-      env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'").first()
+      env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'").first(),
+      env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM reports WHERE status='open'").first().catch(() => ({ c: 0 })),
+      env.RENTORA_DB.prepare("SELECT metadata FROM users").all().catch(() => ({ results: [] }))
     ]);
+    let totalLogins = 0;
+    let totalLogouts = 0;
+    let onlineUsers = 0;
+    for (const u of (usersMetaRows?.results || [])) {
+      let m = {};
+      try { m = u.metadata ? JSON.parse(u.metadata) : {}; } catch (_) {}
+      totalLogins += Number(m.loginCount || 0);
+      totalLogouts += Number(m.logoutCount || 0);
+      if (m.isOnline) onlineUsers++;
+    }
     const totalRev = Number(revRow?.total || 0);
     const totalPayouts = Number(payoutRow?.total || 0);
     const availableBalance = Math.max(0, totalRev - totalPayouts);
@@ -408,7 +442,10 @@ async function adminRoute(request, env, path) {
         totalPayouts,
         availableBalance,
         adminRecipient: user.username,
-        openReports: 0
+        openReports: Number(reportsCount?.c || 0),
+        totalLogins,
+        totalLogouts,
+        onlineUsers
       }
     }, 200, request, env);
   }
