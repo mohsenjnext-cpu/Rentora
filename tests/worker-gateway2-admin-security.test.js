@@ -4,9 +4,11 @@ import fs from 'node:fs';
 
 const entrypoint = fs.readFileSync(new URL('../worker-gateway2.js', import.meta.url), 'utf8');
 
-test('gateway2 admin authorization is configuration-only', () => {
+test('gateway2 admin authorization is configuration-only and UID-bound', () => {
   assert.match(entrypoint, /function adminAllowed\(value, env\)/);
   assert.match(entrypoint, /ADMIN_PI_UIDS/);
+  assert.match(entrypoint, /adminAllowed\(row\.pi_uid, env\)/);
+  assert.doesNotMatch(entrypoint, /adminAllowed\(row\.username, env\)/);
   assert.doesNotMatch(entrypoint, /avina60|mohsenjnext|admin_user/);
 });
 
