@@ -4,6 +4,9 @@ import fs from 'node:fs';
 
 const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
 const piAuthContext = fs.readFileSync(new URL('../src/context/PiAuthContext.jsx', import.meta.url), 'utf8');
+const workerGateway = fs.readFileSync(new URL('../worker-gateway.js', import.meta.url), 'utf8');
+const workerEntry = fs.readFileSync(new URL('../worker-entry.js', import.meta.url), 'utf8');
+
 
 function section(start, end) {
   const from = worker.indexOf(start);
@@ -98,4 +101,18 @@ test('worker admin authorization never derives privilege from username', () => {
   assert.doesNotMatch(worker, /isAdmin\(row\.pi_uid, env\) \|\| isAdmin\(row\.username, env\)/);
   assert.doesNotMatch(worker, /isAdmin\(user\.pi_uid, env\) \|\| isAdmin\(user\.username, env\)/);
   assert.doesNotMatch(worker, /isAdmin\(uid, env\) \|\| isAdmin\(username, env\)/);
+});
+
+
+test('legacy worker entrypoints use the same fail-closed CORS policy', () => {
+  assert.match(workerGateway, /if \(configured\.includes\(origin\)\) return true;/);
+  assert.doesNotMatch(workerGateway, /configured\.length === 0.*return true/);
+  assert.match(workerEntry, /if \(configured\.includes\(origin\)\) return true;/);
+  assert.doesNotMatch(workerEntry, /configured\.length === 0.*return true/);
+});
+
+test('legacy gateway admin authorization is Pi UID-only', () => {
+  assert.match(workerGateway, /allowed\.includes\(uId\)/);
+  assert.doesNotMatch(workerGateway, /allowed\.includes\(uName\)/);
+  assert.doesNotMatch(workerGateway, /uName === 'avina60'|uName === 'mohsenjnext'/);
 });
