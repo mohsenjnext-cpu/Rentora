@@ -3,6 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import { getUserReputationSummary } from '../services/reputationService';
+import { cloudSyncService } from '../services/cloudSyncService';
 import ItemCard from '../components/ItemCard';
 import { 
   ArrowRight, 
@@ -26,12 +27,18 @@ export default function PublicProfilePage({
   const { items = [], rentals = [], fetchUserReviews } = useRentora();
 
   const [userReviewsData, setUserReviewsData] = useState(null);
+  const [remoteUser, setRemoteUser] = useState(null);
 
   const targetUsername = username || 'pioneer';
 
   useEffect(() => {
     if (!targetUsername) return;
     let isMounted = true;
+    cloudSyncService.fetchPublicUserProfile(targetUsername)
+      .then(u => {
+        if (isMounted && u) setRemoteUser(u);
+      })
+      .catch(() => {});
     fetchUserReviews(targetUsername)
       .then(data => {
         if (isMounted && data) setUserReviewsData(data);
@@ -40,7 +47,7 @@ export default function PublicProfilePage({
     return () => { isMounted = false; };
   }, [targetUsername]);
 
-  const targetUser = users.find(u => u.username?.toLowerCase() === targetUsername.toLowerCase());
+  const targetUser = remoteUser || users.find(u => u.username?.toLowerCase() === targetUsername.toLowerCase());
 
   // Items listed by this user
   const userItems = (items || []).filter(

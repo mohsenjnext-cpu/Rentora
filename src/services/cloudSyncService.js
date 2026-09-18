@@ -408,6 +408,20 @@ export class CloudSyncService {
   // AUTHORITATIVE RENTAL REVIEWS API CLIENT
   // =========================================================================
 
+  async fetchPublicUserProfile(usernameOrUid) {
+    if (!usernameOrUid) return null;
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) return null;
+    try {
+      const res = await fetch(`${apiBase}/api/users/${encodeURIComponent(usernameOrUid)}?_t=${Date.now()}`);
+      if (!res.ok) return null;
+      const data = await res.json().catch(() => ({}));
+      return data.user || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   async fetchRentalReviewStatus(rentalId) {
     if (!rentalId) throw new Error('rentalId is required');
     const apiBase = getApiBaseUrl();

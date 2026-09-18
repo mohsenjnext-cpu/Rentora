@@ -226,7 +226,28 @@ function userView(row, env) {
     joinedDate: row.created_at ? row.created_at.slice(0, 10) : ''
   };
 }
-function listingView(row) { const meta = sanitizeListingPublicMetadata(parseMetadata(row.metadata)); return { ...meta, id: row.id, title: row.title, description: row.description || '', category: row.category, location: row.location, pricePerDay: row.price_per_day, deposit: row.deposit_amount, ownerUid: row.owner_pi_uid, ownerUsername: row.owner_username, ownerAvatar: row.owner_avatar, status: row.status, createdAt: row.created_at, updatedAt: row.updated_at }; }
+function listingView(row) {
+  const meta = sanitizeListingPublicMetadata(parseMetadata(row.metadata));
+  const ownerMeta = parseMetadata(row.owner_metadata);
+  const isOwnerKyc = Boolean(meta.ownerKYC || ownerMeta.kycStatus === 'verified' || row.owner_kyc_status === 'verified');
+  return {
+    ...meta,
+    id: row.id,
+    title: row.title,
+    description: row.description || '',
+    category: row.category,
+    location: row.location,
+    pricePerDay: row.price_per_day,
+    deposit: row.deposit_amount,
+    ownerUid: row.owner_pi_uid,
+    ownerUsername: row.owner_username,
+    ownerAvatar: row.owner_avatar,
+    ownerKYC: isOwnerKyc,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
 function rentalView(row) { const meta = parseMetadata(row.metadata); return { ...meta, id: row.id, itemId: row.listing_id, renterUid: row.renter_pi_uid, renterUsername: row.renter_username, ownerUid: row.owner_pi_uid, ownerUsername: row.owner_username, startDate: row.start_date, endDate: row.end_date, pricePerDay: row.price_per_day, rentalTotal: row.rental_amount, baseAmount: row.rental_amount, deposit: row.deposit_amount, securityDeposit: row.deposit_amount, rentoraFee: row.platform_fee, totalPlatformFee: row.platform_fee, totalAmount: row.total_amount, status: row.status, paymentStatus: row.payment_status, createdAt: row.created_at, updatedAt: row.updated_at }; }
 function transactionView(row) {
   return {
@@ -255,11 +276,11 @@ async function listAll(env, auth) {
 
   let itemsQuery;
   if (isAdminUser) {
-    itemsQuery = env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).all();
+    itemsQuery = env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar, u.metadata owner_metadata FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).all();
   } else if (user) {
-    itemsQuery = env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE (l.status = 'active' OR l.owner_user_id = ?1) AND l.status != 'deleted' ORDER BY l.created_at DESC`).bind(user.id).all();
+    itemsQuery = env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar, u.metadata owner_metadata FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE (l.status = 'active' OR l.owner_user_id = ?1) AND l.status != 'deleted' ORDER BY l.created_at DESC`).bind(user.id).all();
   } else {
-    itemsQuery = env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status = 'active' ORDER BY l.created_at DESC`).all();
+    itemsQuery = env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar, u.metadata owner_metadata FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status = 'active' ORDER BY l.created_at DESC`).all();
   }
 
   let rentalsQuery = Promise.resolve({ results: [] });
@@ -1515,6 +1536,16 @@ export default {
             createdAt
           }
         }), { status: 201, headers });
+      }
+
+      if (method === 'GET' && path.startsWith('/api/users/') && !path.includes('/reviews') && !path.includes('/status')) {
+        const identifier = decodeURIComponent(path.slice('/api/users/'.length).trim());
+        const cleanIdent = cleanUsername(identifier);
+        const row = await env.RENTORA_DB.prepare(
+          'SELECT * FROM users WHERE id=?1 OR pi_uid=?1 OR lower(username)=lower(?2) LIMIT 1'
+        ).bind(identifier, cleanIdent).first();
+        if (!row || row.status === 'suspended') return errorResponse('User not found', 404, env, undefined, origin);
+        return jsonResponse({ success: true, user: userView(row, env) }, 200, env, origin);
       }
 
       if (method === 'GET' && path.startsWith('/api/users/') && path.endsWith('/reviews')) {
