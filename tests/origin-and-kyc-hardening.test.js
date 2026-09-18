@@ -45,6 +45,11 @@ test('configured CORS_ORIGIN is an exclusive allowlist', async () => {
   assert.equal(deniedRes.status, 403);
 });
 
+test('admin authorization relies on configured Pi UIDs only', () => {
+  assert.doesNotMatch(legacyWorker, /id === 'avina60'|id === 'mohsenjnext'|id === 'admin_user'/);
+  assert.doesNotMatch(legacyWorker, /isAdmin\((?:user|row)\.username, env\)/);
+});
+
 test('login never derives KYC status from the request body', () => {
   assert.doesNotMatch(legacyWorker, /body\?\.user\?\.kyc/);
   assert.doesNotMatch(legacyWorker, /body\?\.user\?\.is_kyc/);

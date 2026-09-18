@@ -94,6 +94,7 @@ function createMockEnv(initialData = {}) {
   return {
     RENTORA_DB: mockDb,
     RENTORA_KV: mockKv,
+    ADMIN_PI_UIDS: 'avina60',
     dbData,
     kvStore
   };
