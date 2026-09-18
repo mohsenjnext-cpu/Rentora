@@ -158,8 +158,19 @@ test('Health: GET /api/health returns 200 and passes all readiness checks', asyn
   const d1 = createMockD1();
   const env = createMockEnv(d1);
   const req = new Request('https://rentora.workers.dev/api/health', { method: 'GET' });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes('/payments/probe_health_check')) return new Response('', { status: 404 });
+    return originalFetch(input);
+  };
 
-  const res = await gateway.fetch(req, env, {});
+  let res;
+  try {
+    res = await gateway.fetch(req, env, {});
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
   assert.equal(res.status, 200);
   const data = await res.json();
   assert.equal(data.ok, true);
