@@ -400,27 +400,34 @@ async function autoResolveIncompleteServerPayments(env, user) {
       const pid = payment?.identifier || payment?.id;
       if (!pid) continue;
 
+      let metadata = payment?.metadata;
+      if (typeof metadata === 'string') {
+        try { metadata = JSON.parse(metadata); } catch (_) { metadata = {}; }
+      }
+      if (metadata?.type !== 'admin_treasury_payout' || String(metadata?.adminUid || '') !== String(user?.pi_uid || '')) {
+        continue;
+      }
+
       const txid = payment?.transaction?.txid;
       if (payment?.status?.transaction_verified && txid) {
-        await piFetch(env, `/payments/${encodeURIComponent(pid)}/complete`, {
+        const completion = await piFetch(env, `/payments/${encodeURIComponent(pid)}/complete`, {
           method: 'POST',
           body: JSON.stringify({ txid })
-        }).catch(() => {});
+        }).catch(() => null);
 
-        if (env?.RENTORA_DB) {
+        if (completion?.ok || completion?.status === 200) {
           await env.RENTORA_DB.prepare(
-            "INSERT INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, 'admin_payout', 'completed', ?7) ON CONFLICT(pi_payment_id) DO NOTHING"
+            "INSERT OR IGNORE INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, NULL, ?2, ?3, ?4, ?5, 'admin_payout', 'completed', ?6)"
           ).bind(
             `tx_${crypto.randomUUID()}`,
-            null,
             pid,
             txid,
-            user?.id || 'admin',
+            user.id,
             Number(payment?.amount || 0),
             now()
           ).run().catch(() => {});
         }
-      } else {
+      } else if (!payment?.status?.developer_approved && !payment?.status?.developer_completed) {
         await piFetch(env, `/payments/${encodeURIComponent(pid)}/cancel`, {
           method: 'POST',
           body: '{}'
