@@ -54,24 +54,9 @@ function piPlatformApiPlugin() {
                 }
               } catch (err) {}
 
-              // Fallback
-              const resolvedUsername = username || 'pioneer';
-              const resolvedUid = uid || ('pi_usr_' + resolvedUsername);
-              res.statusCode = 200;
+              res.statusCode = 502;
               res.setHeader('Content-Type', 'application/json');
-              return res.end(JSON.stringify({
-                authenticated: true,
-                verifiedWithPiApi: false,
-                isSandboxToken: true,
-                user: {
-                  uid: resolvedUid,
-                  username: resolvedUsername,
-                  roles: resolvedUsername.toLowerCase() === 'avina60' ? ['admin'] : ['user'],
-                  kycVerified: true,
-                  authMethod: 'sandbox_simulator'
-                },
-                sessionToken: 'sess_sim_' + Date.now()
-              }));
+              return res.end(JSON.stringify({ error: 'Pi authentication service unavailable' }));
             } catch (e) {
               res.statusCode = 500;
               res.setHeader('Content-Type', 'application/json');
@@ -114,9 +99,9 @@ function piPlatformApiPlugin() {
                 } catch (e) {}
               }
 
-              res.statusCode = 200;
+              res.statusCode = 502;
               res.setHeader('Content-Type', 'application/json');
-              return res.end(JSON.stringify({ approved: true, paymentId }));
+              return res.end(JSON.stringify({ error: 'Pi payment approval unavailable' }));
             } catch (e) {
               res.statusCode = 200;
               res.setHeader('Content-Type', 'application/json');
@@ -154,9 +139,9 @@ function piPlatformApiPlugin() {
                 } catch (e) {}
               }
 
-              res.statusCode = 200;
+              res.statusCode = 502;
               res.setHeader('Content-Type', 'application/json');
-              return res.end(JSON.stringify({ completed: true, paymentId, txid }));
+              return res.end(JSON.stringify({ error: 'Pi payment completion unavailable' }));
             } catch (e) {
               res.statusCode = 200;
               res.setHeader('Content-Type', 'application/json');
