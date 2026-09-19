@@ -99,7 +99,7 @@ async function sha256(val) {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-test('CORS: OPTIONS preflight permits cross-origin requests when CORS_ORIGIN is empty', async () => {
+test('CORS: OPTIONS preflight rejects cross-origin requests when CORS_ORIGIN is empty', async () => {
   const d1 = createMockD1();
   const env = createMockEnv(d1);
   const req = new Request('https://rentora.workers.dev/api/payments/approve', {
@@ -112,8 +112,8 @@ test('CORS: OPTIONS preflight permits cross-origin requests when CORS_ORIGIN is 
   });
 
   const res = await gateway.fetch(req, env, {});
-  assert.equal(res.status, 204);
-  assert.equal(res.headers.get('Access-Control-Allow-Origin'), 'https://sandbox.minepi.com');
+  assert.equal(res.status, 403);
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), null);
 });
 
 test('Auth: Normal authenticated user can access GET /api/auth/me without 403 Forbidden', async () => {
@@ -158,8 +158,19 @@ test('Health: GET /api/health returns 200 and passes all readiness checks', asyn
   const d1 = createMockD1();
   const env = createMockEnv(d1);
   const req = new Request('https://rentora.workers.dev/api/health', { method: 'GET' });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes('/payments/probe_health_check')) return new Response('', { status: 404 });
+    return originalFetch(input);
+  };
 
-  const res = await gateway.fetch(req, env, {});
+  let res;
+  try {
+    res = await gateway.fetch(req, env, {});
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
   assert.equal(res.status, 200);
   const data = await res.json();
   assert.equal(data.ok, true);

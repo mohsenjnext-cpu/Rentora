@@ -11,7 +11,7 @@ function isOriginAllowed(origin, requestUrl, env) {
     if (origin === requestOrigin) return true;
   } catch (_) {}
   const configured = (env?.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
-  if (configured.length === 0 || configured.includes('*') || configured.includes(origin)) return true;
+  if (configured.includes(origin)) return true;
   return false;
 }
 
@@ -124,7 +124,7 @@ async function safeSync(request, env) {
   const allowed = String(env.ADMIN_PI_UIDS || '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean);
   const uName = String(user?.username || '').toLowerCase();
   const uId = String(user?.pi_uid || '').toLowerCase();
-  const isAdmin = user ? (user.role === 'admin' && (allowed.includes(uId) || allowed.includes(uName) || uName === 'avina60' || uName === 'mohsenjnext')) : false;
+  const isAdmin = user ? (user.role === 'admin' && allowed.includes(uId)) : false;
 
   let itemsQuery;
   if (isAdmin) {

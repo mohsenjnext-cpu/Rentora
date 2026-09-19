@@ -4,6 +4,10 @@ import fs from 'node:fs';
 
 const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
 const piAuthContext = fs.readFileSync(new URL('../src/context/PiAuthContext.jsx', import.meta.url), 'utf8');
+const workerGateway = fs.readFileSync(new URL('../worker-gateway.js', import.meta.url), 'utf8');
+const workerEntry = fs.readFileSync(new URL('../worker-entry.js', import.meta.url), 'utf8');
+const viteConfig = fs.readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
+
 
 function section(start, end) {
   const from = worker.indexOf(start);
@@ -78,4 +82,67 @@ test('frontend sync bridge upgrades legacy identity headers to a signed Bearer s
   assert.match(piAuthContext, /headers\.delete\('x-pi-username'\)/);
   assert.match(piAuthContext, /headers\.set\('Authorization', `Bearer \$\{session\.sessionToken\}`\)/);
   assert.match(piAuthContext, /const isPiLogin = url\.includes\('\/api\/auth\/pi-login'\)/);
+});
+
+
+test('worker admin authorization has no hardcoded usernames', () => {
+  assert.match(worker, /function adminUids\(env\)/);
+  assert.match(worker, /allowed\.includes\(id\)/);
+  assert.doesNotMatch(worker, /avina60|mohsenjnext|admin_user/);
+});
+
+test('worker CORS is fail-closed for cross-origin requests', () => {
+  assert.match(worker, /if \(configured\.includes\(origin\)\) return true;/);
+  assert.doesNotMatch(worker, /configured\.length === 0.*return true/);
+  assert.doesNotMatch(worker, /configured\.includes\('\*'\).*return true/);
+});
+
+
+test('worker admin authorization never derives privilege from username', () => {
+  assert.doesNotMatch(worker, /isAdmin\(row\.pi_uid, env\) \|\| isAdmin\(row\.username, env\)/);
+  assert.doesNotMatch(worker, /isAdmin\(user\.pi_uid, env\) \|\| isAdmin\(user\.username, env\)/);
+  assert.doesNotMatch(worker, /isAdmin\(uid, env\) \|\| isAdmin\(username, env\)/);
+});
+
+
+test('legacy worker entrypoints use the same fail-closed CORS policy', () => {
+  assert.match(workerGateway, /if \(configured\.includes\(origin\)\) return true;/);
+  assert.doesNotMatch(workerGateway, /configured\.length === 0.*return true/);
+  assert.match(workerEntry, /if \(configured\.includes\(origin\)\) return true;/);
+  assert.doesNotMatch(workerEntry, /configured\.length === 0.*return true/);
+});
+
+test('legacy gateway admin authorization is Pi UID-only', () => {
+  assert.match(workerGateway, /allowed\.includes\(uId\)/);
+  assert.doesNotMatch(workerGateway, /allowed\.includes\(uName\)/);
+  assert.doesNotMatch(workerGateway, /uName === 'avina60'|uName === 'mohsenjnext'/);
+});
+
+
+test('frontend admin UI trusts only server-verified admin state', () => {
+  assert.doesNotMatch(piAuthContext, /isServerVerifiedAdmin\s*\|\|\s*currentUser\?\.role\s*===\s*['"]admin['"]/);
+  assert.match(piAuthContext, /const isActuallyAdmin = Boolean\(\s*currentUser\?\.sessionToken &&\s*isServerVerifiedAdmin\s*\);/);
+});
+
+
+test('Vite dev config contains no simulated Pi auth or payment backend', () => {
+  assert.doesNotMatch(viteConfig, /sandbox_simulator|sess_sim_|approved: true|completed: true/);
+  assert.doesNotMatch(viteConfig, /piPlatformApiPlugin|api\/auth\/pi-login|api\/payments\/(approve|complete)/);
+});
+
+
+test('incomplete Pi callbacks are authenticated and intent-bound', () => {
+  const start = worker.indexOf("path === '/api/payments/incomplete'");
+  const end = worker.indexOf("path === '/api/sync/item'", start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const incomplete = worker.slice(start, end);
+  assert.doesNotMatch(incomplete, /requireUser\(request, env\)/);
+  assert.match(incomplete, /payment_intents WHERE pi_payment_id=\?1/);
+  assert.match(incomplete, /payment_intents WHERE id=\?1 AND pi_payment_id=\?2/);
+  assert.match(incomplete, /validatePiPayment\(payment, intent, user\)/);
+  assert.match(incomplete, /metadata/);
+  assert.match(incomplete, /UPDATE rentals SET payment_status='completed', status='confirmed'/);
+  assert.match(incomplete, /INSERT OR IGNORE INTO transactions/);
+  assert.doesNotMatch(incomplete, /UPDATE payment_intents SET status='completed'.*WHERE pi_payment_id=\?3/);
 });
