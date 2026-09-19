@@ -45,7 +45,7 @@ function createContactMockEnv(initialData = {}) {
           }
 
           // Rentals Contact Query
-          if (q.includes('FROM rentals r') && q.includes('JOIN listings l') && q.includes('WHERE r.id = ?1')) {
+          if (q.includes('FROM rentals r') && q.includes('JOIN listings l') && q.includes('JOIN users u') && q.includes('WHERE r.id = ?1')) {
             const rentalId = this._params[0];
             const rental = dbData.rentals.find(r => r.id === rentalId);
             if (!rental) return null;
