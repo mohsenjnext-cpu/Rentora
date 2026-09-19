@@ -190,8 +190,14 @@ class PiNetworkService {
         };
 
         try {
+          const paymentMetadata = {
+            ...(serverIntent.metadata || {}),
+            paymentIntentId: serverIntent.id,
+            rentalId: serverIntent.metadata?.rentalId || paymentData?.metadata?.rentalId
+          };
+
           window.Pi.createPayment(
-            { amount, memo, metadata: { ...(paymentData?.metadata || {}), paymentIntentId: serverIntent.id } },
+            { amount, memo, metadata: paymentMetadata },
             {
               onReadyForServerApproval: async (paymentId) => {
                 try {

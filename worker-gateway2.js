@@ -148,12 +148,16 @@ function validatePayment(payment, intent, user) {
 
   const meta = parsePaymentMetadata(payment?.metadata);
   const metaIntentId = meta?.paymentIntentId || meta?.intentId || meta?.id;
-  if (metaIntentId && String(metaIntentId) !== String(intent.id)) {
+  if (!metaIntentId || String(metaIntentId) !== String(intent.id)) {
     throw Object.assign(new Error('Pi payment metadata binding is missing or invalid'), { status: 409 });
   }
+  if (meta?.rentalId && String(meta.rentalId) !== String(intent.rental_id)) {
+    throw Object.assign(new Error('Pi payment rental binding mismatch'), { status: 409 });
+  }
 
-  const amount = Number(payment?.amount);
-  if (Number.isFinite(amount) && Math.abs(amount - Number(intent.amount)) > 0.001) {
+  const payerAmount = Math.round(Number(payment?.amount || 0) * 10000) / 10000;
+  const expectedAmount = Math.round(Number(intent.amount || 0) * 10000) / 10000;
+  if (Math.abs(payerAmount - expectedAmount) > 0.0001) {
     throw Object.assign(new Error('Pi payment amount mismatch'), { status: 409 });
   }
 
@@ -227,7 +231,10 @@ async function approvePayment(request, env) {
   }
 
   try {
-    await env.RENTORA_DB.prepare("UPDATE payment_intents SET pi_payment_id=?1,status='approved',updated_at=?2 WHERE id=?3 AND status IN ('created','approved')").bind(body.paymentId, now(), intent.id).run();
+    await env.RENTORA_DB.batch([
+      env.RENTORA_DB.prepare("UPDATE payment_intents SET pi_payment_id=?1,status='approved',updated_at=?2 WHERE id=?3 AND status IN ('created','approved')").bind(body.paymentId, now(), intent.id),
+      env.RENTORA_DB.prepare("UPDATE rentals SET status='payment_approved',updated_at=?1 WHERE id=?2 AND status IN ('pending_payment','payment_approved')").bind(now(), intent.rental_id)
+    ]);
   } catch (error) {
     console.error(`[Payment ${traceId}] approval persistence error`, error);
   }

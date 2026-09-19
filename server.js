@@ -148,6 +148,76 @@ app.post('/api/auth/pi-login', async (req, res) => {
 });
 
 // -------------------------------------------------------------
+// 1.5 Server-Authoritative Payment Intent Endpoint
+// STRICT: Derives amount strictly from D1/database rental platform_fee
+// -------------------------------------------------------------
+app.post('/api/payments/intent', (req, res) => {
+  try {
+    const user = getRequestUser(req);
+    if (!user.uid && !user.username) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const { rentalId } = req.body || {};
+    if (!rentalId) {
+      return res.status(400).json({ error: "rentalId is required" });
+    }
+
+    const db = readDb();
+    const rental = (db.rentals || []).find(r => String(r.id) === String(rentalId));
+    if (!rental) {
+      return res.status(404).json({ error: "Rental not found" });
+    }
+
+    const isRenter = (user.uid && rental.renterUid === user.uid) ||
+                     (user.username && rental.renterUsername?.toLowerCase() === user.username);
+    if (!isRenter) {
+      return res.status(403).json({ error: "Forbidden: Not your rental" });
+    }
+
+    const canonicalAmount = Math.round(Number(rental.rentoraFee || rental.platform_fee || rental.totalPlatformFee || 0.0001) * 10000) / 10000;
+    const paymentIntentId = `pii_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const memo = `Rentora Booking Fee #${String(rental.id).slice(-12)}`;
+
+    const metadata = {
+      paymentIntentId,
+      rentalId: rental.id,
+      quoteId: rental.quoteId || null,
+      expectedAmount: canonicalAmount,
+      currency: "PI",
+      memo
+    };
+
+    if (!db.payment_intents) db.payment_intents = [];
+    db.payment_intents = [{
+      id: paymentIntentId,
+      rentalId: rental.id,
+      userId: user.uid || user.username,
+      amount: canonicalAmount,
+      memo,
+      status: "created",
+      metadata,
+      expiresAt,
+      createdAt: new Date().toISOString()
+    }, ...db.payment_intents.filter(pi => pi.rentalId !== rental.id)];
+    writeDb(db);
+
+    return res.status(201).json({
+      paymentIntentId,
+      id: paymentIntentId,
+      amount: canonicalAmount,
+      memo,
+      metadata,
+      expiresAt
+    });
+  } catch (err) {
+    console.error('[Payment Intent Error]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// -------------------------------------------------------------
 // 2. Strict Pi Payment Server Approval Endpoint
 // STRICT: Calls POST https://api.minepi.com/v2/payments/{paymentId}/approve
 // Uses Server API Key: Authorization: Key <PI_API_KEY>
