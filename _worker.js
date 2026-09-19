@@ -933,6 +933,7 @@ export default {
       if (method === 'GET' && path.startsWith('/api/rentals/') && path.endsWith('/contact')) {
         const rentalId = path.slice('/api/rentals/'.length, -'/contact'.length).trim();
         if (!rentalId) return errorResponse('Missing rental ID', 400, env, undefined, origin);
+        const { user } = await requireUser(request, env);
 
         const row = await env.RENTORA_DB.prepare(`
           SELECT
