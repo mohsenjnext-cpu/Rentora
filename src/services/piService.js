@@ -52,6 +52,21 @@ class PiNetworkService {
     return await this.authenticate(null, ['payments', 'username', 'wallet_address']);
   }
 
+  async handleIncompletePayment(payment) {
+    if (!payment?.identifier) return;
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) return;
+    try {
+      await fetch(`${apiBase}/api/payments/incomplete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment, paymentId: payment.identifier, txid: payment.transaction?.txid })
+      });
+    } catch (e) {
+      console.warn('Incomplete payment handling error:', e);
+    }
+  }
+
   async authenticate(customIncompleteHandler = null, scopes = ['payments', 'username', 'wallet_address']) {
     if (!this.hasPiSdk()) throw new Error('NOT_IN_PI_BROWSER');
     if (this.authPromise) return this.authPromise;
@@ -61,21 +76,10 @@ class PiNetworkService {
         await this.init();
         const apiBase = getApiBaseUrl();
         if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
-        const onIncompletePayment = customIncompleteHandler || (async (payment) => {
-          if (!payment?.identifier) return;
-          try {
-            await fetch(`${apiBase}/api/payments/incomplete`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ payment, paymentId: payment.identifier, txid: payment.transaction?.txid })
-            });
-          } catch (e) {
-            console.warn('Incomplete payment handling error:', e);
-          }
-        });
+        const onIncompletePaymentFound = customIncompleteHandler || ((payment) => this.handleIncompletePayment(payment));
 
         const authResult = await Promise.race([
-          window.Pi.authenticate(scopes, onIncompletePayment),
+          window.Pi.authenticate(scopes, onIncompletePaymentFound),
           new Promise((_, reject) => setTimeout(() => reject(new Error('پاسخی از Pi Browser دریافت نشد. لطفاً مجدداً تلاش کنید.')), 35000))
         ]);
 

@@ -597,6 +597,12 @@ export default {
         }
         return new Response(null, { status: 204, headers });
       }
+      if (request.method === 'GET' && path === '/validation-key.txt') {
+        return new Response('d8b5b506fc41746eb0aba3ff56bcb32ed03dd33bf0348a3af22893ba437b437544a2c160e3ba460b7986e1994fa19964a4beabd3ae98620da1f8b90dece4f7b8\n', {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' }
+        });
+      }
       if (request.method === 'GET' && path === '/api/health') {
         const rawKey = env?.PI_API_KEY || env?.PI_SERVER_API_KEY;
         const sanitizedKey = sanitizePiApiKey(rawKey);
