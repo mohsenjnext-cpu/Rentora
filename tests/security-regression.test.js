@@ -120,7 +120,7 @@ test('legacy gateway admin authorization is Pi UID-only', () => {
 
 
 test('frontend admin UI trusts only server-verified admin state', () => {
-  assert.doesNotMatch(piAuthContext, /isServerVerifiedAdmin \|\| currentUser\?\.role === 'admin'/);
+  assert.doesNotMatch(piAuthContext, /isServerVerifiedAdmin\s*\|\|\s*currentUser\?\.role\s*===\s*['"]admin['"]/);
   assert.match(piAuthContext, /const isActuallyAdmin = Boolean\(\s*currentUser\?\.sessionToken &&\s*isServerVerifiedAdmin\s*\);/);
 });
 
@@ -137,9 +137,11 @@ test('incomplete Pi callbacks are authenticated and intent-bound', () => {
   assert.notEqual(start, -1);
   assert.notEqual(end, -1);
   const incomplete = worker.slice(start, end);
-  assert.match(incomplete, /requireUser\(request, env\)/);
-  assert.match(incomplete, /payment_intents WHERE pi_payment_id=\?1 AND user_id=\?2/);
+  assert.doesNotMatch(incomplete, /requireUser\(request, env\)/);
+  assert.match(incomplete, /payment_intents WHERE pi_payment_id=\?1/);
+  assert.match(incomplete, /payment_intents WHERE id=\?1 AND pi_payment_id=\?2/);
   assert.match(incomplete, /validatePiPayment\(payment, intent, user\)/);
+  assert.match(incomplete, /metadata/);
   assert.match(incomplete, /UPDATE rentals SET payment_status='completed', status='confirmed'/);
   assert.match(incomplete, /INSERT OR IGNORE INTO transactions/);
   assert.doesNotMatch(incomplete, /UPDATE payment_intents SET status='completed'.*WHERE pi_payment_id=\?3/);
