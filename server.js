@@ -462,6 +462,172 @@ app.post('/api/sync/rental', (req, res) => {
   }
 });
 
+// Server-Authoritative Quote Endpoint
+app.post('/api/rentals/quote', (req, res) => {
+  try {
+    const user = getRequestUser(req);
+    if (!user.uid && !user.username) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const { listingId, startDate, endDate } = req.body || {};
+    if (!listingId || !startDate || !endDate) {
+      return res.status(400).json({ error: "listingId, startDate, and endDate are required" });
+    }
+
+    const db = readDb();
+    const listing = (db.items || []).find(i => String(i.id) === String(listingId));
+    if (!listing) {
+      return res.status(404).json({ error: "Listing not found" });
+    }
+    if (listing.status && listing.status !== 'active') {
+      return res.status(409).json({ error: "Listing is not currently active for booking" });
+    }
+
+    const isOwner = (user.uid && listing.ownerUid === user.uid) ||
+                    (user.username && listing.ownerUsername?.toLowerCase() === user.username);
+    if (isOwner) {
+      return res.status(400).json({ error: "Owners cannot book their own listing" });
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ error: "Invalid ISO 8601 date format" });
+    }
+    if (start >= end) {
+      return res.status(400).json({ error: "End date must be strictly after start date" });
+    }
+
+    const diffMs = end.getTime() - start.getTime();
+    const daysCount = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    const dailyRate = Number(Number(listing.pricePerDay || 0).toFixed(4));
+    const depositAmount = Number(Number(listing.deposit || 0).toFixed(4));
+    const baseRentalAmount = Number((daysCount * dailyRate).toFixed(4));
+    const platformFee = Math.max(0.0001, Number((baseRentalAmount * 0.05).toFixed(4)));
+    const totalAmount = Number((baseRentalAmount + depositAmount + platformFee).toFixed(4));
+
+    const quoteId = `qt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const createdAt = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    const quote = {
+      quoteId,
+      listingId: listing.id,
+      listingTitle: listing.title,
+      ownerUid: listing.ownerUid,
+      ownerUsername: listing.ownerUsername,
+      renterUid: user.uid,
+      renterUsername: user.username,
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      daysCount,
+      pricePerDay: dailyRate,
+      baseRentalAmount,
+      depositAmount,
+      platformFee,
+      totalAmount,
+      currency: "PI",
+      createdAt,
+      expiresAt
+    };
+
+    if (!db.quotes) db.quotes = [];
+    db.quotes = [quote, ...db.quotes.filter(q => q.quoteId !== quoteId)].slice(0, 500);
+    writeDb(db);
+
+    return res.status(201).json({ success: true, quote });
+  } catch (err) {
+    console.error('[Rental Quote Error]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Server-Authoritative Rental Booking Creation
+app.post('/api/rentals', (req, res) => {
+  try {
+    const user = getRequestUser(req);
+    if (!user.uid && !user.username) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const { quoteId, listingId, startDate, endDate } = req.body || {};
+    const db = readDb();
+    let quote = null;
+
+    if (quoteId) {
+      quote = (db.quotes || []).find(q => q.quoteId === quoteId);
+      if (!quote) {
+        return res.status(410).json({ error: "Quote expired or not found" });
+      }
+      if (new Date(quote.expiresAt) <= new Date()) {
+        return res.status(410).json({ error: "Quote expired" });
+      }
+    }
+
+    const targetListingId = quote ? quote.listingId : listingId;
+    const targetStart = quote ? quote.startDate : startDate;
+    const targetEnd = quote ? quote.endDate : endDate;
+
+    if (!targetListingId || !targetStart || !targetEnd) {
+      return res.status(400).json({ error: "Listing and booking dates are required" });
+    }
+
+    const listing = (db.items || []).find(i => String(i.id) === String(targetListingId));
+    if (!listing) {
+      return res.status(404).json({ error: "Listing not found" });
+    }
+    if (listing.status && listing.status !== 'active') {
+      return res.status(409).json({ error: "Listing is not active" });
+    }
+
+    const start = new Date(targetStart);
+    const end = new Date(targetEnd);
+    const diffMs = end.getTime() - start.getTime();
+    const daysCount = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    const dailyRate = Number(Number(listing.pricePerDay || 0).toFixed(4));
+    const depositAmount = Number(Number(listing.deposit || 0).toFixed(4));
+    const baseRentalAmount = Number((daysCount * dailyRate).toFixed(4));
+    const platformFee = Math.max(0.0001, Number((baseRentalAmount * 0.05).toFixed(4)));
+    const totalAmount = Number((baseRentalAmount + depositAmount + platformFee).toFixed(4));
+
+    const rentalId = `rnt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const rental = {
+      id: rentalId,
+      quoteId: quote?.quoteId || null,
+      itemId: listing.id,
+      itemTitle: listing.title,
+      ownerUid: listing.ownerUid,
+      ownerUsername: listing.ownerUsername,
+      renterUid: user.uid,
+      renterUsername: user.username,
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      daysCount,
+      pricePerDay: dailyRate,
+      rentalTotal: baseRentalAmount,
+      baseAmount: baseRentalAmount,
+      deposit: depositAmount,
+      securityDeposit: depositAmount,
+      rentoraFee: platformFee,
+      totalPlatformFee: platformFee,
+      totalAmount,
+      status: "pending_payment",
+      paymentStatus: "unpaid",
+      createdAt: new Date().toISOString()
+    };
+
+    if (!db.rentals) db.rentals = [];
+    db.rentals = [rental, ...db.rentals.filter(r => r.id !== rentalId)];
+    writeDb(db);
+
+    return res.status(201).json({ success: true, rental });
+  } catch (err) {
+    console.error('[Rental Create Error]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({

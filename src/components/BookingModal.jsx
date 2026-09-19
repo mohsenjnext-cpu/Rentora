@@ -54,6 +54,8 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
   const [errorMessage, setErrorMessage] = useState('');
   const [confirmedBookingData, setConfirmedBookingData] = useState(null);
   const [copiedPhone, setCopiedPhone] = useState(false);
+  const [serverQuote, setServerQuote] = useState(null);
+  const [isLoadingQuote, setIsLoadingQuote] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -64,12 +66,45 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
     }
   }, [isOpen]);
 
+  // Fetch authoritative server quote whenever dates or item change
+  useEffect(() => {
+    if (!isOpen || !item?.id || !dates.startDate || !dates.endDate) return;
+    if (new Date(dates.endDate) <= new Date(dates.startDate)) {
+      setServerQuote(null);
+      return;
+    }
+
+    let isMounted = true;
+    setIsLoadingQuote(true);
+    setErrorMessage('');
+
+    cloudSyncService.createRentalQuote({
+      listingId: item.id,
+      startDate: dates.startDate,
+      endDate: dates.endDate
+    })
+      .then(quote => {
+        if (isMounted) {
+          setServerQuote(quote);
+          setIsLoadingQuote(false);
+        }
+      })
+      .catch(err => {
+        if (isMounted) {
+          setIsLoadingQuote(false);
+          setServerQuote(null);
+        }
+      });
+
+    return () => { isMounted = false; };
+  }, [isOpen, item?.id, dates.startDate, dates.endDate]);
+
   if (!isOpen || !item) return null;
 
-  const dailyPrice = Number(item.pricePerDay ?? item.price_per_day ?? item.dailyRate ?? item.price ?? 0);
-  const depositAmount = Number(item.deposit ?? item.deposit_amount ?? item.securityDeposit ?? 0);
+  const dailyPrice = serverQuote?.pricePerDay ?? Number(item.pricePerDay ?? item.price_per_day ?? item.dailyRate ?? item.price ?? 0);
+  const depositAmount = serverQuote?.depositAmount ?? Number(item.deposit ?? item.deposit_amount ?? item.securityDeposit ?? 0);
 
-  const pricing = calculatePricing({
+  const fallbackPricing = calculatePricing({
     pricePerDay: dailyPrice,
     dailyRate: dailyPrice,
     startDate: dates.startDate,
@@ -78,10 +113,11 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
     ownerUsername: item.ownerUsername || item.owner_username
   });
 
-  const rentoraFee = pricing.rentoraFee !== undefined ? pricing.rentoraFee : (pricing.totalPlatformFee || 0);
-  const rentalTotal = pricing.rentalTotal !== undefined ? pricing.rentalTotal : pricing.baseRentalAmount;
-  const deposit = pricing.deposit !== undefined ? pricing.deposit : depositAmount;
-  const totalObligation = pricing.totalRentalObligation !== undefined ? pricing.totalRentalObligation : (rentalTotal + deposit);
+  const daysCount = serverQuote?.daysCount ?? fallbackPricing.daysCount;
+  const rentoraFee = serverQuote?.platformFee ?? (fallbackPricing.rentoraFee !== undefined ? fallbackPricing.rentoraFee : (fallbackPricing.totalPlatformFee || 0));
+  const rentalTotal = serverQuote?.baseRentalAmount ?? (fallbackPricing.rentalTotal !== undefined ? fallbackPricing.rentalTotal : fallbackPricing.baseRentalAmount);
+  const deposit = serverQuote?.depositAmount ?? (fallbackPricing.deposit !== undefined ? fallbackPricing.deposit : depositAmount);
+  const totalObligation = rentalTotal + deposit;
 
   const handleCreateBooking = async (e) => {
     e.preventDefault();
@@ -127,17 +163,29 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
     setIsSubmitting(true);
 
     try {
-      // 1. Build the rental from the selected listing and quote.
-      const draftRental = await createRentalBooking(item, {
-        startDate: dates.startDate,
-        endDate: dates.endDate,
-        daysCount: pricing.daysCount,
-        notes
-      });
+      // 1. Authoritative Server Rental Creation (using Quote or Server calculation)
+      let persistedRental;
+      try {
+        if (serverQuote?.quoteId) {
+          persistedRental = await cloudSyncService.createRental({ quoteId: serverQuote.quoteId });
+        } else {
+          persistedRental = await cloudSyncService.createRental({
+            listingId: item.id,
+            startDate: dates.startDate,
+            endDate: dates.endDate
+          });
+        }
+      } catch (createErr) {
+        // Fallback for offline/compatibility mode
+        const draftRental = await createRentalBooking(item, {
+          startDate: dates.startDate,
+          endDate: dates.endDate,
+          daysCount,
+          notes
+        });
+        persistedRental = await cloudSyncService.broadcastNewRental(draftRental);
+      }
 
-      // Persist the pending rental BEFORE Pi.createPayment(). The server-side
-      // payment intent derives its amount/memo from this authoritative D1 row.
-      const persistedRental = await cloudSyncService.broadcastNewRental(draftRental);
       if (!persistedRental?.id) throw new Error('ثبت رزرو در سرور ناموفق بود.');
 
       // 2. Pay ONLY Rentora Platform Fee via Official Pi SDK.

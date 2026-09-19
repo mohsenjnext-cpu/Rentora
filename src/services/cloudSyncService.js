@@ -191,6 +191,43 @@ export class CloudSyncService {
     return item;
   }
 
+  async createRentalQuote({ listingId, startDate, endDate }) {
+    if (!listingId || !startDate || !endDate) throw new Error('listingId, startDate, and endDate are required');
+
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/rentals/quote`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ listingId, startDate, endDate })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success !== true) {
+      throw new Error(data?.error || 'خطا در دریافت پیش‌فاکتور از سرور');
+    }
+    return data.quote;
+  }
+
+  async createRental({ quoteId, listingId, startDate, endDate }) {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const body = quoteId ? { quoteId } : { listingId, startDate, endDate };
+    const res = await fetch(`${apiBase}/api/rentals`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(body)
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success !== true) {
+      throw new Error(data?.error || 'خطا در ایجاد قرارداد اجاره در سرور');
+    }
+    return data.rental;
+  }
+
   async broadcastNewRental(rental) {
     if (!rental || !rental.id) throw new Error('Invalid rental payload');
 

@@ -202,6 +202,47 @@ async function verifyPiAccessToken(env, accessToken) { if (!accessToken || !env?
 async function createSession(env, user) { const token = randomToken('sess'); const hash = await sha256(token); await env.RENTORA_KV.put(`session:${hash}`, JSON.stringify({ uid: user.pi_uid, username: user.username, role: user.role }), { expirationTtl: SESSION_TTL }); return token; }
 async function getSession(request, env) { const header = request.headers.get('Authorization') || ''; if (!header.startsWith('Bearer ')) return null; const token = header.slice(7).trim(); if (!token) return null; const hash = await sha256(token); const raw = await env.RENTORA_KV.get(`session:${hash}`); if (!raw) return null; try { return JSON.parse(raw); } catch (_) { return null; } }
 async function requireUser(request, env) { requireBindings(env); const session = await getSession(request, env); if (!session?.uid) throw Object.assign(new Error('Authentication required'), { status: 401 }); const row = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE pi_uid = ?1 LIMIT 1').bind(session.uid).first(); if (!row || row.status !== 'active') throw Object.assign(new Error('User is not active'), { status: 403 }); return { session, user: row }; }
+const QUOTE_TTL = 900; // 15 minutes in seconds
+
+function calculateAuthoritativeFinancials(pricePerDay, depositAmount, startDateStr, endDateStr, feeRate = 0.05, minFeePi = 0.0001) {
+  const start = new Date(startDateStr);
+  const end = new Date(endDateStr);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    throw Object.assign(new Error('تاریخ شروع یا پایان نامعتبر است (Invalid ISO 8601 date)'), { status: 400 });
+  }
+  if (start >= end) {
+    throw Object.assign(new Error('تاریخ پایان باید پس از تاریخ شروع باشد'), { status: 400 });
+  }
+  const todayUtc = new Date();
+  todayUtc.setUTCHours(0, 0, 0, 0);
+  if (start.getTime() < todayUtc.getTime() - 86400000) {
+    throw Object.assign(new Error('تاریخ شروع رزرو نمی‌تواند در گذشته باشد'), { status: 400 });
+  }
+
+  const diffMs = end.getTime() - start.getTime();
+  const daysCount = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+  const dailyRate = Number(Number(pricePerDay || 0).toFixed(4));
+  const deposit = Number(Number(depositAmount || 0).toFixed(4));
+  const baseRentalAmount = Number((daysCount * dailyRate).toFixed(4));
+
+  const calculatedFee = Number((baseRentalAmount * feeRate).toFixed(4));
+  const platformFee = Math.max(minFeePi, calculatedFee);
+  const totalAmount = Number((baseRentalAmount + deposit + platformFee).toFixed(4));
+
+  return {
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+    daysCount,
+    pricePerDay: dailyRate,
+    baseRentalAmount,
+    depositAmount: deposit,
+    platformFee,
+    totalAmount,
+    currency: 'PI'
+  };
+}
+
 async function requireAdmin(request, env) { const auth = await requireUser(request, env); if (!isAdmin(auth.user.pi_uid, env) || auth.user.role !== 'admin') throw Object.assign(new Error('Admin access required'), { status: 403 }); return auth; }
 function parseMetadata(value) { if (!value) return {}; try { return JSON.parse(value); } catch (_) { return {}; } }
 function userView(row, env) {
@@ -768,6 +809,202 @@ export default {
           }
         }
         return jsonResponse({ success: true }, 200, env, origin);
+      }
+      if (method === 'POST' && path === '/api/rentals/quote') {
+        const { user } = await requireUser(request, env);
+        const body = await readJson(request);
+        const listingId = String(body.listingId || '').trim();
+        if (!listingId) return errorResponse('listingId is required', 400, env, undefined, origin);
+        if (!body.startDate || !body.endDate) return errorResponse('startDate and endDate are required', 400, env, undefined, origin);
+
+        const listing = await env.RENTORA_DB.prepare(
+          `SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.id=?1 LIMIT 1`
+        ).bind(listingId).first();
+
+        if (!listing) return errorResponse('Listing not found', 404, env, undefined, origin);
+        if (listing.status !== 'active') return errorResponse('Listing is not currently active for booking', 409, env, undefined, origin);
+
+        if (listing.owner_user_id === user.id || String(listing.owner_pi_uid).toLowerCase() === String(user.pi_uid).toLowerCase()) {
+          return errorResponse('Owners cannot book or rent their own listing', 400, env, undefined, origin);
+        }
+
+        let financials;
+        try {
+          financials = calculateAuthoritativeFinancials(
+            listing.price_per_day,
+            listing.deposit_amount,
+            body.startDate,
+            body.endDate,
+            Number(env.PLATFORM_FEE_RATE || 0.05),
+            0.0001
+          );
+        } catch (err) {
+          return errorResponse(err.message, err.status || 400, env, undefined, origin);
+        }
+
+        // Check date overlap in D1 against confirmed/pending rentals
+        const overlap = await env.RENTORA_DB.prepare(`
+          SELECT 1 FROM rentals
+          WHERE listing_id = ?1
+            AND status IN ('pending_payment', 'paid', 'confirmed', 'active')
+            AND julianday(end_date) > julianday(?2)
+            AND julianday(start_date) < julianday(?3)
+            AND (status <> 'pending_payment' OR (renter_user_id <> ?4 AND julianday(created_at) >= julianday('now','-10 minutes')))
+          LIMIT 1
+        `).bind(listing.id, financials.startDate, financials.endDate, user.id).first();
+
+        if (overlap) {
+          return errorResponse('این کالا برای تاریخ‌های انتخابی قبلاً رزرو شده است.', 409, env, undefined, origin);
+        }
+
+        const quoteId = `qt_${crypto.randomUUID()}`;
+        const createdAt = now();
+        const expiresAt = new Date(Date.now() + QUOTE_TTL * 1000).toISOString();
+
+        const quoteData = {
+          quoteId,
+          listingId: listing.id,
+          listingTitle: listing.title,
+          ownerUserId: listing.owner_user_id,
+          ownerUid: listing.owner_pi_uid,
+          ownerUsername: listing.owner_username,
+          renterUserId: user.id,
+          renterUid: user.pi_uid,
+          renterUsername: user.username,
+          startDate: financials.startDate,
+          endDate: financials.endDate,
+          daysCount: financials.daysCount,
+          pricePerDay: financials.pricePerDay,
+          baseRentalAmount: financials.baseRentalAmount,
+          depositAmount: financials.depositAmount,
+          platformFee: financials.platformFee,
+          totalAmount: financials.totalAmount,
+          currency: 'PI',
+          createdAt,
+          expiresAt
+        };
+
+        if (env?.RENTORA_KV) {
+          await env.RENTORA_KV.put(`quote:${quoteId}`, JSON.stringify(quoteData), { expirationTtl: QUOTE_TTL });
+        }
+
+        return jsonResponse({ success: true, quote: quoteData }, 201, env, origin);
+      }
+      if (method === 'POST' && path === '/api/rentals') {
+        const { user } = await requireUser(request, env);
+        const body = await readJson(request);
+
+        let quote = null;
+        if (body.quoteId) {
+          const rawQuote = env?.RENTORA_KV ? await env.RENTORA_KV.get(`quote:${body.quoteId}`) : null;
+          if (!rawQuote) {
+            return errorResponse('پیش‌فاکتور منقضی شده یا نامعتبر است. لطفاً مجدداً استعلام بگیرید.', 410, env, undefined, origin);
+          }
+          try { quote = JSON.parse(rawQuote); } catch (_) {
+            return errorResponse('Invalid quote payload', 400, env, undefined, origin);
+          }
+
+          if (quote.renterUserId !== user.id && quote.renterUid !== user.pi_uid) {
+            return errorResponse('Quote does not belong to the authenticated user', 403, env, undefined, origin);
+          }
+          if (new Date(quote.expiresAt) <= new Date()) {
+            return errorResponse('پیش‌فاکتور منقضی شده است.', 410, env, undefined, origin);
+          }
+        }
+
+        const listingId = quote?.listingId || String(body.listingId || '').trim();
+        if (!listingId) return errorResponse('listingId or quoteId is required', 400, env, undefined, origin);
+
+        // Fetch fresh listing from D1 to defend against race conditions and price changes
+        const listing = await env.RENTORA_DB.prepare(
+          `SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.id=?1 LIMIT 1`
+        ).bind(listingId).first();
+
+        if (!listing) return errorResponse('Listing not found', 404, env, undefined, origin);
+        if (listing.status !== 'active') return errorResponse('Listing is no longer active for rental', 409, env, undefined, origin);
+
+        if (listing.owner_user_id === user.id || String(listing.owner_pi_uid).toLowerCase() === String(user.pi_uid).toLowerCase()) {
+          return errorResponse('Owners cannot book or rent their own listing', 400, env, undefined, origin);
+        }
+
+        const startDate = quote?.startDate || body.startDate;
+        const endDate = quote?.endDate || body.endDate;
+        if (!startDate || !endDate) return errorResponse('startDate and endDate are required', 400, env, undefined, origin);
+
+        let financials;
+        try {
+          financials = calculateAuthoritativeFinancials(
+            listing.price_per_day,
+            listing.deposit_amount,
+            startDate,
+            endDate,
+            Number(env.PLATFORM_FEE_RATE || 0.05),
+            0.0001
+          );
+        } catch (err) {
+          return errorResponse(err.message, err.status || 400, env, undefined, origin);
+        }
+
+        // If quote was provided, verify price and deposit haven't changed since quote generation
+        if (quote) {
+          if (quote.pricePerDay !== financials.pricePerDay || quote.depositAmount !== financials.depositAmount) {
+            return errorResponse('قیمت یا شرایط کالا تغییر یافته است. لطفاً پیش‌فاکتور جدید دریافت نمایید.', 409, env, undefined, origin);
+          }
+        }
+
+        // Overlap verification in D1
+        const overlap = await env.RENTORA_DB.prepare(`
+          SELECT 1 FROM rentals
+          WHERE listing_id = ?1
+            AND status IN ('pending_payment', 'paid', 'confirmed', 'active')
+            AND julianday(end_date) > julianday(?2)
+            AND julianday(start_date) < julianday(?3)
+            AND (status <> 'pending_payment' OR (renter_user_id <> ?4 AND julianday(created_at) >= julianday('now','-10 minutes')))
+          LIMIT 1
+        `).bind(listing.id, financials.startDate, financials.endDate, user.id).first();
+
+        if (overlap) {
+          return errorResponse('این کالا برای تاریخ‌های انتخابی در دسترس نیست یا قبلاً رزرو شده است.', 409, env, undefined, origin);
+        }
+
+        const rentalId = `rnt_${crypto.randomUUID()}`;
+        const createdAt = now();
+        const rentalMeta = {
+          quoteId: quote?.quoteId || null,
+          daysCount: financials.daysCount,
+          pricePerDay: financials.pricePerDay,
+          listingTitle: listing.title,
+          currency: 'PI'
+        };
+
+        await env.RENTORA_DB.prepare(`
+          INSERT INTO rentals(id, listing_id, renter_user_id, owner_user_id, start_date, end_date, rental_amount, deposit_amount, platform_fee, total_amount, status, payment_status, metadata, created_at, updated_at)
+          VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'pending_payment', 'unpaid', ?11, ?12, ?12)
+        `).bind(
+          rentalId,
+          listing.id,
+          user.id,
+          listing.owner_user_id,
+          financials.startDate,
+          financials.endDate,
+          financials.baseRentalAmount,
+          financials.depositAmount,
+          financials.platformFee,
+          financials.totalAmount,
+          JSON.stringify(rentalMeta),
+          createdAt
+        ).run();
+
+        const createdRental = await env.RENTORA_DB.prepare(`
+          SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username
+          FROM rentals r
+          JOIN listings l ON l.id=r.listing_id
+          JOIN users ru ON ru.id=r.renter_user_id
+          JOIN users ou ON ou.id=l.owner_user_id
+          WHERE r.id=?1 LIMIT 1
+        `).bind(rentalId).first();
+
+        return jsonResponse({ success: true, rental: rentalView(createdRental) }, 201, env, origin);
       }
       if (method === 'POST' && path === '/api/payments/intent') {
         const { user } = await requireUser(request, env);
