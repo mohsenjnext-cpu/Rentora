@@ -66,6 +66,7 @@ export function PiAuthProvider({ children }) {
   const handleSessionInvalid = useCallback(() => {
     try {
       localStorage.removeItem(STORAGE_KEY_USER);
+      cloudSyncService.clearUserSessionCache();
     } catch (_) {}
     setCurrentUser(null);
     setIsServerVerifiedAdmin(false);

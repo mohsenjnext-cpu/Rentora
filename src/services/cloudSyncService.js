@@ -811,6 +811,19 @@ export class CloudSyncService {
     } catch (e) {}
   }
 
+  clearUserSessionCache() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(STORAGE_USER_KEY);
+        localStorage.removeItem(STORAGE_RENTALS_KEY);
+        localStorage.removeItem('rentora_db_transactions_v8');
+        localStorage.removeItem('rentora_db_reports_v8');
+        localStorage.removeItem('rentora_live_v1_session');
+      }
+    } catch (_) {}
+    this.lastSyncedHash = '';
+  }
+
   getCachedUsers() {
     try {
       const saved = localStorage.getItem(STORAGE_USERS_KEY);

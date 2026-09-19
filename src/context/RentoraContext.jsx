@@ -23,9 +23,9 @@ export function RentoraProvider({ children }) {
   });
   const [items, setItems] = useState(() => cloudSyncService.getCachedItems());
   const [favorites, setFavorites] = useState(() => { try { const saved = localStorage.getItem(STORAGE_PREFIX + 'favorites_v8'); return saved ? JSON.parse(saved) : []; } catch (e) { return []; } });
-  const [rentals, setRentals] = useState(() => cloudSyncService.getCachedRentals());
-  const [transactions, setTransactions] = useState(() => { try { const saved = localStorage.getItem(STORAGE_PREFIX + 'transactions_v8'); return saved ? JSON.parse(saved) : []; } catch (e) { return []; } });
-  const [reports, setReports] = useState(() => { try { const saved = localStorage.getItem(STORAGE_PREFIX + 'reports_v8'); return saved ? JSON.parse(saved) : []; } catch (e) { return []; } });
+  const [rentals, setRentals] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [reports, setReports] = useState([]);
   const [conversations, setConversations] = useState([]);
   const [latestNotification, setLatestNotification] = useState(null);
   const knownMsgIdsRef = useRef(new Set());
@@ -112,8 +112,6 @@ export function RentoraProvider({ children }) {
 
   useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'config_v9', JSON.stringify(platformConfig)); } catch (e) {} }, [platformConfig]);
   useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'favorites_v8', JSON.stringify(favorites)); } catch (e) {} }, [favorites]);
-  useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'transactions_v8', JSON.stringify(transactions)); } catch (e) {} }, [transactions]);
-  useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'reports_v8', JSON.stringify(reports)); } catch (e) {} }, [reports]);
 
   useEffect(() => {
     const unsubscribe = cloudSyncService.subscribe((event, data) => {
@@ -129,8 +127,10 @@ export function RentoraProvider({ children }) {
 
   useEffect(() => {
     if (!currentUser) {
+      setRentals([]);
       setTransactions([]);
       setReports([]);
+      setConversations([]);
     }
     cloudSyncService.fetchSharedData(true).catch(() => {});
   }, [currentUser]);
