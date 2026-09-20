@@ -520,3 +520,144 @@ test('10. Security: No PI_API_KEY disclosure in any response', async () => {
   const text = await res.text();
   assert.equal(text.includes('SECRET_PI_API_KEY_NEVER_LEAK_9999'), false);
 });
+
+test('11. Idempotent Approve: Payment already approved in Pi skips approve call and completes seamlessly', async () => {
+  const db = createA2UTestMockDb();
+  const kv = createA2UTestMockKv();
+  const env = { RENTORA_DB: db, RENTORA_KV: kv, PI_API_KEY: 'test_pi_key', IS_TEST: true };
+
+  db.users.push({
+    id: 'usr_alice',
+    pi_uid: 'pi_uid_alice',
+    username: 'alice_pioneer',
+    role: 'user',
+    status: 'active',
+    metadata: JSON.stringify({})
+  });
+
+  db.transactions.push(
+    { id: 'tx_earn_1', user_id: 'usr_alice', amount: 20.0, type: 'commission', status: 'completed', pi_payment_id: 'pe1', pi_txid: 'te1' }
+  );
+
+  const token = 'token_alice_123';
+  const tokenHash = await sha256(token);
+  await kv.put(`session:${tokenHash}`, JSON.stringify({ uid: 'pi_uid_alice', username: 'alice_pioneer', role: 'user' }));
+
+  let approveCallCount = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const sUrl = String(url);
+    if (sUrl.includes('/incomplete_server_payments')) {
+      // Returns an ongoing payment that was already approved earlier
+      return new Response(JSON.stringify([{
+        identifier: 'pay_a2u_already_approved',
+        status: { developer_approved: true, transaction_verified: false },
+        amount: 5.0,
+        uid: 'pi_uid_alice'
+      }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (sUrl.includes('/payments/pay_a2u_already_approved/approve')) {
+      approveCallCount++;
+      // If server calls approve again, Pi would throw error
+      return new Response(JSON.stringify({ error_message: 'Current payment is already approved' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (sUrl.endsWith('/payments/pay_a2u_already_approved') && (!opts || !opts.method || opts.method === 'GET')) {
+      return new Response(JSON.stringify({
+        identifier: 'pay_a2u_already_approved',
+        status: { developer_approved: true, transaction_verified: true },
+        amount: 5.0,
+        transaction: { txid: 'horizon_txid_recovered_001' }
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (sUrl.includes('/payments/pay_a2u_already_approved/complete')) {
+      return new Response(JSON.stringify({ identifier: 'pay_a2u_already_approved', status: { developer_completed: true } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response('{}', { status: 200 });
+  };
+
+  try {
+    const req = new Request('http://localhost/api/wallet/withdraw', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ amount: 5.0 })
+    });
+
+    const res = await worker.fetch(req, env);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.success, true);
+    assert.equal(data.txid, 'horizon_txid_recovered_001');
+    assert.equal(approveCallCount, 0); // Approve must be skipped!
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('12. Idempotent Complete: Payment already completed in Pi skips complete call without duplicate recording', async () => {
+  const db = createA2UTestMockDb();
+  const kv = createA2UTestMockKv();
+  const env = { RENTORA_DB: db, RENTORA_KV: kv, PI_API_KEY: 'test_pi_key', IS_TEST: true };
+
+  db.users.push({
+    id: 'usr_alice',
+    pi_uid: 'pi_uid_alice',
+    username: 'alice_pioneer',
+    role: 'user',
+    status: 'active',
+    metadata: JSON.stringify({})
+  });
+
+  db.transactions.push(
+    { id: 'tx_earn_1', user_id: 'usr_alice', amount: 20.0, type: 'commission', status: 'completed', pi_payment_id: 'pe1', pi_txid: 'te1' }
+  );
+
+  const token = 'token_alice_123';
+  const tokenHash = await sha256(token);
+  await kv.put(`session:${tokenHash}`, JSON.stringify({ uid: 'pi_uid_alice', username: 'alice_pioneer', role: 'user' }));
+
+  let completeCallCount = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const sUrl = String(url);
+    if (sUrl.includes('/incomplete_server_payments')) {
+      return new Response(JSON.stringify([{
+        identifier: 'pay_a2u_already_done',
+        status: { developer_approved: true, transaction_verified: true, developer_completed: true },
+        amount: 5.0,
+        transaction: { txid: 'horizon_txid_already_mined' },
+        uid: 'pi_uid_alice'
+      }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (sUrl.endsWith('/payments/pay_a2u_already_done') && (!opts || !opts.method || opts.method === 'GET')) {
+      return new Response(JSON.stringify({
+        identifier: 'pay_a2u_already_done',
+        status: { developer_approved: true, transaction_verified: true, developer_completed: true },
+        amount: 5.0,
+        transaction: { txid: 'horizon_txid_already_mined' },
+        uid: 'pi_uid_alice'
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (sUrl.includes('/payments/pay_a2u_already_done/complete')) {
+      completeCallCount++;
+      return new Response(JSON.stringify({ error_message: 'Current payment is already completed' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response('{}', { status: 200 });
+  };
+
+  try {
+    const req = new Request('http://localhost/api/wallet/withdraw', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ amount: 5.0 })
+    });
+
+    const res = await worker.fetch(req, env);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.success, true);
+    assert.equal(data.txid, 'horizon_txid_already_mined');
+    assert.equal(completeCallCount, 0); // Complete must be skipped!
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

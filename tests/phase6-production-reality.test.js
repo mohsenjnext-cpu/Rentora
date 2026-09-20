@@ -144,7 +144,7 @@ function createPhase6MockDb() {
             return { meta: { changes: 1 } };
           }
           if (sql.includes('INSERT INTO transactions')) {
-            const isPayout = sql.includes("'admin_payout'");
+            const txType = params[6] || (sql.includes("'admin_payout'") ? 'admin_payout' : (sql.includes("'user_payout'") ? 'user_payout' : 'platform_fee'));
             transactions.push({
               id: params[0],
               payment_intent_id: params[1],
@@ -152,9 +152,9 @@ function createPhase6MockDb() {
               pi_txid: params[3],
               user_id: params[4],
               amount: params[5],
-              type: isPayout ? 'admin_payout' : 'platform_fee',
+              type: txType,
               status: 'completed',
-              created_at: (isPayout ? params[6] : params[7]) || new Date().toISOString()
+              created_at: params[7] || params[6] || new Date().toISOString()
             });
             return { meta: { changes: 1 } };
           }
