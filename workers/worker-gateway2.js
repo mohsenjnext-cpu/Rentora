@@ -46,6 +46,7 @@ function userView(row, env) {
   try { meta = row.metadata ? JSON.parse(row.metadata) : {}; } catch (_) {}
   const isAdmin = adminAllowed(row.pi_uid, env) || adminAllowed(row.username, env);
   const isVerifiedPioneer = meta.kycStatus === 'verified' || row.kyc_status === 'verified';
+  const resolvedKycStatus = isVerifiedPioneer ? 'verified' : (meta.kycStatus === 'unverified' ? 'unverified' : 'unknown');
   return {
     ...meta,
     id: row.id,
@@ -59,7 +60,7 @@ function userView(row, env) {
     phoneMasked: meta.phoneMasked || '',
     role: isAdmin ? 'admin' : 'user',
     status: row.status || 'active',
-    kycStatus: isVerifiedPioneer ? 'verified' : 'unverified',
+    kycStatus: resolvedKycStatus,
     isOfficialSdk: true,
     joinedDate: row.created_at?.slice(0, 10) || '',
     lastLoginAt: meta.lastLoginAt || null,
@@ -580,15 +581,30 @@ async function adminRoute(request, env, path) {
       }
 
       let paymentInfo = approved;
-      if (!paymentInfo?.transaction?.txid) {
+      let txid = paymentInfo?.transaction?.txid;
+      let pollAttempts = 0;
+      const maxPolls = 4;
+      const isTestEnv = Boolean(env.IS_TEST || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test'));
+      const delayMs = isTestEnv ? 20 : 1500;
+
+      while (!txid && pollAttempts < maxPolls) {
+        pollAttempts++;
+        await new Promise(r => setTimeout(r, delayMs));
         const getRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
         if (getRes.ok) {
           paymentInfo = await getRes.json().catch(() => ({}));
+          txid = paymentInfo?.transaction?.txid;
         }
       }
 
-      const txid = paymentInfo?.transaction?.txid;
       if (!txid) {
+        if (env.RENTORA_KV) {
+          await env.RENTORA_KV.put(
+            `pending_payout:${paymentId}`,
+            JSON.stringify({ paymentId, amount, userId: user.id, uid: user.pi_uid, createdAt: now() }),
+            { expirationTtl: 86400 }
+          ).catch(() => {});
+        }
         return json({
           success: true,
           pending: true,

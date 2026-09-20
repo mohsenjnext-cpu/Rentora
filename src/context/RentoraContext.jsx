@@ -32,10 +32,12 @@ export function RentoraProvider({ children }) {
   const isInitialLoadDoneRef = useRef(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const userIdentifier = currentUser?.uid || currentUser?.id || null;
+  const usernameIdentifier = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
+
   const getReadTimestampsKey = useCallback(() => {
-    const userIdentifier = currentUser?.username || currentUser?.uid || currentUser?.id;
-    return userIdentifier ? `rentora_chat_reads_${userIdentifier.toLowerCase().replace('@', '').trim()}` : null;
-  }, [currentUser]);
+    return usernameIdentifier || userIdentifier ? `rentora_chat_reads_${usernameIdentifier || userIdentifier}` : null;
+  }, [usernameIdentifier, userIdentifier]);
 
   const getReadTimestamps = useCallback(() => {
     const key = getReadTimestampsKey();
@@ -49,7 +51,7 @@ export function RentoraProvider({ children }) {
   }, [getReadTimestampsKey]);
 
   const markConversationAsRead = useCallback((convId) => {
-    if (!convId || !currentUser) return;
+    if (!convId || !userIdentifier) return;
     const key = getReadTimestampsKey();
     const nowIso = new Date().toISOString();
     if (key) {
@@ -66,18 +68,18 @@ export function RentoraProvider({ children }) {
       }
       return c;
     }));
-  }, [currentUser, getReadTimestampsKey, getReadTimestamps]);
+  }, [userIdentifier, getReadTimestampsKey, getReadTimestamps]);
 
   // Load conversations from server when authenticated
   const refreshConversations = useCallback(async () => {
-    if (!currentUser) {
+    if (!userIdentifier) {
       setConversations([]);
       return [];
     }
     try {
       const list = await cloudSyncService.fetchConversations();
       const readMap = getReadTimestamps();
-      const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
+      const myName = usernameIdentifier;
 
       const enrichedList = (list || []).map(c => {
         const lastMsgTime = c.lastMessageAt ? new Date(c.lastMessageAt).getTime() : (c.createdAt ? new Date(c.createdAt).getTime() : 0);
@@ -102,7 +104,7 @@ export function RentoraProvider({ children }) {
     } catch (e) {
       return [];
     }
-  }, [currentUser, getReadTimestamps]);
+  }, [userIdentifier, usernameIdentifier, getReadTimestamps]);
 
   useEffect(() => {
     refreshConversations().finally(() => {
@@ -126,25 +128,25 @@ export function RentoraProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (!currentUser) {
+    if (!userIdentifier) {
       setRentals([]);
       setTransactions([]);
       setReports([]);
       setConversations([]);
     }
     cloudSyncService.fetchSharedData(true).catch(() => {});
-  }, [currentUser]);
+  }, [userIdentifier]);
 
   // Background polling for conversations and marketplace data
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const pollInterval = setInterval(() => {
-      if (currentUser) {
+      if (userIdentifier) {
         refreshConversations().catch(() => {});
       }
     }, 4000);
     return () => clearInterval(pollInterval);
-  }, [currentUser, refreshConversations]);
+  }, [userIdentifier, refreshConversations]);
 
   const toggleFavorite = (itemId) => setFavorites(prev => prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]);
 

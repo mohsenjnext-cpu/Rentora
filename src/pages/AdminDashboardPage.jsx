@@ -109,8 +109,10 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
     }
   };
 
-  const loadAdminServerData = async () => {
-    setLoadingAdminData(true);
+  const loadAdminServerData = async (silent = false) => {
+    if (!silent && !adminOverview) {
+      setLoadingAdminData(true);
+    }
     setAdminAuthError(false);
     try {
       const [overviewData, usersData] = await Promise.all([
@@ -130,9 +132,22 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
 
   useEffect(() => {
     if (isAdmin) {
-      loadAdminServerData();
+      loadAdminServerData(true);
     }
   }, [isAdmin, activeTab]);
+
+  const handleToggleUserKyc = async (u) => {
+    if (!u?.id && !u?.uid) return;
+    const currentKyc = u.kycStatus === 'verified' || u.isKyced === true;
+    const newKycStatus = currentKyc ? 'unverified' : 'verified';
+    try {
+      const targetId = u.id || u.uid;
+      const updatedUser = await cloudSyncService.setAdminUserKycStatus(targetId, newKycStatus);
+      setAdminUsers(prev => prev.map(user => (user.id === targetId || user.uid === targetId) ? { ...user, ...updatedUser, kycStatus: newKycStatus } : user));
+    } catch (err) {
+      alert(err.message || 'خطا در تغییر وضعیت احراز هویت');
+    }
+  };
 
   const allRealUsers = useMemo(() => {
     // The admin API is the sole source of truth.
@@ -846,25 +861,43 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
                               {isUserActive ? l('فعال', 'Active', 'نشط', '正常') : l('مسدود', 'Suspended', 'محظور', '已冻结')}
                             </span>
                             <span>•</span>
-                            <span>{u.kycStatus === 'verified' ? l('احراز هویت شده (KYC)', 'KYC Verified', 'موثق (KYC)', 'KYC 已实名') : l('احراز هویت نشده', 'Unverified', 'غير موثق', '未认证')}</span>
+                            <span className={u.kycStatus === 'verified' ? 'text-[#0F6E56] font-bold' : 'text-slate-400'}>
+                              {u.kycStatus === 'verified' ? l('احراز هویت شده (KYC)', 'KYC Verified', 'موثق (KYC)', 'KYC 已实名') : l('احراز هویت نشده', 'Unverified', 'غير موثق', '未认证')}
+                            </span>
                           </div>
                         </div>
                       </div>
 
-                      {!isSelf && u.role !== 'admin' && (
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
-                          onClick={() => handleToggleUserStatus(u)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition flex items-center gap-1 ${
-                            isUserActive
-                              ? 'border border-rose-200 dark:border-rose-900 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40'
-                              : 'badge-trust text-[#0F6E56]'
+                          onClick={() => handleToggleUserKyc(u)}
+                          className={`px-2 py-1 rounded-lg text-xs font-semibold cursor-pointer transition flex items-center gap-1 ${
+                            u.kycStatus === 'verified'
+                              ? 'border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                              : 'border border-emerald-200 dark:border-emerald-800 text-[#0F6E56] dark:text-[#48D2A8] hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
                           }`}
+                          title={l('تغییر وضعیت احراز هویت پای', 'Toggle Pi KYC status', 'تغيير حالة التوثيق', '切换 KYC 认证状态')}
                         >
-                          {isUserActive ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
-                          <span>{isUserActive ? l('مسدودسازی', 'Suspend', 'حظر', '冻结') : l('رفع انسداد', 'Activate', 'تفعيل', '解冻')}</span>
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>{u.kycStatus === 'verified' ? l('لغو KYC', 'Revoke KYC', 'إلغاء التوثيق', '取消认证') : l('تایید KYC', 'Verify KYC', 'توثيق KYC', '认证 KYC')}</span>
                         </button>
-                      )}
+
+                        {!isSelf && u.role !== 'admin' && (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleUserStatus(u)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition flex items-center gap-1 ${
+                              isUserActive
+                                ? 'border border-rose-200 dark:border-rose-900 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40'
+                                : 'badge-trust text-[#0F6E56]'
+                            }`}
+                          >
+                            {isUserActive ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
+                            <span>{isUserActive ? l('مسدودسازی', 'Suspend', 'حظر', '冻结') : l('رفع انسداد', 'Activate', 'تفعيل', '解冻')}</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

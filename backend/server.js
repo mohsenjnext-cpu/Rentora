@@ -759,6 +759,59 @@ app.post('/api/admin/cleanup', (req, res) => {
   return res.json({ success: true, cleaned: { staleRentalsCancelled: staleRentalsCount }, auditLog: audit });
 });
 
+app.post('/api/admin/users/:id/kyc', (req, res) => {
+  const user = getRequestUser(req);
+  if (!user.isAdmin) return res.status(403).json({ error: "Admin access required" });
+  const targetId = req.params.id;
+  const { kycStatus } = req.body;
+  const newKycStatus = String(kycStatus || '').trim().toLowerCase();
+  if (!['verified', 'unverified', 'unknown'].includes(newKycStatus)) {
+    return res.status(400).json({ error: "kycStatus must be 'verified', 'unverified', or 'unknown'" });
+  }
+  const db = readDb();
+  const targetUser = (db.users || []).find(u => u.id === targetId || u.uid === targetId || u.username === targetId);
+  if (!targetUser) return res.status(404).json({ error: 'User not found' });
+  targetUser.kycStatus = newKycStatus;
+  targetUser.kycVerified = newKycStatus === 'verified';
+  const audit = {
+    id: `audit_${crypto.randomUUID()}`,
+    timestamp: new Date().toISOString(),
+    adminUid: user.uid || 'admin',
+    adminUsername: user.username || 'admin',
+    action: 'USER_KYC_UPDATED',
+    details: { targetUser: targetUser.username, kycStatus: newKycStatus }
+  };
+  db.admin_audit_logs = [audit, ...(db.admin_audit_logs || [])].slice(0, 100);
+  writeDb(db);
+  return res.json({ success: true, user: targetUser });
+});
+
+app.post('/api/sync/purge', (req, res) => {
+  const user = getRequestUser(req);
+  if (!user.isAdmin) return res.status(403).json({ error: "Admin access required" });
+  const db = readDb();
+  db.transactions = [];
+  db.payment_intents = [];
+  db.messages = [];
+  db.conversations = [];
+  db.reviews = [];
+  db.reports = [];
+  db.listing_contacts = [];
+  db.rentals = [];
+  db.items = [];
+  const audit = {
+    id: `audit_${crypto.randomUUID()}`,
+    timestamp: new Date().toISOString(),
+    adminUid: user.uid || 'admin',
+    adminUsername: user.username || 'admin',
+    action: 'DATABASE_PURGED',
+    details: { purgedAt: new Date().toISOString() }
+  };
+  db.admin_audit_logs = [audit, ...(db.admin_audit_logs || [])].slice(0, 100);
+  writeDb(db);
+  return res.json({ success: true, purged: true, by: user.uid });
+});
+
 app.post('/api/admin/payout', async (req, res) => {
   const user = getRequestUser(req);
   if (!user.isAdmin) return res.status(403).json({ error: "Admin access required" });

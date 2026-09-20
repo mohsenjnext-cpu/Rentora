@@ -107,13 +107,28 @@ export function PiAuthProvider({ children }) {
         if (data.authenticated && data.user) {
           const verifiedAdmin = Boolean(data.isAdmin || data.user.isAdmin || data.user.role === 'admin');
           setIsServerVerifiedAdmin(verifiedAdmin);
-          setCurrentUser(prev => prev ? {
-            ...prev,
-            ...data.user,
-            role: data.user.role || (verifiedAdmin ? 'admin' : 'user'),
-            kycStatus: data.user.kycStatus === 'verified' ? 'verified' : 'unverified',
-            sessionToken: prev.sessionToken
-          } : null);
+          setCurrentUser(prev => {
+            if (!prev) return null;
+            const newRole = data.user.role || (verifiedAdmin ? 'admin' : 'user');
+            const newKyc = data.user.kycStatus === 'verified' ? 'verified' : (data.user.kycStatus === 'unverified' ? 'unverified' : 'unknown');
+            if (
+              prev.uid === data.user.uid &&
+              prev.username === data.user.username &&
+              prev.role === newRole &&
+              prev.kycStatus === newKyc &&
+              prev.avatar === data.user.avatar &&
+              prev.displayName === data.user.displayName
+            ) {
+              return prev; // Maintain stable reference to prevent app-wide re-render cascade
+            }
+            return {
+              ...prev,
+              ...data.user,
+              role: newRole,
+              kycStatus: newKyc,
+              sessionToken: prev.sessionToken
+            };
+          });
         }
       })
       .catch(() => {});

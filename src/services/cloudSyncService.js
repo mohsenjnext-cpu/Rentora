@@ -356,6 +356,26 @@ export class CloudSyncService {
     return data.user;
   }
 
+  async setAdminUserKycStatus(userId, kycStatus) {
+    if (!userId) throw new Error('userId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/admin/users/${encodeURIComponent(userId)}/kyc`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ kycStatus })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در تغییر وضعیت احراز هویت کاربر');
+      err.status = res.status;
+      throw err;
+    }
+    return data.user;
+  }
+
   async setAdminListingStatus(listingId, status) {
     if (!listingId) throw new Error('listingId is required');
     const apiBase = getApiBaseUrl();

@@ -62,6 +62,7 @@ export default function ChatModal({
   const activeConvIdRef = useRef(activeConvId);
   activeConvIdRef.current = activeConvId;
   const isFetchingRef = useRef(false);
+  const messagesCacheRef = useRef(new Map());
 
   const activeItem = itemContext || initialItem;
   const activeRental = rentalContext || initialRental;
@@ -113,7 +114,6 @@ export default function ChatModal({
   useEffect(() => {
     if (!isOpen) {
       setActiveConvId(null);
-      setMessages([]);
       setFilterWarningMessage('');
       lastMessagesHashRef.current = '';
       prevMessagesCountRef.current = 0;
@@ -127,11 +127,10 @@ export default function ChatModal({
         return;
       }
 
-      setIsLoadingMessages(true);
       try {
         if (activeRental?.id) {
           const res = await getOrCreateConversation({ rentalId: activeRental.id });
-          if (isMounted && res?.conversationId) {
+          if (isMounted && res?.conversationId && res.conversationId !== activeConvIdRef.current) {
             setActiveConvId(res.conversationId);
           }
         } else if (activeItem?.id) {
@@ -147,13 +146,13 @@ export default function ChatModal({
             return;
           }
           const res = await getOrCreateConversation({ listingId: activeItem.id });
-          if (isMounted && res?.conversationId) {
+          if (isMounted && res?.conversationId && res.conversationId !== activeConvIdRef.current) {
             setActiveConvId(res.conversationId);
           }
         } else {
           // General chat view: load all conversations
           const list = await refreshConversations();
-          if (isMounted && list && list.length === 1 && !activeConvId) {
+          if (isMounted && list && list.length === 1 && !activeConvIdRef.current) {
             setActiveConvId(list[0].id);
           }
         }
@@ -171,8 +170,6 @@ export default function ChatModal({
             setFilterWarningMessage(err.message || 'خطا در بارگذاری گفتگو');
           }
         }
-      } finally {
-        if (isMounted) setIsLoadingMessages(false);
       }
     }
 
@@ -183,28 +180,29 @@ export default function ChatModal({
     };
   }, [isOpen, activeItem?.id, activeRental?.id, isAuthenticated, currentUser?.uid, isItemOwner]);
 
-  // Load messages whenever activeConvId changes with stale request protection
+  // Load messages whenever activeConvId changes with cached memory persistence
   const loadMessages = useCallback(async (convId, silent = false) => {
     if (!convId || !isAuthenticated) return;
     if (isFetchingRef.current && silent) return;
 
+    const cached = messagesCacheRef.current.get(convId) || [];
+    if (!silent && cached.length === 0) setIsLoadingMessages(true);
     isFetchingRef.current = true;
-    if (!silent) setIsLoadingMessages(true);
     try {
       const data = await fetchConversationMessages(convId);
-      // Discard stale response if active conversation changed during fetch
       if (activeConvIdRef.current !== convId) return;
 
       if (data && Array.isArray(data.messages)) {
         const hash = data.messages.map(m => `${m.id}_${m.createdAt}`).join('|');
         if (hash !== lastMessagesHashRef.current) {
           lastMessagesHashRef.current = hash;
-          // Deduplicate messages strictly by id
           const dedupedMap = new Map();
           data.messages.forEach(m => {
             if (m && m.id) dedupedMap.set(m.id, m);
           });
-          setMessages(Array.from(dedupedMap.values()));
+          const dedupedList = Array.from(dedupedMap.values());
+          messagesCacheRef.current.set(convId, dedupedList);
+          setMessages(dedupedList);
           if (markConversationAsRead) {
             markConversationAsRead(convId);
           }
@@ -214,17 +212,20 @@ export default function ChatModal({
       console.warn('Fetch messages error:', err.message);
     } finally {
       isFetchingRef.current = false;
-      if (!silent) setIsLoadingMessages(false);
+      setIsLoadingMessages(false);
     }
   }, [fetchConversationMessages, isAuthenticated, markConversationAsRead]);
 
   useEffect(() => {
     if (activeConvId) {
-      lastMessagesHashRef.current = '';
-      prevMessagesCountRef.current = 0;
+      const cached = messagesCacheRef.current.get(activeConvId) || [];
+      if (cached.length > 0) {
+        setMessages(cached);
+        prevMessagesCountRef.current = cached.length;
+      }
+      lastMessagesHashRef.current = cached.map(m => `${m.id}_${m.createdAt}`).join('|');
       isNearBottomRef.current = true;
-      setMessages([]);
-      loadMessages(activeConvId, false);
+      loadMessages(activeConvId, cached.length > 0);
       if (markConversationAsRead) {
         markConversationAsRead(activeConvId);
       }
@@ -250,14 +251,12 @@ export default function ChatModal({
   useEffect(() => {
     if (isOpen && messages.length > 0) {
       if (prevMessagesCountRef.current === 0) {
-        // Initial load: instant jump to bottom of chat list only after paint
         requestAnimationFrame(() => {
           scrollToBottom(false);
         });
       } else if (messages.length > prevMessagesCountRef.current) {
         const lastMsg = messages[messages.length - 1];
         const isSentByMe = (lastMsg?.senderUsername || '').toLowerCase() === myUsername;
-        // Only auto-scroll if user was near the bottom or user sent this message
         if (isNearBottomRef.current || isSentByMe) {
           requestAnimationFrame(() => {
             scrollToBottom(true);
@@ -594,7 +593,7 @@ export default function ChatModal({
             style={{ overscrollBehavior: 'contain', overflowAnchor: 'auto' }}
             className="flex-1 overflow-y-auto p-3.5 space-y-3 bg-slate-50/50 dark:bg-[#121124]/50"
           >
-            {isLoadingMessages ? (
+            {isLoadingMessages && messages.length === 0 ? (
               <div className="h-full flex items-center justify-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#534AB7]"></div>
               </div>

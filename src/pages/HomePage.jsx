@@ -34,7 +34,12 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
       <article onClick={() => onSelectItem?.(item)} className="bg-white dark:bg-[#151426] border border-[#E4E4EC] dark:border-slate-800 rounded-2xl p-1.5 overflow-hidden cursor-pointer">
         <div className="relative h-28 rounded-xl overflow-hidden bg-[#D8D7F5] dark:bg-[#27254A]">
           <img src={imageUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
-          {item.ownerKYC && <span className="absolute top-2 left-2 rounded-lg bg-[#E1F5EE] text-[#0F6E56] px-2 py-1 text-[9px] font-bold">KYC</span>}
+          {item.ownerKYC && (
+            <span className="absolute top-2 left-2 rounded px-1.5 py-0.5 text-[9px] font-bold badge-trust flex items-center gap-0.5 shadow-xs">
+              <ShieldCheck className="w-2.5 h-2.5 stroke-[2.2]" />
+              <span>KYC</span>
+            </span>
+          )}
           <button type="button" aria-label={t('btnFavorite')} onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }} className="absolute top-2 right-2 w-8 h-8 rounded-full bg-[#26215C]/60 text-white flex items-center justify-center">
             <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
           </button>

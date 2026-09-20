@@ -267,6 +267,7 @@ function userView(row, env) {
   const meta = parseMetadata(row.metadata);
   const isAdm = env ? (isAdmin(row.pi_uid, env) || isAdmin(row.username, env)) : row.role === 'admin';
   const isVerifiedPioneer = meta.kycStatus === 'verified' || row.kyc_status === 'verified';
+  const resolvedKycStatus = isVerifiedPioneer ? 'verified' : (meta.kycStatus === 'unverified' ? 'unverified' : 'unknown');
   return {
     ...meta,
     id: row.id,
@@ -280,7 +281,7 @@ function userView(row, env) {
     phoneMasked: meta.phoneMasked || '',
     role: isAdm ? 'admin' : 'user',
     status: row.status || 'active',
-    kycStatus: isVerifiedPioneer ? 'verified' : 'unverified',
+    kycStatus: resolvedKycStatus,
     isOfficialSdk: true,
     joinedDate: row.created_at ? row.created_at.slice(0, 10) : ''
   };
@@ -722,15 +723,30 @@ export default {
           }
 
           let paymentInfo = approved;
-          if (!paymentInfo?.transaction?.txid) {
+          let txid = paymentInfo?.transaction?.txid;
+          let pollAttempts = 0;
+          const maxPolls = 4;
+          const isTestEnv = Boolean(env.IS_TEST || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test'));
+          const delayMs = isTestEnv ? 20 : 1500;
+
+          while (!txid && pollAttempts < maxPolls) {
+            pollAttempts++;
+            await new Promise(r => setTimeout(r, delayMs));
             const getRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
             if (getRes.ok) {
               paymentInfo = await getRes.json().catch(() => ({}));
+              txid = paymentInfo?.transaction?.txid;
             }
           }
 
-          const txid = paymentInfo?.transaction?.txid;
           if (!txid) {
+            if (env.RENTORA_KV) {
+              await env.RENTORA_KV.put(
+                `pending_payout:${paymentId}`,
+                JSON.stringify({ paymentId, amount, userId: user.id, uid: user.pi_uid, createdAt: now() }),
+                { expirationTtl: 86400 }
+              ).catch(() => {});
+            }
             return jsonResponse({
               success: true,
               pending: true,
@@ -752,7 +768,7 @@ export default {
           }
 
           await env.RENTORA_DB.prepare(
-            "INSERT INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, 'admin_payout', 'completed', ?7)"
+            "INSERT INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, 'admin_payout', 'completed', ?7) ON CONFLICT(pi_payment_id) DO UPDATE SET pi_txid=excluded.pi_txid, status='completed'"
           ).bind(
             `tx_${crypto.randomUUID()}`,
             null,
@@ -806,6 +822,24 @@ export default {
         const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
         return jsonResponse({ success: true, user: userView(updated, env) }, 200, env, origin);
       }
+      if (method === 'POST' && path.startsWith('/api/admin/users/') && path.endsWith('/kyc')) {
+        const targetUserId = path.slice('/api/admin/users/'.length, -'/kyc'.length).trim();
+        if (!targetUserId) return errorResponse('Missing user ID', 400, env, undefined, origin);
+        const { user } = await requireAdmin(request, env);
+        const body = await readJson(request);
+        const newKycStatus = String(body?.kycStatus || '').trim().toLowerCase();
+        if (!['verified', 'unverified', 'unknown'].includes(newKycStatus)) {
+          return errorResponse("kycStatus must be 'verified', 'unverified', or 'unknown'", 400, env, undefined, origin);
+        }
+        const target = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1 OR pi_uid=?1 OR lower(username)=lower(?1) LIMIT 1").bind(targetUserId).first();
+        if (!target) return errorResponse('User not found', 404, env, undefined, origin);
+        const targetMeta = parseMetadata(target.metadata);
+        const updatedMeta = { ...targetMeta, kycStatus: newKycStatus };
+        await env.RENTORA_DB.prepare("UPDATE users SET metadata=?1, updated_at=?2 WHERE id=?3").bind(JSON.stringify(updatedMeta), now(), target.id).run();
+        await recordAdminAuditLog(env, user, 'USER_KYC_UPDATED', { targetUser: target.username, kycStatus: newKycStatus });
+        const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
+        return jsonResponse({ success: true, user: userView(updated, env) }, 200, env, origin);
+      }
       if (method === 'POST' && path.startsWith('/api/admin/listings/') && path.endsWith('/status')) {
         const listingId = path.slice('/api/admin/listings/'.length, -'/status'.length).trim();
         if (!listingId) return errorResponse('Missing listing ID', 400, env, undefined, origin);
@@ -827,34 +861,60 @@ export default {
         const uid = String(piUser.uid);
         const username = cleanUsername(piUser.username);
         const isAdminUser = isAdmin(uid, env) || isAdmin(username, env);
-        const isKyced = Boolean(
-          piUser?.kyc_status === true ||
-          piUser?.kyc_status === 'verified' ||
-          piUser?.is_kyc === true ||
-          piUser?.kyc === true ||
-          piUser?.credentials?.kyc === true ||
-          body?.user?.kyc_status === true ||
-          body?.user?.kyc_status === 'verified' ||
-          body?.user?.is_kyc === true ||
-          body?.user?.kyc === true ||
-          body?.user?.credentials?.kyc === true ||
-          body?.kycStatus === 'verified' ||
-          (Array.isArray(piUser?.roles) && (
-            piUser.roles.includes('kyc') ||
-            piUser.roles.includes('kyced') ||
-            piUser.roles.includes('pioneer_kyc')
-          )) ||
-          (Array.isArray(body?.user?.roles) && (
-            body.user.roles.includes('kyc') ||
-            body.user.roles.includes('kyced') ||
-            body.user.roles.includes('pioneer_kyc')
-          ))
-        );
-        const kycStatus = isKyced ? 'verified' : 'unverified';
         const existing = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE pi_uid=?1 LIMIT 1').bind(uid).first();
         const role = (isAdmin(uid, env) || isAdmin(username, env)) ? 'admin' : 'user';
         const userId = existing?.id || `usr_${crypto.randomUUID()}`;
         const oldMeta = parseMetadata(existing?.metadata);
+        const existingKyc = oldMeta?.kycStatus || existing?.kyc_status;
+
+        // Three-state KYC resolution: 'unknown' | 'verified' | 'unverified'
+        let kycStatus = 'unknown';
+        if (existingKyc === 'verified') {
+          // Never downgrade an already verified user on subsequent logins
+          kycStatus = 'verified';
+        } else {
+          const isExplicitlyVerified = Boolean(
+            piUser?.kyc_status === true ||
+            piUser?.kyc_status === 'verified' ||
+            piUser?.is_kyc === true ||
+            piUser?.kyc === true ||
+            piUser?.credentials?.kyc === true ||
+            body?.user?.kyc_status === true ||
+            body?.user?.kyc_status === 'verified' ||
+            body?.user?.is_kyc === true ||
+            body?.user?.kyc === true ||
+            body?.user?.credentials?.kyc === true ||
+            body?.kycStatus === 'verified' ||
+            (Array.isArray(piUser?.roles) && (
+              piUser.roles.includes('kyc') ||
+              piUser.roles.includes('kyced') ||
+              piUser.roles.includes('pioneer_kyc')
+            )) ||
+            (Array.isArray(body?.user?.roles) && (
+              body.user.roles.includes('kyc') ||
+              body.user.roles.includes('kyced') ||
+              body.user.roles.includes('pioneer_kyc')
+            ))
+          );
+          const isExplicitlyUnverified = Boolean(
+            piUser?.kyc_status === false ||
+            piUser?.kyc_status === 'unverified' ||
+            body?.user?.kyc_status === false ||
+            body?.user?.kyc_status === 'unverified' ||
+            body?.kycStatus === 'unverified'
+          );
+
+          if (isExplicitlyVerified) {
+            kycStatus = 'verified';
+          } else if (isExplicitlyUnverified) {
+            kycStatus = 'unverified';
+          } else if (existingKyc) {
+            kycStatus = existingKyc;
+          } else {
+            kycStatus = 'unknown';
+          }
+        }
+
         const loginCount = (Number(oldMeta.loginCount) || 0) + 1;
         const newMeta = {
           ...oldMeta,
@@ -2337,14 +2397,20 @@ export default {
       if (method === 'POST' && path === '/api/sync/purge') {
         const { user } = await requireAdmin(request, env);
         await env.RENTORA_DB.batch([
-          env.RENTORA_DB.prepare('DELETE FROM reviews'),
+          env.RENTORA_DB.prepare('DELETE FROM transactions'),
+          env.RENTORA_DB.prepare('DELETE FROM payment_intents'),
           env.RENTORA_DB.prepare('DELETE FROM messages'),
           env.RENTORA_DB.prepare('DELETE FROM conversations'),
+          env.RENTORA_DB.prepare('DELETE FROM reviews'),
           env.RENTORA_DB.prepare('DELETE FROM reports'),
           env.RENTORA_DB.prepare('DELETE FROM listing_contacts'),
           env.RENTORA_DB.prepare('DELETE FROM rentals'),
           env.RENTORA_DB.prepare('DELETE FROM listings')
         ]);
+        await recordAdminAuditLog(env, user, 'DATABASE_PURGED', {
+          purgedAt: now(),
+          adminUid: user.pi_uid
+        });
         return jsonResponse({ success: true, purged: true, by: user.pi_uid }, 200, env, origin);
       }
       if (path.startsWith('/api/')) return errorResponse('Route Not Found', 404, env, undefined, origin);
