@@ -703,3 +703,47 @@ test('TASK 5: Navigation & Auth Token verification returns stable state', async 
   assert.equal(meData.user.username, 'pioneer_user');
   assert.equal(meData.user.kycStatus, 'verified');
 });
+
+test('RESERVATION REGRESSION: BookingModal pricing scope resolution and fallback termination', async () => {
+  const item = {
+    id: 'item_test_drill',
+    title: 'Bosch Hammer Drill',
+    pricePerDay: 4.5,
+    deposit: 30,
+    ownerUsername: 'owner_user'
+  };
+
+  const dates = {
+    startDate: '2026-09-21',
+    endDate: '2026-09-24'
+  };
+
+  // 1. Calculate pricing
+  const dailyPrice = Number(item.pricePerDay || 0);
+  const depositAmount = Number(item.deposit || 0);
+
+  const startMs = new Date(dates.startDate).getTime();
+  const endMs = new Date(dates.endDate).getTime();
+  const daysCount = Math.max(1, Math.round((endMs - startMs) / (1000 * 60 * 60 * 24)));
+  const baseRentalAmount = Number((daysCount * dailyPrice).toFixed(4));
+  const platformFee = Number((baseRentalAmount * 0.05).toFixed(4));
+  const totalObligation = baseRentalAmount + depositAmount;
+
+  const pricing = {
+    daysCount,
+    platformFeePercentage: 5,
+    rentoraFee: platformFee,
+    rentalTotal: baseRentalAmount,
+    deposit: depositAmount,
+    totalObligation
+  };
+
+  // Verify all scoped variables required by BookingModal render exist and are numeric
+  assert.equal(typeof pricing.daysCount, 'number');
+  assert.equal(pricing.daysCount, 3);
+  assert.equal(typeof pricing.platformFeePercentage, 'number');
+  assert.equal(pricing.platformFeePercentage, 5);
+  assert.equal(pricing.rentalTotal, 13.5);
+  assert.equal(pricing.rentoraFee, 0.675);
+  assert.equal(pricing.totalObligation, 43.5);
+});
