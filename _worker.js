@@ -489,6 +489,222 @@ export default {
           isAdmin: isAdminUser
         }, 200, env, origin);
       }
+      if (method === 'GET' && path === '/api/wallet/balance') {
+        const { user } = await requireUser(request, env);
+        const [earnRow, payoutRow] = await Promise.all([
+          env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE user_id=?1 AND status='completed' AND type IN ('commission', 'reward', 'earning', 'user_credit', 'deposit_refund')").bind(user.id).first(),
+          env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE user_id=?1 AND status='completed' AND type='user_payout'").bind(user.id).first()
+        ]);
+        const totalEarned = Number(Number(earnRow?.total || 0).toFixed(4));
+        const totalPaidOut = Number(Number(payoutRow?.total || 0).toFixed(4));
+
+        let pendingHold = 0;
+        if (env.RENTORA_KV) {
+          const lockRaw = await env.RENTORA_KV.get(`user_payout_lock:${user.id}`);
+          if (lockRaw) {
+            try {
+              const lockObj = JSON.parse(lockRaw);
+              pendingHold = Number(lockObj.amount || 0);
+            } catch (_) {}
+          }
+        }
+
+        const withdrawable = Math.max(0, Number((totalEarned - totalPaidOut - pendingHold).toFixed(4)));
+
+        return jsonResponse({
+          success: true,
+          balance: {
+            withdrawable,
+            pending: pendingHold,
+            totalEarned,
+            totalPaidOut,
+            currency: 'PI',
+            userUid: user.pi_uid,
+            username: user.username
+          }
+        }, 200, env, origin);
+      }
+      if (method === 'POST' && path === '/api/wallet/withdraw') {
+        const { user } = await requireUser(request, env);
+
+        // 1. Check Atomic KV Lock to prevent race condition / double-spending
+        const lockKey = `user_payout_lock:${user.id}`;
+        if (env.RENTORA_KV) {
+          const existingLock = await env.RENTORA_KV.get(lockKey);
+          if (existingLock) {
+            return errorResponse('یک درخواست برداشت برای این حساب در حال پردازش است. لطفاً چند لحظه صبر کنید.', 429, env, undefined, origin);
+          }
+        }
+
+        // 2. Authoritative Server-side D1 balance calculation
+        const [earnRow, payoutRow] = await Promise.all([
+          env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE user_id=?1 AND status='completed' AND type IN ('commission', 'reward', 'earning', 'user_credit', 'deposit_refund')").bind(user.id).first(),
+          env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE user_id=?1 AND status='completed' AND type='user_payout'").bind(user.id).first()
+        ]);
+        const totalEarned = Number(Number(earnRow?.total || 0).toFixed(4));
+        const totalPaidOut = Number(Number(payoutRow?.total || 0).toFixed(4));
+        const availableBalance = Math.max(0, Number((totalEarned - totalPaidOut).toFixed(4)));
+
+        const body = await readJson(request);
+        let requestedAmount = Number(body?.amount || 0);
+        if (!requestedAmount || isNaN(requestedAmount) || requestedAmount <= 0) {
+          requestedAmount = availableBalance;
+        }
+        const amount = Number(requestedAmount.toFixed(4));
+        if (amount <= 0 || amount > availableBalance) {
+          return errorResponse(`مبلغ درخواستی (${amount} π) از موجودی واقعی قابل برداشت شما (${availableBalance.toFixed(4)} π) بیشتر است.`, 400, env, undefined, origin);
+        }
+
+        // 3. Acquire atomic hold lock in KV
+        if (env.RENTORA_KV) {
+          await env.RENTORA_KV.put(lockKey, JSON.stringify({ amount, requestedAt: now() }), { expirationTtl: 90 });
+        }
+
+        try {
+          // Reconcile incomplete payments first
+          try {
+            const incRes = await piFetch(env, '/payments/incomplete_server_payments');
+            if (incRes.ok) {
+              const incData = await incRes.json().catch(() => ({}));
+              const incompleteList = incData?.incomplete_server_payments || (Array.isArray(incData) ? incData : []);
+              for (const p of incompleteList) {
+                const pid = p?.identifier || p?.id;
+                if (!pid) continue;
+                const txid = p?.transaction?.txid;
+                if (p?.status?.transaction_verified && txid) {
+                  await piFetch(env, `/payments/${encodeURIComponent(pid)}/complete`, { method: 'POST', body: JSON.stringify({ txid }) }).catch(() => {});
+                  await env.RENTORA_DB.prepare(
+                    "INSERT INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, 'user_payout', 'completed', ?7) ON CONFLICT(pi_payment_id) DO UPDATE SET pi_txid=excluded.pi_txid, status='completed'"
+                  ).bind(`tx_${crypto.randomUUID()}`, null, pid, txid, user.id, Number(p?.amount || 0), now()).run().catch(() => {});
+                } else {
+                  await piFetch(env, `/payments/${encodeURIComponent(pid)}/cancel`, { method: 'POST', body: '{}' }).catch(() => {});
+                }
+              }
+            }
+          } catch (_) {}
+
+          const paymentPayload = {
+            amount,
+            memo: String(body?.memo || `Rentora Earnings Withdrawal to @${user.username}`).slice(0, 120),
+            metadata: {
+              type: 'user_earnings_withdrawal',
+              userId: user.id,
+              userUid: user.pi_uid,
+              username: user.username,
+              requestedAt: now()
+            },
+            uid: user.pi_uid
+          };
+
+          let piRes = await piFetch(env, '/payments', {
+            method: 'POST',
+            body: JSON.stringify({ payment: paymentPayload })
+          });
+          let created = await piRes.json().catch(() => ({}));
+
+          if (!piRes.ok && (created?.error_message || '').includes('complete the ongoing payment')) {
+            piRes = await piFetch(env, '/payments', {
+              method: 'POST',
+              body: JSON.stringify({ payment: paymentPayload })
+            });
+            created = await piRes.json().catch(() => ({}));
+          }
+
+          if (!piRes.ok || !created?.identifier) {
+            const errMsg = piErrorMessage(created, 'ایجاد تراکنش واریز به کاربر در شبکه پای رد شد.');
+            if (env.RENTORA_KV) await env.RENTORA_KV.delete(lockKey).catch(() => {});
+            return errorResponse(errMsg, 502, env, created, origin);
+          }
+
+          const paymentId = created.identifier || created.id;
+
+          const appRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, {
+            method: 'POST',
+            body: '{}'
+          });
+          const approved = await appRes.json().catch(() => ({}));
+          if (!appRes.ok && !approved?.status?.developer_approved) {
+            const errMsg = piErrorMessage(approved, 'تایید تراکنش واریز در سرور پای ناموفق بود.');
+            if (env.RENTORA_KV) await env.RENTORA_KV.delete(lockKey).catch(() => {});
+            return errorResponse(errMsg, 502, env, approved, origin);
+          }
+
+          let paymentInfo = approved;
+          let txid = paymentInfo?.transaction?.txid;
+          let pollAttempts = 0;
+          const maxPolls = 4;
+          const isTestEnv = Boolean(env.IS_TEST || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test'));
+          const delayMs = isTestEnv ? 20 : 1500;
+
+          while (!txid && pollAttempts < maxPolls) {
+            pollAttempts++;
+            await new Promise(r => setTimeout(r, delayMs));
+            const getRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
+            if (getRes.ok) {
+              paymentInfo = await getRes.json().catch(() => ({}));
+              txid = paymentInfo?.transaction?.txid;
+            }
+          }
+
+          if (!txid) {
+            if (env.RENTORA_KV) {
+              await env.RENTORA_KV.put(
+                `pending_user_payout:${paymentId}`,
+                JSON.stringify({ paymentId, amount, userId: user.id, uid: user.pi_uid, createdAt: now() }),
+                { expirationTtl: 86400 }
+              ).catch(() => {});
+              await env.RENTORA_KV.delete(lockKey).catch(() => {});
+            }
+            return jsonResponse({
+              success: true,
+              pending: true,
+              paymentId,
+              amount,
+              recipient: user.username,
+              message: `تراکنش واریز مبلغ ${amount} π در شبکه پای تایید شد و پس از اجرای بلاک‌چین نهایی می‌گردد.`
+            }, 202, env, origin);
+          }
+
+          const compRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, {
+            method: 'POST',
+            body: JSON.stringify({ txid })
+          });
+          const compData = await compRes.json().catch(() => ({}));
+          if (!compRes.ok && !compData?.status?.developer_completed) {
+            const errMsg = piErrorMessage(compData, 'تکمیل نهایی تراکنش در شبکه پای ناموفق بود.');
+            if (env.RENTORA_KV) await env.RENTORA_KV.delete(lockKey).catch(() => {});
+            return errorResponse(errMsg, 502, env, compData, origin);
+          }
+
+          await env.RENTORA_DB.prepare(
+            "INSERT INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, 'user_payout', 'completed', ?7) ON CONFLICT(pi_payment_id) DO UPDATE SET pi_txid=excluded.pi_txid, status='completed'"
+          ).bind(
+            `tx_${crypto.randomUUID()}`,
+            null,
+            paymentId,
+            txid,
+            user.id,
+            amount,
+            now()
+          ).run();
+
+          if (env.RENTORA_KV) {
+            await env.RENTORA_KV.delete(lockKey).catch(() => {});
+          }
+
+          return jsonResponse({
+            success: true,
+            paymentId,
+            txid,
+            amount,
+            recipient: user.username,
+            message: `مبلغ ${amount} π با موفقیت به حساب پای @${user.username} واریز گردید.`
+          }, 200, env, origin);
+        } catch (err) {
+          if (env.RENTORA_KV) await env.RENTORA_KV.delete(lockKey).catch(() => {});
+          throw err;
+        }
+      }
       if (method === 'GET' && path === '/api/sync/all') {
         requireBindings(env);
         let auth = null;

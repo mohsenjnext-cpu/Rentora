@@ -287,6 +287,54 @@ export class CloudSyncService {
     return data.overview;
   }
 
+  async fetchWalletBalance() {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/wallet/balance?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      },
+      cache: 'no-store'
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در دریافت موجودی کیف پول.');
+      err.status = res.status;
+      throw err;
+    }
+    return data.balance;
+  }
+
+  async requestUserWithdrawal(amount, memo) {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/wallet/withdraw`, {
+      method: 'POST',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        amount: amount !== undefined ? Number(amount) : undefined,
+        memo: memo || undefined
+      })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'درخواست انتقال به کیف پول پای ناموفق بود.');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
   async requestAdminPayout(amount, memo, walletAddress) {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('API Base URL is not configured');

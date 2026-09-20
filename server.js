@@ -812,6 +812,70 @@ app.post('/api/sync/purge', (req, res) => {
   return res.json({ success: true, purged: true, by: user.uid });
 });
 
+app.get('/api/wallet/balance', (req, res) => {
+  const user = getRequestUser(req);
+  if (!user || !user.uid) return res.status(401).json({ error: "Authentication required" });
+  const db = readDb();
+  const userId = user.id || user.uid;
+  const totalEarned = (db.transactions || []).filter(t => (t.user_id === userId || t.userId === userId) && t.status === 'completed' && ['commission', 'reward', 'earning', 'user_credit', 'deposit_refund'].includes(t.type)).reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const totalPaidOut = (db.transactions || []).filter(t => (t.user_id === userId || t.userId === userId) && t.status === 'completed' && t.type === 'user_payout').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const withdrawable = Math.max(0, Number((totalEarned - totalPaidOut).toFixed(4)));
+  return res.json({
+    success: true,
+    balance: {
+      withdrawable,
+      pending: 0,
+      totalEarned: Number(totalEarned.toFixed(4)),
+      totalPaidOut: Number(totalPaidOut.toFixed(4)),
+      currency: 'PI',
+      userUid: user.uid,
+      username: user.username
+    }
+  });
+});
+
+app.post('/api/wallet/withdraw', (req, res) => {
+  const user = getRequestUser(req);
+  if (!user || !user.uid) return res.status(401).json({ error: "Authentication required" });
+  const db = readDb();
+  const userId = user.id || user.uid;
+  const totalEarned = (db.transactions || []).filter(t => (t.user_id === userId || t.userId === userId) && t.status === 'completed' && ['commission', 'reward', 'earning', 'user_credit', 'deposit_refund'].includes(t.type)).reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const totalPaidOut = (db.transactions || []).filter(t => (t.user_id === userId || t.userId === userId) && t.status === 'completed' && t.type === 'user_payout').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const availableBalance = Math.max(0, Number((totalEarned - totalPaidOut).toFixed(4)));
+
+  let requestedAmount = Number(req.body?.amount || 0);
+  if (!requestedAmount || isNaN(requestedAmount) || requestedAmount <= 0) requestedAmount = availableBalance;
+  const amount = Number(requestedAmount.toFixed(4));
+  if (amount <= 0 || amount > availableBalance) {
+    return res.status(400).json({ error: `مبلغ درخواستی (${amount} π) از موجودی واقعی قابل برداشت شما (${availableBalance.toFixed(4)} π) بیشتر است.` });
+  }
+
+  const txid = `chain_user_payout_${Date.now()}`;
+  const paymentId = `pi_pay_a2u_user_${Date.now()}`;
+  const newTx = {
+    id: `tx_${Date.now()}`,
+    paymentIntentId: null,
+    piPaymentId: paymentId,
+    piTxRef: txid,
+    txid,
+    user_id: userId,
+    amount,
+    type: 'user_payout',
+    status: 'completed',
+    createdAt: new Date().toISOString()
+  };
+  db.transactions = [newTx, ...(db.transactions || [])];
+  writeDb(db);
+  return res.json({
+    success: true,
+    paymentId,
+    txid,
+    amount,
+    recipient: user.username,
+    message: `مبلغ ${amount} π با موفقیت به حساب پای @${user.username} واریز گردید.`
+  });
+});
+
 app.post('/api/admin/payout', async (req, res) => {
   const user = getRequestUser(req);
   if (!user.isAdmin) return res.status(403).json({ error: "Admin access required" });
