@@ -23,6 +23,24 @@ async function requireUser(request, env) {
   if (!user || user.status !== 'active') throw Object.assign(new Error('User is not active'), { status: 403 });
   return user;
 }
+async function recordAdminAuditLog(env, adminUser, action, details = {}) {
+  const entry = {
+    id: `audit_${crypto.randomUUID()}`,
+    timestamp: new Date().toISOString(),
+    adminUid: adminUser?.pi_uid || adminUser?.uid || 'admin',
+    adminUsername: adminUser?.username || 'admin',
+    action,
+    details
+  };
+  if (env?.RENTORA_KV && typeof env.RENTORA_KV.get === 'function') {
+    try {
+      const existing = await env.RENTORA_KV.get('rentora_admin_audit_logs', 'json') || [];
+      const updated = [entry, ...(Array.isArray(existing) ? existing : [])].slice(0, 100);
+      await env.RENTORA_KV.put('rentora_admin_audit_logs', JSON.stringify(updated));
+    } catch (_) {}
+  }
+  return entry;
+}
 function userView(row, env) {
   let meta = {};
   try { meta = row.metadata ? JSON.parse(row.metadata) : {}; } catch (_) {}
@@ -438,6 +456,12 @@ async function adminRoute(request, env, path) {
     const totalRev = Number(revRow?.total || 0);
     const totalPayouts = Number(payoutRow?.total || 0);
     const availableBalance = Math.max(0, totalRev - totalPayouts);
+    let auditLogs = [];
+    if (env?.RENTORA_KV && typeof env.RENTORA_KV.get === 'function') {
+      try {
+        auditLogs = await env.RENTORA_KV.get('rentora_admin_audit_logs', 'json') || [];
+      } catch (_) {}
+    }
     return json({
       success: true,
       overview: {
@@ -452,8 +476,34 @@ async function adminRoute(request, env, path) {
         openReports: Number(reportsCount?.c || 0),
         totalLogins,
         totalLogouts,
-        onlineUsers
+        onlineUsers,
+        auditLogs: Array.isArray(auditLogs) ? auditLogs.slice(0, 20) : []
       }
+    }, 200, request, env);
+  }
+  if (path === '/api/admin/cleanup' && request.method === 'POST') {
+    const staleRentalsRes = await env.RENTORA_DB.prepare(
+      "UPDATE rentals SET status='cancelled', updated_at=?1 WHERE status='pending_payment' AND julianday(created_at) < julianday('now', '-15 minutes')"
+    ).bind(now()).run();
+    const staleIntentsRes = await env.RENTORA_DB.prepare(
+      "UPDATE payment_intents SET status='cancelled', updated_at=?1 WHERE status='created' AND julianday(created_at) < julianday('now', '-60 minutes')"
+    ).bind(now()).run();
+
+    const staleRentalsCount = Number(staleRentalsRes?.meta?.changes || 0);
+    const staleIntentsCount = Number(staleIntentsRes?.meta?.changes || 0);
+
+    const audit = await recordAdminAuditLog(env, user, 'CLEANUP_STALE_RECORDS', {
+      staleRentalsCancelled: staleRentalsCount,
+      staleIntentsCancelled: staleIntentsCount
+    });
+
+    return json({
+      success: true,
+      cleaned: {
+        staleRentalsCancelled: staleRentalsCount,
+        staleIntentsCancelled: staleIntentsCount
+      },
+      auditLog: audit
     }, 200, request, env);
   }
   if (path === '/api/admin/payout' && request.method === 'POST') {
@@ -473,6 +523,11 @@ async function adminRoute(request, env, path) {
     const amount = Number(requestedAmount.toFixed(4));
     if (amount <= 0 || amount > availableBalance) {
       return json({ error: `مبلغ درخواستی (${amount} π) از موجودی واقعی کارمزدها (${availableBalance.toFixed(4)} π) بیشتر است.` }, 400, request, env);
+    }
+
+    const targetWallet = String(body?.walletAddress || '').trim();
+    if (targetWallet && !/^[A-Za-z0-9_.-]{12,70}$/.test(targetWallet)) {
+      return json({ error: 'فرمت آدرس کیف پول پای نامعتبر است.' }, 400, request, env);
     }
 
     try {
@@ -566,6 +621,13 @@ async function adminRoute(request, env, path) {
         now()
       ).run();
 
+      await recordAdminAuditLog(env, user, 'PAYOUT_COMPLETED', {
+        amount,
+        paymentId,
+        txid,
+        recipient: targetWallet || user.username
+      });
+
       return json({
         success: true,
         paymentId,
@@ -647,7 +709,7 @@ export default {
         const isAdmin = adminAllowed(user.pi_uid, env) || adminAllowed(user.username, env);
         return json({ authenticated: true, user: { ...userView(user, env), isAdmin }, isAdmin }, 200, request, env);
       }
-      if ((request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users')) || (request.method === 'POST' && path === '/api/admin/payout')) return await adminRoute(request, env, path);
+      if ((request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users')) || (request.method === 'POST' && (path === '/api/admin/payout' || path === '/api/admin/cleanup'))) return await adminRoute(request, env, path);
       return legacyWorker.fetch(request, env, ctx);
     } catch (err) {
       console.error('Gateway error', err);

@@ -244,6 +244,24 @@ function calculateAuthoritativeFinancials(pricePerDay, depositAmount, startDateS
 }
 
 async function requireAdmin(request, env) { const auth = await requireUser(request, env); if (!isAdmin(auth.user.pi_uid, env) || auth.user.role !== 'admin') throw Object.assign(new Error('Admin access required'), { status: 403 }); return auth; }
+async function recordAdminAuditLog(env, adminUser, action, details = {}) {
+  const entry = {
+    id: `audit_${crypto.randomUUID()}`,
+    timestamp: new Date().toISOString(),
+    adminUid: adminUser?.pi_uid || adminUser?.uid || 'admin',
+    adminUsername: adminUser?.username || 'admin',
+    action,
+    details
+  };
+  if (env?.RENTORA_KV && typeof env.RENTORA_KV.get === 'function') {
+    try {
+      const existing = await env.RENTORA_KV.get('rentora_admin_audit_logs', 'json') || [];
+      const updated = [entry, ...(Array.isArray(existing) ? existing : [])].slice(0, 100);
+      await env.RENTORA_KV.put('rentora_admin_audit_logs', JSON.stringify(updated));
+    } catch (_) {}
+  }
+  return entry;
+}
 function parseMetadata(value) { if (!value) return {}; try { return JSON.parse(value); } catch (_) { return {}; } }
 function userView(row, env) {
   const meta = parseMetadata(row.metadata);
@@ -491,11 +509,11 @@ export default {
 
         let rows;
         if (isAdminUser) {
-          rows = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).bind().all();
+          rows = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar, u.metadata owner_metadata FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status != 'deleted' ORDER BY l.created_at DESC`).bind().all();
         } else if (user) {
-          rows = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE (l.status = 'active' OR l.owner_user_id = ?1) AND l.status != 'deleted' ORDER BY l.created_at DESC`).bind(user.id).all();
+          rows = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar, u.metadata owner_metadata FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE (l.status = 'active' OR l.owner_user_id = ?1) AND l.status != 'deleted' ORDER BY l.created_at DESC`).bind(user.id).all();
         } else {
-          rows = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status = 'active' ORDER BY l.created_at DESC`).bind().all();
+          rows = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar, u.metadata owner_metadata FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status = 'active' ORDER BY l.created_at DESC`).bind().all();
         }
         return jsonResponse({ success: true, items: (rows.results || []).map(listingView) }, 200, env, origin);
       }
@@ -511,7 +529,7 @@ export default {
         const user = auth?.user || null;
         const isAdminUser = user ? (isAdmin(user.pi_uid, env) && user.role === 'admin') : false;
 
-        const row = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.id = ?1 AND l.status != 'deleted' LIMIT 1`).bind(listingId).first();
+        const row = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar, u.metadata owner_metadata FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.id = ?1 AND l.status != 'deleted' LIMIT 1`).bind(listingId).first();
         if (!row) return errorResponse('Listing not found', 404, env, undefined, origin);
 
         const isOwner = user && (row.owner_user_id === user.id);
@@ -541,6 +559,12 @@ export default {
           totalLogouts += Number(m.logoutCount || 0);
           if (m.isOnline) onlineUsers++;
         }
+        let auditLogs = [];
+        if (env?.RENTORA_KV && typeof env.RENTORA_KV.get === 'function') {
+          try {
+            auditLogs = await env.RENTORA_KV.get('rentora_admin_audit_logs', 'json') || [];
+          } catch (_) {}
+        }
         const totalRev = Number(revRow?.total || 0);
         const totalPayouts = Number(payoutRow?.total || 0);
         const availableBalance = Math.max(0, totalRev - totalPayouts);
@@ -558,8 +582,35 @@ export default {
             openReports: Number(reportsCount?.c || 0),
             totalLogins,
             totalLogouts,
-            onlineUsers
+            onlineUsers,
+            auditLogs: Array.isArray(auditLogs) ? auditLogs.slice(0, 20) : []
           }
+        }, 200, env, origin);
+      }
+      if (method === 'POST' && path === '/api/admin/cleanup') {
+        const { user } = await requireAdmin(request, env);
+        const staleRentalsRes = await env.RENTORA_DB.prepare(
+          "UPDATE rentals SET status='cancelled', updated_at=?1 WHERE status='pending_payment' AND julianday(created_at) < julianday('now', '-15 minutes')"
+        ).bind(now()).run();
+        const staleIntentsRes = await env.RENTORA_DB.prepare(
+          "UPDATE payment_intents SET status='cancelled', updated_at=?1 WHERE status='created' AND julianday(created_at) < julianday('now', '-60 minutes')"
+        ).bind(now()).run();
+
+        const staleRentalsCount = Number(staleRentalsRes?.meta?.changes || 0);
+        const staleIntentsCount = Number(staleIntentsRes?.meta?.changes || 0);
+
+        const audit = await recordAdminAuditLog(env, user, 'CLEANUP_STALE_RECORDS', {
+          staleRentalsCancelled: staleRentalsCount,
+          staleIntentsCancelled: staleIntentsCount
+        });
+
+        return jsonResponse({
+          success: true,
+          cleaned: {
+            staleRentalsCancelled: staleRentalsCount,
+            staleIntentsCancelled: staleIntentsCount
+          },
+          auditLog: audit
         }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/admin/payout') {
@@ -580,6 +631,11 @@ export default {
         const amount = Number(requestedAmount.toFixed(4));
         if (amount <= 0 || amount > availableBalance) {
           return errorResponse(`مبلغ درخواستی (${amount} π) از موجودی واقعی کارمزدها (${availableBalance.toFixed(4)} π) بیشتر است.`, 400, env, undefined, origin);
+        }
+
+        const targetWallet = String(body?.walletAddress || '').trim();
+        if (targetWallet && !/^[A-Za-z0-9_.-]{12,70}$/.test(targetWallet)) {
+          return errorResponse('فرمت آدرس کیف پول پای نامعتبر است.', 400, env, undefined, origin);
         }
 
         try {
@@ -706,6 +762,13 @@ export default {
             amount,
             now()
           ).run();
+
+          await recordAdminAuditLog(env, user, 'PAYOUT_COMPLETED', {
+            amount,
+            paymentId,
+            txid,
+            recipient: targetWallet || user.username
+          });
 
           return jsonResponse({
             success: true,

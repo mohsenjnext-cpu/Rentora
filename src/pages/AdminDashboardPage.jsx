@@ -84,6 +84,31 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
   const [payoutErrorMsg, setPayoutErrorMsg] = useState('');
   const [needsWalletAuth, setNeedsWalletAuth] = useState(false);
 
+  // Database Cleanup state
+  const [isCleaningDb, setIsCleaningDb] = useState(false);
+  const [cleanupResultMsg, setCleanupResultMsg] = useState('');
+
+  const handleCleanupDatabase = async () => {
+    setIsCleaningDb(true);
+    setCleanupResultMsg('');
+    try {
+      const res = await cloudSyncService.cleanupDatabase();
+      const count = res.cleaned?.staleRentalsCancelled || 0;
+      setCleanupResultMsg(l(
+        `پاکسازی با موفقیت انجام شد: ${count} رزرو معلق و منقضی لغو گردید.`,
+        `Database cleanup successful: ${count} stale pending rentals cancelled.`,
+        `تم تنظيف قاعدة البيانات بنجاح: تم إلغاء ${count} حجوزات معلقة.`,
+        `数据库清理成功：已取消 ${count} 条过期未付款订单。`
+      ));
+      await loadAdminServerData();
+      setTimeout(() => setCleanupResultMsg(''), 5000);
+    } catch (err) {
+      setCleanupResultMsg(err?.message || 'خطا در پاکسازی دیتابیس');
+    } finally {
+      setIsCleaningDb(false);
+    }
+  };
+
   const loadAdminServerData = async () => {
     setLoadingAdminData(true);
     setAdminAuthError(false);
@@ -710,6 +735,67 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
               }`}>
                 {backendTestStatus === 'success' ? <CheckCircle2 className="w-4 h-4 text-[#0F6E56]" /> : <AlertTriangle className="w-4 h-4 text-rose-600" />}
                 <span>{backendTestMsg}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Secure Database Cleanup Tool */}
+          <div className="p-4 sm:p-5 rounded-xl rentora-card space-y-3">
+            <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+              <Database className="w-4 h-4 text-[#534AB7]" />
+              <span>{l('ابزار پاکسازی امن و ابطال رزروهای معلق منقضی (Database Maintenance)', 'Database Maintenance & Cleanup Tool', 'أداة تنظيف قاعدة البيانات', '数据库维护与安全清理工具')}</span>
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              {l('این ابزار رزروهای معلق بدون پرداخت (Pending Payment) که بیش از ۱۵ دقیقه رها شده‌اند را به صورت امن لغو کرده و گزارش لاگ حسابرسی (Audit Log) را ثبت می‌نماید.', 'This tool cancels abandoned unpaid rentals older than 15 minutes and records an authoritative audit log.', 'تقوم هذه الأداة بإلغاء الحجوزات المعلقة غير المدفوعة لأكثر من 15 دقيقة مع تسجيل سجل التدقيق.', '此工具可自动清理超过15分钟未付款的滞留订单并记录管理员审计日志。')}
+            </p>
+
+            {cleanupResultMsg && (
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-[#0F6E56] dark:text-[#48D2A8] text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{cleanupResultMsg}</span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleCleanupDatabase}
+              disabled={isCleaningDb}
+              className="btn-primary px-4 py-2 text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isCleaningDb ? 'animate-spin' : ''}`} />
+              <span>{isCleaningDb ? l('در حال اجرای پاکسازی...', 'Cleaning Database...', 'جارٍ التنظيف...', '正在清理...') : l('اجرای پاکسازی رزروهای معلق', 'Execute Cleanup Now', 'تنفيذ التنظيف الآن', '立即执行清理')}</span>
+            </button>
+          </div>
+
+          {/* Audit Logs Trail */}
+          <div className="p-4 sm:p-5 rounded-xl rentora-card space-y-3">
+            <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-[#0F6E56]" />
+              <span>{l('گزارش رویدادهای مدیریتی و حسابرسی (Audit Logs Trail)', 'Admin Audit Logs Trail', 'سجل تدقيق الإدارة', '管理员操作审计日志')}</span>
+            </h3>
+
+            {(!adminOverview?.auditLogs || adminOverview.auditLogs.length === 0) ? (
+              <p className="text-xs text-slate-400 py-2">
+                {l('هنوز هیچ لاگ حسابرسی ثبت نشده است.', 'No audit logs recorded yet.', 'لا توجد سجلات تدقيق بعد.', '暂无审计记录。')}
+              </p>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800 font-mono text-[11px]">
+                {adminOverview.auditLogs.map((log) => (
+                  <div key={log.id} className="py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-slate-700 dark:text-slate-300">
+                    <div>
+                      <span className="font-bold text-[#534AB7] dark:text-[#AFA9EC]">{log.action}</span>
+                      <span className="text-slate-400 ml-1.5">by @{log.adminUsername || log.adminUid}</span>
+                      {log.details && (
+                        <span className="text-slate-500 dark:text-slate-400 block sm:inline sm:ml-2 font-sans text-[10px]">
+                          ({JSON.stringify(log.details)})
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-slate-400 shrink-0">
+                      {log.timestamp ? new Date(log.timestamp).toLocaleString() : ''}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </div>

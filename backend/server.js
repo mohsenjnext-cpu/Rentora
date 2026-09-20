@@ -698,6 +698,120 @@ app.post('/api/rentals', (req, res) => {
   }
 });
 
+// Admin Endpoints
+app.get('/api/admin/overview', (req, res) => {
+  const user = getRequestUser(req);
+  if (!user.isAdmin) return res.status(403).json({ error: "Admin access required" });
+  const db = readDb();
+  const totalUsers = (db.users || []).length;
+  const totalListings = (db.items || []).filter(i => i.status !== 'deleted').length;
+  const totalRentals = (db.rentals || []).length;
+  const totalTransactions = (db.transactions || []).length;
+  const totalPlatformRevenue = (db.transactions || []).filter(t => t.type === 'platform_fee' || !t.type).reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const totalPayouts = (db.transactions || []).filter(t => t.type === 'admin_payout').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const availableBalance = Math.max(0, totalPlatformRevenue - totalPayouts);
+  return res.json({
+    success: true,
+    overview: {
+      totalUsers,
+      totalListings,
+      totalRentals,
+      totalTransactions,
+      totalPlatformRevenue,
+      totalPayouts,
+      availableBalance,
+      adminRecipient: user.username,
+      openReports: (db.reports || []).filter(r => r.status === 'open').length,
+      auditLogs: db.admin_audit_logs || []
+    }
+  });
+});
+
+app.get('/api/admin/users', (req, res) => {
+  const user = getRequestUser(req);
+  if (!user.isAdmin) return res.status(403).json({ error: "Admin access required" });
+  const db = readDb();
+  return res.json({ success: true, users: db.users || [] });
+});
+
+app.post('/api/admin/cleanup', (req, res) => {
+  const user = getRequestUser(req);
+  if (!user.isAdmin) return res.status(403).json({ error: "Admin access required" });
+  const db = readDb();
+  const nowTime = Date.now();
+  let staleRentalsCount = 0;
+  (db.rentals || []).forEach(r => {
+    if (r.status === 'pending_payment' && (nowTime - new Date(r.createdAt).getTime()) > 15 * 60 * 1000) {
+      r.status = 'cancelled';
+      staleRentalsCount++;
+    }
+  });
+  const audit = {
+    id: `audit_${crypto.randomUUID()}`,
+    timestamp: new Date().toISOString(),
+    adminUid: user.uid || 'admin',
+    adminUsername: user.username || 'admin',
+    action: 'CLEANUP_STALE_RECORDS',
+    details: { staleRentalsCancelled: staleRentalsCount }
+  };
+  db.admin_audit_logs = [audit, ...(db.admin_audit_logs || [])].slice(0, 100);
+  writeDb(db);
+  return res.json({ success: true, cleaned: { staleRentalsCancelled: staleRentalsCount }, auditLog: audit });
+});
+
+app.post('/api/admin/payout', async (req, res) => {
+  const user = getRequestUser(req);
+  if (!user.isAdmin) return res.status(403).json({ error: "Admin access required" });
+  const db = readDb();
+  const totalPlatformRevenue = (db.transactions || []).filter(t => t.type === 'platform_fee' || !t.type).reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const totalPayouts = (db.transactions || []).filter(t => t.type === 'admin_payout').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  const availableBalance = Math.max(0, totalPlatformRevenue - totalPayouts);
+
+  let requestedAmount = Number(req.body?.amount || 0);
+  if (!requestedAmount || isNaN(requestedAmount) || requestedAmount <= 0) requestedAmount = availableBalance;
+  const amount = Number(requestedAmount.toFixed(4));
+  if (amount <= 0 || amount > availableBalance) {
+    return res.status(400).json({ error: `مبلغ درخواستی (${amount} π) از موجودی واقعی کارمزدها (${availableBalance.toFixed(4)} π) بیشتر است.` });
+  }
+  const targetWallet = String(req.body?.walletAddress || '').trim();
+  if (targetWallet && !/^[A-Za-z0-9_.-]{12,70}$/.test(targetWallet)) {
+    return res.status(400).json({ error: 'فرمت آدرس کیف پول پای نامعتبر است.' });
+  }
+
+  const txid = `chain_payout_${Date.now()}`;
+  const paymentId = `pi_pay_a2u_${Date.now()}`;
+  const newTx = {
+    id: `tx_${Date.now()}`,
+    paymentIntentId: null,
+    piPaymentId: paymentId,
+    piTxRef: txid,
+    txid,
+    amount,
+    type: 'admin_payout',
+    status: 'completed',
+    createdAt: new Date().toISOString()
+  };
+  db.transactions = [newTx, ...(db.transactions || [])];
+  const audit = {
+    id: `audit_${crypto.randomUUID()}`,
+    timestamp: new Date().toISOString(),
+    adminUid: user.uid || 'admin',
+    adminUsername: user.username || 'admin',
+    action: 'PAYOUT_COMPLETED',
+    details: { amount, paymentId, txid, recipient: targetWallet || user.username }
+  };
+  db.admin_audit_logs = [audit, ...(db.admin_audit_logs || [])].slice(0, 100);
+  writeDb(db);
+  return res.json({
+    success: true,
+    paymentId,
+    txid,
+    amount,
+    recipient: targetWallet || user.username,
+    message: `مبلغ ${amount} π با موفقیت ثبت شد.`
+  });
+});
+
 app.get('/validation-key.txt', (req, res) => {
   res.type('text/plain').send('d8b5b506fc41746eb0aba3ff56bcb32ed03dd33bf0348a3af22893ba437b437544a2c160e3ba460b7986e1994fa19964a4beabd3ae98620da1f8b90dece4f7b8\n');
 });

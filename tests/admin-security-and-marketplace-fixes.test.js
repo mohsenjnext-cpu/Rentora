@@ -64,8 +64,12 @@ function createMockEnv(initialData = {}) {
       if (query.includes('SELECT COUNT(*) AS c FROM transactions')) {
         return { c: dbData.transactions.filter(t => t.status === 'completed').length };
       }
+      if (query.includes("type='admin_payout'")) {
+        const sum = dbData.transactions.filter(t => t.status === 'completed' && t.type === 'admin_payout').reduce((acc, t) => acc + (t.amount || 0), 0);
+        return { total: sum };
+      }
       if (query.includes('SELECT SUM(amount) AS total FROM transactions')) {
-        const sum = dbData.transactions.filter(t => t.status === 'completed').reduce((acc, t) => acc + (t.amount || 0), 0);
+        const sum = dbData.transactions.filter(t => t.status === 'completed' && (t.type === 'platform_fee' || !t.type)).reduce((acc, t) => acc + (t.amount || 0), 0);
         return { total: sum };
       }
       if (query.includes('SELECT COUNT(*) AS c FROM reports WHERE status = \'open\'')) {
@@ -320,6 +324,64 @@ test('Admin 7: Admin can suspend and reactivate a user', async () => {
   assert.equal(res.status, 200);
   const json = await res.json();
   assert.equal(json.user.status, 'suspended');
+});
+
+test('Admin 8: Authenticated master admin can execute POST /api/admin/cleanup', async () => {
+  const admin = { id: 'usr_admin', pi_uid: 'avina60', username: 'avina60', display_name: 'Admin', role: 'admin', status: 'active' };
+  const env = createMockEnv({ users: [admin] });
+  const token = await setupSession(env, admin);
+
+  const req = new Request('https://rentora.app/api/admin/cleanup', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({})
+  });
+  const res = await gateway.fetch(req, env);
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.success, true);
+  assert.ok(json.cleaned);
+  assert.ok(json.auditLog);
+});
+
+test('Admin 9: Non-admin request to POST /api/admin/cleanup is rejected with 403', async () => {
+  const normalUser = { id: 'usr_normal', pi_uid: 'pi_normal', username: 'normaluser', display_name: 'Normal User', role: 'user', status: 'active' };
+  const env = createMockEnv({ users: [normalUser] });
+  const token = await setupSession(env, normalUser);
+
+  const req = new Request('https://rentora.app/api/admin/cleanup', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({})
+  });
+  const res = await gateway.fetch(req, env);
+  assert.equal(res.status, 403);
+});
+
+test('Admin 10: Payout with invalid wallet key is rejected with 400', async () => {
+  const admin = { id: 'usr_admin', pi_uid: 'avina60', username: 'avina60', display_name: 'Admin', role: 'admin', status: 'active' };
+  const tx = { id: 'tx_rev_1', amount: 10, type: 'platform_fee', status: 'completed' };
+  const env = createMockEnv({ users: [admin], transactions: [tx] });
+  const token = await setupSession(env, admin);
+
+  const req = new Request('https://rentora.app/api/admin/payout', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ amount: 1, walletAddress: 'bad! address with spaces' })
+  });
+  const res = await gateway.fetch(req, env);
+  assert.equal(res.status, 400);
+  const json = await res.json();
+  assert.match(json.error, /کیف پول/);
 });
 
 // =========================================================================

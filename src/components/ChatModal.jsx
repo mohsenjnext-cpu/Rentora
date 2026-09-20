@@ -181,7 +181,7 @@ export default function ChatModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, activeItem?.id, activeRental?.id, isAuthenticated, currentUser, isItemOwner]);
+  }, [isOpen, activeItem?.id, activeRental?.id, isAuthenticated, currentUser?.uid, isItemOwner]);
 
   // Load messages whenever activeConvId changes with stale request protection
   const loadMessages = useCallback(async (convId, silent = false) => {

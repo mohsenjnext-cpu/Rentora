@@ -420,6 +420,28 @@ export class CloudSyncService {
     return data;
   }
 
+  async cleanupDatabase() {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/admin/cleanup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify({})
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در اجرای ابزار پاکسازی دیتابیس');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
   async purgeDatabase() {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('API Base URL is not configured');
@@ -650,6 +672,16 @@ export class CloudSyncService {
   }
 
   async fetchSharedData(forceNotify = false) {
+    if (this._inFlightFetch) {
+      return this._inFlightFetch;
+    }
+    this._inFlightFetch = this._doFetchSharedData(forceNotify).finally(() => {
+      this._inFlightFetch = null;
+    });
+    return this._inFlightFetch;
+  }
+
+  async _doFetchSharedData(forceNotify = false) {
     const localItems = this.getCachedItems();
     const localRentals = this.getCachedRentals();
     const localUsers = this.getCachedUsers();
