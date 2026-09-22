@@ -8,27 +8,42 @@ const gateways = [
   fs.readFileSync(new URL('../workers/worker-gateway2.js', import.meta.url), 'utf8')
 ];
 
-test('payout operation schema is unique and stateful', () => {
+test('payout operation schema is durable, unique, and stateful', () => {
   assert.match(migration, /operation_key TEXT NOT NULL UNIQUE/);
-  assert.match(migration, /status TEXT NOT NULL CHECK/);
+  assert.match(migration, /pi_payment_id TEXT UNIQUE/);
+  assert.match(migration, /reservation_expires_at TEXT/);
   assert.match(migration, /idx_payout_operations_payment_id/);
-});
-
-test('both gateways claim idempotency before Pi API work', () => {
-  for (const source of gateways) {
-    assert.match(source, /function payoutIdempotencyKey\(/);
-    assert.match(source, /ON CONFLICT\(operation_key\) DO NOTHING/);
-    assert.match(source, /return payoutOperationResponse\(operationClaim\.operation/);
-    const route = source.slice(source.indexOf("path === '/api/admin/payout'"));
-    assert.ok(route.indexOf('claimPayoutOperation(env, operationKey') < route.indexOf('autoResolveIncompleteServerPayments(env, user)'));
+  assert.match(migration, /payout_operations_transition_guard/);
+  for (const state of ['reserved', 'creating', 'pi_created', 'approving', 'approved', 'completing', 'completed', 'cancelled', 'reconciliation_required']) {
+    assert.match(migration, new RegExp(`['"]${state}['"]`));
   }
 });
 
-test('payout transitions are persisted and payment settlement is unique', () => {
+test('both gateways reserve before Pi API work and resume by operation key', () => {
   for (const source of gateways) {
-    assert.match(source, /UPDATE payout_operations SET status=/);
-    assert.match(source, /updatePayoutOperation\(env, operationKey, 'pending'/);
-    assert.match(source, /updatePayoutOperation\(env, operationKey, 'completed'/);
-    assert.match(source, /ON CONFLICT\(pi_payment_id\) DO NOTHING/);
+    assert.match(source, /function payoutIdempotencyKey\(/);
+    assert.match(source, /INSERT INTO payout_operations[\s\S]*SELECT[\s\S]*ON CONFLICT\(operation_key\) DO NOTHING/);
+    assert.match(source, /resumePayoutOperation\(env, claim\.operation\)/);
+    assert.match(source, /operationKey, adminUid/);
+    assert.match(source, /PAYOUT_STALE_MS/);
+  }
+});
+
+test('payout transitions are persisted at each external boundary', () => {
+  for (const source of gateways) {
+    assert.match(source, /'reserved'\], 'creating'/);
+    assert.match(source, /'creating'\], 'pi_created'/);
+    assert.match(source, /'pi_created'\], 'approving'/);
+    assert.match(source, /'approving'\], 'approved'/);
+    assert.match(source, /'approved', 'reconciliation_required'\], 'completing'/);
+    assert.match(source, /status='completed'/);
+  }
+});
+
+test('transaction settlement is conflict-safe', () => {
+  for (const source of gateways) {
+    assert.match(source, /SELECT \* FROM transactions WHERE pi_payment_id=\?1 OR pi_txid=\?2/);
+    assert.match(source, /INSERT OR IGNORE INTO transactions/);
+    assert.match(source, /already linked to a conflicting transaction/);
   }
 });

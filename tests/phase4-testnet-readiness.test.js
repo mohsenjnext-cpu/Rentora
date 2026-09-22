@@ -48,7 +48,7 @@ test('Phase 4: onIncompletePaymentFound Handling and Server Recovery', async (t)
 
     assert.match(gatewayContent, /handleIncompletePayment/, 'worker-gateway2.js must implement handleIncompletePayment');
     assert.match(gatewayContent, /\/payments\/.*\/complete/, 'worker-gateway2.js must call Pi complete when txid exists');
-    assert.match(gatewayContent, /\/payments\/.*\/cancel/, 'worker-gateway2.js must call Pi cancel when txid is missing');
+    assert.match(gatewayContent, /reconciliation_required/, 'worker-gateway2.js must use reconciliation_required when incomplete payout correlation is ambiguous');
 
     assert.match(workerContent, /\/api\/payments\/incomplete/, '_worker.js must route /api/payments/incomplete');
     assert.match(serverContent, /\/api\/payments\/incomplete/, 'server.js must route /api/payments/incomplete');
