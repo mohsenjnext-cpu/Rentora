@@ -41,6 +41,23 @@ async function recordAdminAuditLog(env, adminUser, action, details = {}) {
   }
   return entry;
 }
+function payoutIdempotencyKey(request, body) {
+  const key = request.headers.get('Idempotency-Key') || request.headers.get('X-Idempotency-Key') || body?.idempotencyKey;
+  return key ? String(key).trim().slice(0, 200) : null;
+}
+function payoutOperationResponse(op, request, env) {
+  return json({ success: op.status === 'completed', pending: op.status === 'pending', processing: op.status === 'processing', paymentId: op.payment_id || undefined, txid: op.txid || undefined, amount: Number(op.amount), recipient: op.recipient || undefined, idempotent: true }, op.status === 'completed' ? 200 : op.status === 'pending' ? 202 : 409, request, env);
+}
+async function claimPayoutOperation(env, key, details) {
+  const existing = await env.RENTORA_DB.prepare('SELECT * FROM payout_operations WHERE operation_key=?1 LIMIT 1').bind(key).first();
+  if (existing) return { created: false, operation: existing };
+  await env.RENTORA_DB.prepare("INSERT INTO payout_operations(id,operation_key,status,amount,user_id,recipient,created_at,updated_at) VALUES(?1,?2,'processing',?3,?4,?5,?6,?6) ON CONFLICT(operation_key) DO NOTHING").bind(`payout_${crypto.randomUUID()}`, key, details.amount, details.userId, details.recipient, now()).run();
+  const operation = await env.RENTORA_DB.prepare('SELECT * FROM payout_operations WHERE operation_key=?1 LIMIT 1').bind(key).first();
+  return { created: Boolean(operation && operation.status === 'processing' && Number(operation.amount) === Number(details.amount)), operation };
+}
+async function updatePayoutOperation(env, key, status, fields = {}) {
+  await env.RENTORA_DB.prepare('UPDATE payout_operations SET status=?1,payment_id=COALESCE(?2,payment_id),txid=COALESCE(?3,txid),error=COALESCE(?4,error),updated_at=?5 WHERE operation_key=?6').bind(status, fields.paymentId || null, fields.txid || null, fields.error || null, now(), key).run();
+}
 function userView(row, env) {
   let meta = {};
   try { meta = row.metadata ? JSON.parse(row.metadata) : {}; } catch (_) {}
@@ -531,6 +548,14 @@ async function adminRoute(request, env, path) {
       return json({ error: 'فرمت آدرس کیف پول پای نامعتبر است.' }, 400, request, env);
     }
 
+    const operationKey = payoutIdempotencyKey(request, body);
+    if (!operationKey) return json({ error: 'Idempotency-Key برای پرداخت الزامی است.' }, 400, request, env);
+    const operationClaim = await claimPayoutOperation(env, operationKey, { amount, userId: user.id, recipient: targetWallet || user.username });
+    if (!operationClaim.created) {
+      if (Number(operationClaim.operation?.amount) !== amount || operationClaim.operation?.user_id !== user.id) return json({ error: 'کلید idempotency قبلاً برای درخواست دیگری استفاده شده است.' }, 409, request, env);
+      return payoutOperationResponse(operationClaim.operation, request, env);
+    }
+
     try {
       await autoResolveIncompleteServerPayments(env, user);
 
@@ -565,10 +590,12 @@ async function adminRoute(request, env, path) {
 
       if (!piRes.ok || !created?.identifier) {
         const errMsg = piErrorMessage(created, 'ایجاد تراکنش واریز به کاربر در شبکه پای رد شد.');
+        await updatePayoutOperation(env, operationKey, 'failed', { error: errMsg });
         return json({ error: errMsg, details: created }, 502, request, env);
       }
 
       const paymentId = created.identifier || created.id;
+      await updatePayoutOperation(env, operationKey, 'approved', { paymentId });
 
       const appRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, {
         method: 'POST',
@@ -598,6 +625,7 @@ async function adminRoute(request, env, path) {
       }
 
       if (!txid) {
+        await updatePayoutOperation(env, operationKey, 'pending', { paymentId });
         if (env.RENTORA_KV) {
           await env.RENTORA_KV.put(
             `pending_payout:${paymentId}`,
@@ -641,8 +669,10 @@ async function adminRoute(request, env, path) {
         amount,
         paymentId,
         txid,
-        recipient: targetWallet || user.username
+        recipient: targetWallet || user.username,
+        operationKey
       });
+      await updatePayoutOperation(env, operationKey, 'completed', { paymentId, txid });
 
       return json({
         success: true,
@@ -653,6 +683,7 @@ async function adminRoute(request, env, path) {
         message: `مبلغ ${amount} π با موفقیت به حساب پای ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username} واریز گردید.`
       }, 200, request, env);
     } catch (err) {
+      await updatePayoutOperation(env, operationKey, 'failed', { error: err.message || 'payout failed' }).catch(() => {});
       console.error('Payout error', err);
       return json({ error: err.message || 'خطا در اجرای تسویه حساب' }, 500, request, env);
     }
