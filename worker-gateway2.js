@@ -293,11 +293,16 @@ async function resumePayoutOperation(env, operation) {
 }
 
 async function reconcileStalePayoutOperations(env) {
+  const recoveryScanSucceeded = await autoResolveIncompleteServerPayments(env, null);
   const cutoff = new Date(Date.now() - PAYOUT_STALE_MS).toISOString();
   const rows = await env.RENTORA_DB.prepare(`SELECT * FROM payout_operations WHERE status IN ('reserved','creating','pi_created','approving','approved','completing','reconciliation_required') AND updated_at < ?1 LIMIT 50`).bind(cutoff).all();
   for (const operation of rows?.results || []) {
     if (!operation.pi_payment_id) {
-      await markPayoutReconciliationRequired(env, operation, 'Stale payout operation has no payment id');
+      if (recoveryScanSucceeded && operation.reservation_expires_at && operation.reservation_expires_at <= now()) {
+        await transitionPayoutOperation(env, operation.operation_key, ['reserved', 'creating', 'reconciliation_required'], 'cancelled', { error: 'Stale payout operation expired without a recoverable Pi payment id', clearLease: true });
+      } else {
+        await markPayoutReconciliationRequired(env, operation, 'Stale payout operation has no payment id');
+      }
       continue;
     }
     try { await resumePayoutOperation(env, operation); } catch (error) { await markPayoutReconciliationRequired(env, operation, error.message); }
@@ -789,7 +794,8 @@ async function autoResolveIncompleteServerPayments(env, user) {
       }
       await markPayoutReconciliationRequired(env, operation, 'Incomplete payment has no safely actionable Pi state');
     }
-  } catch (err) { console.warn('autoResolveIncompleteServerPayments warning:', err); }
+  } catch (err) { console.warn('autoResolveIncompleteServerPayments warning:', err); return false; }
+  return true;
 }
 
 async function createPayoutPayment(env, operation, leaseOwner, paymentPayload) {
