@@ -661,3 +661,78 @@ test('12. Idempotent Complete: Payment already completed in Pi skips complete ca
     globalThis.fetch = originalFetch;
   }
 });
+
+test('13. Idempotent Approve recovery: Pi returns 400 "Current payment is already approved" without failing', async () => {
+  const db = createA2UTestMockDb();
+  const kv = createA2UTestMockKv();
+  const env = { RENTORA_DB: db, RENTORA_KV: kv, PI_API_KEY: 'test_pi_key', IS_TEST: true };
+
+  db.users.push({
+    id: 'usr_charlie',
+    pi_uid: 'pi_uid_charlie',
+    username: 'charlie_pioneer',
+    role: 'user',
+    status: 'active',
+    metadata: JSON.stringify({})
+  });
+
+  db.transactions.push(
+    { id: 'tx_earn_c1', user_id: 'usr_charlie', amount: 15.0, type: 'commission', status: 'completed', pi_payment_id: 'pe_c1', pi_txid: 'te_c1' }
+  );
+
+  const token = 'token_charlie_123';
+  const tokenHash = await sha256(token);
+  await kv.put(`session:${tokenHash}`, JSON.stringify({ uid: 'pi_uid_charlie', username: 'charlie_pioneer', role: 'user' }));
+
+  let approveCalls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const sUrl = String(url);
+    if (sUrl.includes('/incomplete_server_payments')) {
+      return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (sUrl.endsWith('/payments') && opts.method === 'POST') {
+      return new Response(JSON.stringify({
+        identifier: 'pay_a2u_race_app',
+        status: { developer_approved: false, developer_completed: false },
+        amount: 5.0,
+        uid: 'pi_uid_charlie'
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (sUrl.includes('/payments/pay_a2u_race_app/approve')) {
+      approveCalls++;
+      return new Response(JSON.stringify({ error_message: 'Current payment is already approved' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (sUrl.endsWith('/payments/pay_a2u_race_app') && (!opts || !opts.method || opts.method === 'GET')) {
+      return new Response(JSON.stringify({
+        identifier: 'pay_a2u_race_app',
+        status: { developer_approved: true, transaction_verified: true },
+        amount: 5.0,
+        transaction: { txid: 'horizon_txid_recovered_app_charlie' },
+        uid: 'pi_uid_charlie'
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (sUrl.includes('/payments/pay_a2u_race_app/complete')) {
+      return new Response(JSON.stringify({ identifier: 'pay_a2u_race_app', status: { developer_completed: true } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response('{}', { status: 200 });
+  };
+
+  try {
+    const req = new Request('http://localhost/api/wallet/withdraw', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ amount: 5.0 })
+    });
+
+    const res = await worker.fetch(req, env);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.success, true);
+    assert.equal(data.txid, 'horizon_txid_recovered_app_charlie');
+    assert.equal(approveCalls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+

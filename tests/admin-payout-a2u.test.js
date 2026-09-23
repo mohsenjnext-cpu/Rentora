@@ -371,3 +371,148 @@ test('Admin A2U Payout: payout with destination wallet address records metadata 
     globalThis.fetch = originalFetch;
   }
 });
+
+test('Admin A2U Payout: Idempotent Approve recovery when Pi API returns "Current payment is already approved"', async () => {
+  const db = createMockDb();
+  const kv = createMockKv();
+  const token = await setupSession(kv, db.users[0]);
+
+  const env = {
+    RENTORA_DB: db,
+    RENTORA_KV: kv,
+    PI_API_KEY: 'test_api_key_valid_64_characters_long_1234567890abcdef1234567890abcdef',
+    ADMIN_PI_UIDS: 'uid_admin_123',
+    IS_TEST: true
+  };
+
+  let approveAttempted = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const urlStr = String(url);
+    if (urlStr.includes('/payments/incomplete_server_payments')) {
+      return new Response(JSON.stringify({ incomplete_server_payments: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.endsWith('/payments') && opts.method === 'POST') {
+      return new Response(JSON.stringify({
+        identifier: 'pi_pay_a2u_already_app_test',
+        amount: 5,
+        status: { developer_approved: false, developer_completed: false }
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.includes('/payments/pi_pay_a2u_already_app_test/approve')) {
+      approveAttempted++;
+      // Simulating Pi Platform returning 400 "Current payment is already approved"
+      return new Response(JSON.stringify({
+        error_message: 'Current payment is already approved'
+      }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.endsWith('/payments/pi_pay_a2u_already_app_test') && (!opts || !opts.method || opts.method === 'GET')) {
+      return new Response(JSON.stringify({
+        identifier: 'pi_pay_a2u_already_app_test',
+        amount: 5,
+        status: { developer_approved: true, transaction_verified: true },
+        transaction: { txid: 'blockchain_txid_recovered_app' }
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.includes('/payments/pi_pay_a2u_already_app_test/complete')) {
+      return new Response(JSON.stringify({
+        identifier: 'pi_pay_a2u_already_app_test',
+        amount: 5,
+        status: { developer_completed: true }
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return originalFetch(url, opts);
+  };
+
+  try {
+    const req = new Request('http://localhost/api/admin/payout', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ amount: 5, memo: 'Test approve idempotency' })
+    });
+
+    const res = await worker.fetch(req, env);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.success, true);
+    assert.equal(data.txid, 'blockchain_txid_recovered_app');
+    assert.equal(approveAttempted, 1);
+
+    const payoutTx = db.transactions.find(t => t.pi_payment_id === 'pi_pay_a2u_already_app_test');
+    assert.ok(payoutTx);
+    assert.equal(payoutTx.pi_txid, 'blockchain_txid_recovered_app');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Admin A2U Payout: Idempotent Complete recovery when Pi API returns "Current payment is already completed"', async () => {
+  const db = createMockDb();
+  const kv = createMockKv();
+  const token = await setupSession(kv, db.users[0]);
+
+  const env = {
+    RENTORA_DB: db,
+    RENTORA_KV: kv,
+    PI_API_KEY: 'test_api_key_valid_64_characters_long_1234567890abcdef1234567890abcdef',
+    ADMIN_PI_UIDS: 'uid_admin_123',
+    IS_TEST: true
+  };
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const urlStr = String(url);
+    if (urlStr.includes('/payments/incomplete_server_payments')) {
+      return new Response(JSON.stringify({ incomplete_server_payments: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.endsWith('/payments') && opts.method === 'POST') {
+      return new Response(JSON.stringify({
+        identifier: 'pi_pay_a2u_already_comp_test',
+        amount: 5,
+        status: { developer_approved: true, transaction_verified: true },
+        transaction: { txid: 'blockchain_txid_comp_test' }
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.endsWith('/payments/pi_pay_a2u_already_comp_test') && (!opts || !opts.method || opts.method === 'GET')) {
+      return new Response(JSON.stringify({
+        identifier: 'pi_pay_a2u_already_comp_test',
+        amount: 5,
+        status: { developer_approved: true, transaction_verified: true, developer_completed: true },
+        transaction: { txid: 'blockchain_txid_comp_test' }
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.includes('/payments/pi_pay_a2u_already_comp_test/complete')) {
+      return new Response(JSON.stringify({
+        error_message: 'Current payment is already completed'
+      }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    return originalFetch(url, opts);
+  };
+
+  try {
+    const req = new Request('http://localhost/api/admin/payout', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ amount: 5, memo: 'Test complete idempotency' })
+    });
+
+    const res = await worker.fetch(req, env);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.success, true);
+    assert.equal(data.txid, 'blockchain_txid_comp_test');
+
+    const payoutTx = db.transactions.find(t => t.pi_payment_id === 'pi_pay_a2u_already_comp_test');
+    assert.ok(payoutTx);
+    assert.equal(payoutTx.status, 'completed');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+

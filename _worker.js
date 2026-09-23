@@ -407,6 +407,25 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
     await env.RENTORA_KV.put(activePaymentKey, JSON.stringify({ paymentId, amount, userId: user.id, uid: user.pi_uid, updatedAt: now() }), { expirationTtl: 86400 }).catch(() => {});
   }
 
+  // Check if resumed payment is already completed
+  if (paymentInfo?.status?.developer_completed) {
+    const txid = paymentInfo?.transaction?.txid || `txid_completed_${paymentId}`;
+    const payoutAmount = Number(paymentInfo.amount || amount);
+    await recordCompletedPayout(env, user, paymentId, txid, payoutAmount, metadataType, targetWallet);
+    if (env.RENTORA_KV) {
+      await env.RENTORA_KV.delete(activePaymentKey).catch(() => {});
+      if (lockKey) await env.RENTORA_KV.delete(lockKey).catch(() => {});
+    }
+    return jsonResponse({
+      success: true,
+      paymentId,
+      txid,
+      amount: payoutAmount,
+      recipient: targetWallet || user.username,
+      message: `مبلغ ${payoutAmount} π با موفقیت به حساب پای ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username} واریز گردید.`
+    }, 200, env, origin);
+  }
+
   // 6. Idempotent Approval - DO NOT call approve if already approved!
   const isAlreadyApproved = Boolean(paymentInfo?.status?.developer_approved);
   if (!isAlreadyApproved) {
@@ -416,7 +435,8 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
     });
     const approved = await appRes.json().catch(() => ({}));
     const isApprovedNow = appRes.ok && approved?.status?.developer_approved;
-    const isReportedAlreadyApproved = (approved?.error_message || '').includes('already approved');
+    const rawAppErr = String(approved?.error_message || approved?.message || approved?.error || '').toLowerCase();
+    const isReportedAlreadyApproved = rawAppErr.includes('already approved') || rawAppErr.includes('already_approved') || rawAppErr.includes('is already approved') || (appRes.status === 400 && rawAppErr.includes('approved'));
 
     if (!isApprovedNow && !isReportedAlreadyApproved) {
       const errMsg = piErrorMessage(approved, 'تایید تراکنش واریز در سرور پای ناموفق بود.');
@@ -424,6 +444,12 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
       return errorResponse(errMsg, 502, env, approved, origin);
     }
     if (isApprovedNow) paymentInfo = approved;
+    if (isReportedAlreadyApproved) {
+      const getRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
+      if (getRes.ok) {
+        paymentInfo = await getRes.json().catch(() => paymentInfo);
+      }
+    }
   }
 
   // 7. Poll for Horizon Blockchain Transaction Hash (txid)
@@ -468,14 +494,16 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
   }
 
   // 8. Idempotent Completion - DO NOT call complete if already completed!
-  if (!paymentInfo?.status?.developer_completed) {
+  const isAlreadyCompleted = Boolean(paymentInfo?.status?.developer_completed);
+  if (!isAlreadyCompleted) {
     const compRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, {
       method: 'POST',
       body: JSON.stringify({ txid })
     });
     const compData = await compRes.json().catch(() => ({}));
     const isCompletedNow = compRes.ok && compData?.status?.developer_completed;
-    const isReportedAlreadyCompleted = (compData?.error_message || '').includes('already completed');
+    const rawCompErr = String(compData?.error_message || compData?.message || compData?.error || '').toLowerCase();
+    const isReportedAlreadyCompleted = rawCompErr.includes('already completed') || rawCompErr.includes('already_completed') || rawCompErr.includes('is already completed') || (compRes.status === 400 && rawCompErr.includes('completed'));
 
     if (!isCompletedNow && !isReportedAlreadyCompleted) {
       const errMsg = piErrorMessage(compData, 'تکمیل نهایی تراکنش در شبکه پای ناموفق بود.');
