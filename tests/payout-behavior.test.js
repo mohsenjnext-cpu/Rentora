@@ -50,10 +50,20 @@ class FakeD1 {
       this.operations.push({ id, operation_key: key, status: 'reserved', amount, user_id: userId, recipient, created_at: createdAt, updated_at: createdAt, reservation_expires_at: reservationExpires, lease_owner: leaseOwner, lease_expires_at: leaseExpires, pi_payment_id: null, txid: null, error: null });
       return { meta: { changes: 1 } };
     }
-    if (sql.includes("status='reserved'") && sql.includes('lease_expires_at')) {
+    if (sql.includes("UPDATE payout_operations SET lease_owner=?1") && sql.includes("status='reserved'")) {
       const [owner, expires, updated, key] = values;
       const op = this.operations.find((row) => row.operation_key === key);
       if (op && op.status === 'reserved' && (!op.lease_expires_at || op.lease_expires_at < updated)) {
+        Object.assign(op, { lease_owner: owner, lease_expires_at: expires, updated_at: updated });
+        return { meta: { changes: 1 } };
+      }
+      return { meta: { changes: 0 } };
+    }
+    if (sql.includes('UPDATE payout_operations SET lease_owner=?1') && sql.includes('status IN (')) {
+      const [owner, expires, updated, key] = values;
+      const op = this.operations.find((row) => row.operation_key === key);
+      const allowed = [...sql.matchAll(/status IN \(([^)]+)\)/g)].at(-1)?.[1]?.match(/\?\d+/g)?.map((placeholder) => values[Number(placeholder.slice(1)) - 1]) || [];
+      if (op && allowed.includes(op.status) && (!op.lease_expires_at || op.lease_expires_at < updated)) {
         Object.assign(op, { lease_owner: owner, lease_expires_at: expires, updated_at: updated });
         return { meta: { changes: 1 } };
       }
@@ -122,7 +132,6 @@ function piHarness({ get = {}, approve, complete, create, incomplete = [] } = {}
 
 function env(db) { return { RENTORA_DB: db, PI_API_URL: 'https://api.test/v2', PI_API_KEY: 'test-key' }; }
 
-
 test('behavior: concurrent treasury reservation allows exactly one owner', async () => {
   const db = new FakeD1({ available: 10 });
   const [a, b] = await Promise.all([
@@ -161,7 +170,6 @@ test('behavior: correlated incomplete payment recovers create/persist crash with
   assert.equal(calls.filter((call) => call.path.endsWith('/payments') && call.method === 'POST').length, 0);
   assert.ok(claim.operation);
 });
-
 
 test('behavior: created A2U payment with mismatched recipient is never advanced to pi_created', async () => {
   const db = new FakeD1({ available: 10 });

@@ -107,6 +107,15 @@ test('required operational scenarios are represented by explicit safeguards', ()
 });
 
 
+test('A2U approval and completion paths acquire an exclusive lease before Pi mutation', () => {
+  const approval = gateway.slice(gateway.indexOf("async function resumePayoutOperation"), gateway.indexOf("async function reconcileStalePayoutOperations"));
+  assert.match(approval, /acquirePayoutLease\(env, operation, \['approving'\]\)/);
+  assert.match(approval, /clearLease: true/);
+  const completion = gateway.slice(gateway.indexOf("async function completePayoutOperation"), gateway.indexOf("async function resumePayoutOperation"));
+  assert.match(completion, /acquirePayoutLease\(env, operation, \['approved', 'completing'\]\)/);
+  assert.match(completion, /leaseOwner: operation\.lease_owner/);
+});
+
 test('A2U payout binds Pi payment to operation recipient, amount, direction, network and metadata', () => {
   assert.match(gateway, /validateA2UPayment/);
   assert.match(gateway, /recipient uid does not match payout operation/);
