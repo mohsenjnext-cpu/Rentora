@@ -176,7 +176,7 @@ test('behavior: incomplete payment with matching metadata but mismatched amount 
   const db = new FakeD1({ available: 10 });
   await hooks.claimPayoutOperation(env(db), 'op', { amount: 5, userId: 'u', recipient: 'r' });
   db.operations[0].status = 'creating';
-  piHarness({ incomplete: [{ identifier: 'pi-bad', metadata: { type: 'admin_treasury_payout', operationKey: 'op' } }], get: { 'pi-bad': { identifier: 'pi-bad', user_uid: 'uid-u', amount: 99, direction: 'app_to_user', network: 'Pi Testnet', metadata: { type: 'admin_treasury_payout', operationKey: 'op' }, status: { developer_approved: true }, transaction: { txid: 'tx-bad' } } });
+  piHarness({ incomplete: [{ identifier: 'pi-bad', metadata: { type: 'admin_treasury_payout', operationKey: 'op' } }], get: { 'pi-bad': { identifier: 'pi-bad', user_uid: 'uid-u', amount: 99, direction: 'app_to_user', network: 'Pi Testnet', metadata: { type: 'admin_treasury_payout', operationKey: 'op' }, status: { developer_approved: true }, transaction: { txid: 'tx-bad' } } } });
   await hooks.autoResolveIncompleteServerPayments(env(db), { pi_uid: 'u' });
   assert.equal(db.operations[0].status, 'reconciliation_required');
   assert.equal(db.operations[0].pi_payment_id, null);
