@@ -119,6 +119,13 @@ test('A2U payout binds Pi payment to operation recipient, amount, direction, net
   assert.match(gateway, /Pi A2U completion could not be re-verified/);
 });
 
+test('A2U recovery validates payment identity before approving or binding incomplete payments', () => {
+  assert.match(gateway, /validateA2UPayment\(env, operation, current\.payment\)/);
+  assert.match(gateway, /Incomplete payout payment failed validation/);
+  assert.match(gateway, /payment failed validation during recovery/);
+  assert.match(gateway, /payment\?\.transaction\?\.txid, current\.payment/);
+});
+
 test('A2U route does not accept a client-supplied wallet address as the payout authority', () => {
   assert.match(gateway, /آدرس کیف پول مستقیم قابل تعیین نیست/);
   assert.doesNotMatch(gateway, /targetWallet\s*:\s*targetWallet\s*\|\|\s*undefined/);
