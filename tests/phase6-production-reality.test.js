@@ -196,7 +196,7 @@ function createPhase6MockKv() {
   };
 }
 
-test('TASK 1: KYC 3-state resolution and verified status preservation across logins', async () => {
+test('TASK 1: login does not preserve KYC verified without a trusted server-side KYC source', async () => {
   const db = createPhase6MockDb();
   const kv = createPhase6MockKv();
   const env = {
@@ -248,8 +248,8 @@ test('TASK 1: KYC 3-state resolution and verified status preservation across log
     const loginRes = await worker.fetch(loginReq, env);
     assert.equal(loginRes.status, 200);
     const loginData = await loginRes.json();
-    // Must remain verified and not get downgraded!
-    assert.equal(loginData.user.kycStatus, 'verified');
+    // No documented server-authoritative KYC assertion is available from /me.
+    assert.equal(loginData.user.kycStatus, 'unverified');
 
     // Admin can also manage KYC status via admin route
     const adminSessionToken = 'admin_session_token_xyz';
@@ -269,7 +269,7 @@ test('TASK 1: KYC 3-state resolution and verified status preservation across log
       display_name: 'Admin User',
       role: 'admin',
       status: 'active',
-      metadata: JSON.stringify({ kycStatus: 'verified' }),
+      metadata: JSON.stringify({ adminKycStatus: 'verified' }),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     });
@@ -280,13 +280,14 @@ test('TASK 1: KYC 3-state resolution and verified status preservation across log
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${adminSessionToken}`
       },
-      body: JSON.stringify({ kycStatus: 'verified' })
+      body: JSON.stringify({ adminKycStatus: 'verified' })
     });
 
     const kycRes = await worker.fetch(kycToggleReq, env);
     assert.equal(kycRes.status, 200);
     const kycData = await kycRes.json();
-    assert.equal(kycData.user.kycStatus, 'verified');
+    assert.equal(kycData.user.kycStatus, 'unverified');
+    assert.equal(kycData.user.adminKycStatus, 'verified');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -702,7 +703,7 @@ test('TASK 5: Navigation & Auth Token verification returns stable state', async 
   const meData = await meRes.json();
   assert.equal(meData.authenticated, true);
   assert.equal(meData.user.username, 'pioneer_user');
-  assert.equal(meData.user.kycStatus, 'verified');
+  assert.equal(meData.user.kycStatus, 'unverified');
 });
 
 test('RESERVATION REGRESSION: BookingModal pricing scope resolution and fallback termination', async () => {

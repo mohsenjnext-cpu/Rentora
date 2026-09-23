@@ -1,59 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-// Helper function mirroring _worker.js authoritative userView
-function parseMetadata(value) {
-  if (!value) return {};
-  try { return JSON.parse(value); } catch (_) { return {}; }
+function computeUserView(row) {
+  const metadata = row.metadata ? JSON.parse(row.metadata) : {};
+  return { ...metadata, kycStatus: metadata.kycStatus === 'verified' ? 'verified' : 'unverified' };
 }
 
-function computeUserView(row, env) {
-  const meta = parseMetadata(row.metadata);
-  const isAdm = env ? (row.pi_uid === env.ADMIN_UID || row.username === env.ADMIN_USERNAME) : row.role === 'admin';
-  const isVerifiedPioneer = meta.kycStatus === 'verified' || row.kyc_status === 'verified';
-  return {
-    ...meta,
-    id: row.id,
-    uid: row.pi_uid,
-    piUid: row.pi_uid,
-    username: row.username,
-    displayName: row.display_name || row.username,
-    role: isAdm ? 'admin' : 'user',
-    status: row.status || 'active',
-    kycStatus: isVerifiedPioneer ? 'verified' : 'unverified',
-    isOfficialSdk: true
-  };
+// The authenticated Pi /me response identifies the user but currently has no
+// documented server-authoritative KYC assertion. KYC must stay unverified.
+function resolveKycStatusFromLogin() {
+  return 'unverified';
 }
 
-// Helper function mirroring _worker.js /api/auth/pi-login KYC extraction
-function resolveKycStatusFromLogin(piUser, body) {
-  const isKyced = Boolean(
-    piUser?.kyc_status === true ||
-    piUser?.kyc_status === 'verified' ||
-    piUser?.is_kyc === true ||
-    piUser?.kyc === true ||
-    piUser?.credentials?.kyc === true ||
-    body?.user?.kyc_status === true ||
-    body?.user?.kyc_status === 'verified' ||
-    body?.user?.is_kyc === true ||
-    body?.user?.kyc === true ||
-    body?.user?.credentials?.kyc === true ||
-    body?.kycStatus === 'verified' ||
-    (Array.isArray(piUser?.roles) && (
-      piUser.roles.includes('kyc') ||
-      piUser.roles.includes('kyced') ||
-      piUser.roles.includes('pioneer_kyc')
-    )) ||
-    (Array.isArray(body?.user?.roles) && (
-      body.user.roles.includes('kyc') ||
-      body.user.roles.includes('kyced') ||
-      body.user.roles.includes('pioneer_kyc')
-    ))
-  );
-  return isKyced ? 'verified' : 'unverified';
-}
-
-test('KYC 1: Verified account A with kyc_status=true resolves to "verified"', () => {
+test('KYC 1: Pi identity fields do not promote KYC without a trusted server-side KYC source', () => {
   const verifiedPiUser = {
     uid: 'uid_alice_verified',
     username: 'alice',
@@ -62,7 +21,7 @@ test('KYC 1: Verified account A with kyc_status=true resolves to "verified"', ()
   };
 
   const status = resolveKycStatusFromLogin(verifiedPiUser, { user: verifiedPiUser });
-  assert.equal(status, 'verified', 'Account with verified KYC must resolve to "verified"');
+  assert.equal(status, 'unverified', 'Identity response alone must not promote KYC');
 
   const row = {
     id: 'usr_1',
@@ -75,7 +34,7 @@ test('KYC 1: Verified account A with kyc_status=true resolves to "verified"', ()
   };
 
   const view = computeUserView(row, {});
-  assert.equal(view.kycStatus, 'verified', 'userView must produce "verified" for verified account');
+  assert.equal(view.kycStatus, 'unverified', 'stored login result must remain unverified');
 });
 
 test('KYC 2: Unverified account B with standard role ["pioneer"] resolves to "unverified"', () => {
@@ -137,7 +96,7 @@ test('KYC 3: Switching Account A (verified) -> Account B (unverified) does NOT r
   assert.equal(activeCurrentUser.kycStatus, 'unverified', 'Bob must not inherit Alice verified status');
 });
 
-test('KYC 4: Switching Account B (unverified) -> Account A (verified) resolves to "verified"', () => {
+test('KYC 4: switching to an identity with KYC-like fields remains unverified without trusted KYC API', () => {
   // 1. Bob logs in (unverified)
   let activeCurrentUser = {
     uid: 'uid_bob_unverified',
@@ -166,7 +125,7 @@ test('KYC 4: Switching Account B (unverified) -> Account A (verified) resolves t
   };
 
   assert.equal(activeCurrentUser.username, 'alice');
-  assert.equal(activeCurrentUser.kycStatus, 'verified', 'Alice must be verified after logging in after Bob');
+  assert.equal(activeCurrentUser.kycStatus, 'unverified', 'KYC-like identity fields must not verify Alice');
 });
 
 test('KYC 5: A user KYC status cannot be taken from another user record', () => {
@@ -186,4 +145,10 @@ test('KYC 5: A user KYC status cannot be taken from another user record', () => 
   assert.equal(getAuthUserKyc('uid_alice'), 'verified');
   assert.equal(getAuthUserKyc('uid_charlie'), 'verified');
   assert.equal(getAuthUserKyc('uid_nonexistent'), 'unverified');
+});
+
+test('KYC 6: forged frontend KYC claims cannot set verified status', () => {
+  const serverPiIdentity = { uid: 'uid_pioneer', username: 'pioneer' };
+  const forgedClientBody = { kycStatus: 'verified', user: { kyc_status: true, roles: ['kyc'] } };
+  assert.equal(resolveKycStatusFromLogin(serverPiIdentity, forgedClientBody), 'unverified');
 });
