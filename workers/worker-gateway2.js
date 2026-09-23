@@ -97,8 +97,7 @@ async function claimPayoutOperation(env, key, details) {
     INSERT INTO payout_operations(
       id, operation_key, status, amount, user_id, recipient, created_at, updated_at, reservation_expires_at, lease_owner, lease_expires_at
     )
-    SELECT ?1, ?2, 'reserved', ?3, ?4, ?5, ?6, ?6, ?7, ?8, ?9
-    WHERE ?3 > 0 AND ?3 <= (
+    SELECT ?1, ?2, 'reserved', ?3, ?4, ?5, ?6, ?6, ?7, ?8, ?9    WHERE ?3 > 0 AND ?3 <= (
       COALESCE((SELECT SUM(amount) FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)), 0)
       - COALESCE((SELECT SUM(amount) FROM transactions WHERE status='completed' AND type='admin_payout'), 0)
       - COALESCE((SELECT SUM(amount) FROM payout_operations WHERE status IN ('reserved','creating','pi_created','approving','approved','completing','reconciliation_required')), 0)
@@ -197,8 +196,7 @@ async function completePayoutOperation(env, operation) {
 async function resumePayoutOperation(env, operation) {
   if (!operation) return null;
   if (PAYOUT_FINAL_STATES.includes(operation.status)) return operation;
-  if (operation.status === 'reconciliation_required' && !operation.pi_payment_id) return operation;
-  if (operation.status === 'reconciliation_required' && operation.pi_payment_id) operation = await transitionPayoutOperation(env, operation.operation_key, ['reconciliation_required'], 'approving', { piPaymentId: operation.pi_payment_id });
+  if (operation.status === 'reconciliation_required' && !operation.pi_payment_id) return operation;  if (operation.status === 'reconciliation_required' && operation.pi_payment_id) operation = await transitionPayoutOperation(env, operation.operation_key, ['reconciliation_required'], 'approving', { piPaymentId: operation.pi_payment_id });
   if (!operation.pi_payment_id && operation.status !== 'reserved') return markPayoutReconciliationRequired(env, operation, 'Operation has no durable Pi payment id and may have crossed a create boundary');
   if (operation.status === 'reserved') return operation;
   if (operation.status === 'creating' && operation.lease_expires_at && operation.lease_expires_at > now()) return operation;
@@ -297,8 +295,7 @@ function isOriginAllowed(origin, env) {
 
 function json(data, status = 200, request = null, env = null) {
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
-  const origin = request?.headers?.get('Origin');
-  if (origin && isOriginAllowed(origin, env)) {
+  const origin = request?.headers?.get('Origin');  if (origin && isOriginAllowed(origin, env)) {
     headers['Access-Control-Allow-Origin'] = origin;
     headers['Vary'] = 'Origin';
   }
@@ -397,8 +394,7 @@ function validatePayment(payment, intent, user) {
   }
 
   const meta = parsePaymentMetadata(payment?.metadata);
-  const metaIntentId = meta?.paymentIntentId || meta?.intentId || meta?.id;
-  if (!metaIntentId || String(metaIntentId) !== String(intent.id)) {
+  const metaIntentId = meta?.paymentIntentId || meta?.intentId || meta?.id;  if (!metaIntentId || String(metaIntentId) !== String(intent.id)) {
     throw Object.assign(new Error('Pi payment metadata binding is missing or invalid'), { status: 409 });
   }
   if (meta?.rentalId && String(meta.rentalId) !== String(intent.rental_id)) {
@@ -497,8 +493,7 @@ async function completePayment(request, env) {
   const user = await requireUser(request, env);
   const body = await readJson(request);
   if (!body.paymentId || !body.txid || !body.paymentIntentId) {
-    return json({ error: 'paymentId, txid and paymentIntentId are required', traceId, stage: 'params_validation' }, 400, request, env);
-  }
+    return json({ error: 'paymentId, txid and paymentIntentId are required', traceId, stage: 'params_validation' }, 400, request, env);  }
   const intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(body.paymentIntentId, user.id).first();
   if (!intent) {
     return json({ error: 'Payment intent not found', traceId, stage: 'intent_lookup' }, 404, request, env);
@@ -559,43 +554,94 @@ async function completePayment(request, env) {
 
 async function handleIncompletePayment(request, env) {
   const traceId = 'incomp_' + crypto.randomUUID().slice(0, 8);
+  const user = await requireUser(request, env);
   const body = await readJson(request);
   const paymentObj = body?.payment || {};
   const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
-  const txid = String(body?.txid || paymentObj?.transaction?.txid || '').trim();
-  
-  if (!paymentId) {
-    return json({ handled: false, error: 'paymentId is required' }, 400, request, env);
+  const paymentIntentId = String(body?.paymentIntentId || paymentObj?.metadata?.paymentIntentId || '').trim();
+
+  if (!paymentId || !paymentIntentId) {
+    return json({ handled: false, error: 'paymentId and paymentIntentId are required', traceId }, 400, request, env);
+  }
+
+  const intent = await env.RENTORA_DB.prepare(
+    'SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1'
+  ).bind(paymentIntentId, user.id).first();
+
+  if (!intent) {
+    return json({ handled: false, error: 'Payment intent not found', traceId }, 404, request, env);
+  }
+
+  if (intent.status === 'completed') {
+    return json({
+      handled: true,
+      status: 'completed',
+      paymentId: intent.pi_payment_id || paymentId,
+      txid: intent.pi_txid || undefined,
+      idempotent: true,
+      traceId
+    }, 200, request, env);
+  }
+
+  if (intent.pi_payment_id && intent.pi_payment_id !== paymentId) {
+    return json({ handled: false, error: 'Payment ID does not match intent', traceId }, 409, request, env);
   }
 
   try {
     const response = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
     const payment = await response.json().catch(() => ({}));
     if (!response.ok) {
-      console.error(`[Incomplete ${traceId}] Pi GET payment ${paymentId} failed:`, response.status, payment);
-      return json({ handled: false, error: 'Unable to fetch Pi payment' }, 502, request, env);
+      return json({ handled: false, error: 'Unable to verify Pi payment', traceId }, 502, request, env);
     }
 
-    const status = normalizeStatus(payment?.status);
-    const resolvedTxid = txid || payment?.transaction?.txid;
-
-    if (status.developer_completed) {
-      if (env?.RENTORA_DB) {
-        await env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE pi_payment_id=?3").bind(resolvedTxid || null, now(), paymentId).run().catch(() => {});
-      }
-      return json({ handled: true, status: 'completed', paymentId, traceId }, 200, request, env);
+    let status;
+    try {
+      status = validatePayment(payment, { ...intent, pi_payment_id: paymentId }, user);
+    } catch (valErr) {
+      return json({ handled: false, error: valErr.message, traceId }, valErr.status || 409, request, env);
     }
 
-    if (payment?.status?.transaction_verified && resolvedTxid) {
+    if (status.cancelled || status.user_cancelled) {
+      return json({ handled: false, error: 'Pi payment is cancelled', traceId }, 409, request, env);
+    }
+
+    let txid = String(payment?.transaction?.txid || '').trim();
+
+    if (!status.developer_completed && status.developer_approved && payment?.status?.transaction_verified && txid) {
       const compRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, {
         method: 'POST',
-        body: JSON.stringify({ txid: resolvedTxid })
+        body: JSON.stringify({ txid })
       });
       const compData = await compRes.json().catch(() => ({}));
-      if (env?.RENTORA_DB) {
-        await env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE pi_payment_id=?3").bind(resolvedTxid, now(), paymentId).run().catch(() => {});
+      if (!compRes.ok && !compData?.status?.developer_completed) {
+        return json({ handled: false, error: piErrorMessage(compData, 'Pi payment completion failed'), traceId }, 502, request, env);
       }
-      return json({ handled: true, status: 'completed', paymentId, txid: resolvedTxid, traceId }, 200, request, env);
+      const refreshed = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
+      const refreshedPayment = await refreshed.json().catch(() => ({}));
+      if (!refreshed.ok) {
+        return json({ handled: false, error: 'Unable to re-verify Pi payment completion', traceId }, 502, request, env);
+      }
+      try {
+        status = validatePayment(refreshedPayment, { ...intent, pi_payment_id: paymentId }, user);
+      } catch (valErr) {
+        return json({ handled: false, error: valErr.message, traceId }, valErr.status || 409, request, env);
+      }
+      txid = String(refreshedPayment?.transaction?.txid || txid).trim();
+      if (!status.developer_completed || !txid) {
+        return json({ handled: true, status: 'pending', paymentId, traceId }, 202, request, env);
+      }
+    }
+
+    if (status.developer_completed) {
+      if (!txid) {
+        return json({ handled: false, error: 'Pi payment is completed but has no verified transaction id; reconciliation is required.', traceId }, 409, request, env);
+      }
+      await env.RENTORA_DB.batch([
+        env.RENTORA_DB.prepare("UPDATE payment_intents SET pi_payment_id=?1,pi_txid=?2,status='completed',updated_at=?3 WHERE id=?4 AND user_id=?5").bind(paymentId, txid, now(), intent.id, user.id),
+        env.RENTORA_DB.prepare("UPDATE rentals SET payment_status='completed',status='confirmed',updated_at=?1 WHERE id=?2 AND renter_user_id=?3").bind(now(), intent.rental_id, user.id),
+        env.RENTORA_DB.prepare("INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)").bind(`tx_${crypto.randomUUID()}`, intent.id, paymentId, txid, user.id, intent.amount, now())
+      ]);
+      return json({ handled: true, status: 'completed', paymentId, txid, traceId }, 200, request, env);
     }
 
     if (!status.developer_approved) {
@@ -604,13 +650,16 @@ async function handleIncompletePayment(request, env) {
         body: '{}'
       });
       const appData = await appRes.json().catch(() => ({}));
+      if (!appRes.ok && !(appRes.status === 400 && String(JSON.stringify(appData)).toLowerCase().includes('already'))) {
+        return json({ handled: false, error: piErrorMessage(appData, 'Pi payment approval failed'), traceId }, 502, request, env);
+      }
       return json({ handled: true, status: 'approved', paymentId, traceId }, 200, request, env);
     }
 
-    return json({ handled: true, status: 'pending', paymentId, traceId }, 200, request, env);
+    return json({ handled: true, status: 'pending', paymentId, traceId }, 202, request, env);
   } catch (err) {
     console.error(`[Incomplete ${traceId}] error:`, err);
-    return json({ handled: false, error: err.message, traceId }, 500, request, env);
+    return json({ handled: false, error: 'Payment recovery failed', traceId }, 500, request, env);
   }
 }
 
@@ -697,8 +746,7 @@ async function adminRoute(request, env, path) {
   if (path === '/api/admin/overview') {
     const [usersCount, listingsCount, rentalsCount, transactionsCount, revRow, payoutRow, reportsCount, usersMetaRows] = await Promise.all([
       env.RENTORA_DB.prepare('SELECT COUNT(*) AS c FROM users').first(),
-      env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM listings WHERE status != 'deleted'").first(),
-      env.RENTORA_DB.prepare('SELECT COUNT(*) AS c FROM rentals').first(),
+      env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM listings WHERE status != 'deleted'").first(),      env.RENTORA_DB.prepare('SELECT COUNT(*) AS c FROM rentals').first(),
       env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)").first(),
       env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)").first(),
       env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'").first(),
@@ -797,8 +845,7 @@ async function adminRoute(request, env, path) {
       return payoutOperationResponse(resumed, request, env);
     }
     let operation = claim.operation;
-    try {
-      await autoResolveIncompleteServerPayments(env, user);
+    try {      await autoResolveIncompleteServerPayments(env, user);
       operation = await transitionPayoutOperation(env, operationKey, ['reserved'], 'creating', { leaseOwner: claim.leaseOwner || operation.lease_owner });
       const paymentPayload = {
         amount,
@@ -897,8 +944,7 @@ export default {
       }
       return json({ error: displayMessage }, status, request, env);
     }
-  }
-};
+  }};
 
 export const __payoutTestHooks = {
   claimPayoutOperation,

@@ -862,54 +862,13 @@ export default {
         }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/wallet/withdraw') {
-        const { user } = await requireUser(request, env);
-
-        // 1. Check Atomic KV Lock to prevent race condition / double-spending
-        const lockKey = `user_payout_lock:${user.id}`;
-        if (env.RENTORA_KV) {
-          const existingLock = await env.RENTORA_KV.get(lockKey);
-          if (existingLock) {
-            return errorResponse('یک درخواست برداشت برای این حساب در حال پردازش است. لطفاً چند لحظه صبر کنید.', 429, env, undefined, origin);
-          }
-        }
-
-        // 2. Authoritative Server-side D1 balance calculation
-        const [earnRow, payoutRow] = await Promise.all([
-          env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE user_id=?1 AND status='completed' AND type IN ('commission', 'reward', 'earning', 'user_credit', 'deposit_refund')").bind(user.id).first(),
-          env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE user_id=?1 AND status='completed' AND type='user_payout'").bind(user.id).first()
-        ]);
-        const totalEarned = Number(Number(earnRow?.total || 0).toFixed(4));
-        const totalPaidOut = Number(Number(payoutRow?.total || 0).toFixed(4));
-        const availableBalance = Math.max(0, Number((totalEarned - totalPaidOut).toFixed(4)));
-
-        const body = await readJson(request);
-        let requestedAmount = Number(body?.amount || 0);
-        if (!requestedAmount || isNaN(requestedAmount) || requestedAmount <= 0) {
-          requestedAmount = availableBalance;
-        }
-        const amount = Number(requestedAmount.toFixed(4));
-        if (amount <= 0 || amount > availableBalance) {
-          return errorResponse(`مبلغ درخواستی (${amount} π) از موجودی واقعی قابل برداشت شما (${availableBalance.toFixed(4)} π) بیشتر است.`, 400, env, undefined, origin);
-        }
-
-        // 3. Acquire atomic hold lock in KV
-        if (env.RENTORA_KV) {
-          await env.RENTORA_KV.put(lockKey, JSON.stringify({ amount, requestedAt: now() }), { expirationTtl: 90 });
-        }
-
-        try {
-          return await executePiA2UPayoutPipeline(env, {
-            user,
-            amount,
-            memo: body?.memo || `Rentora Earnings Withdrawal to @${user.username}`,
-            metadataType: 'user_earnings_withdrawal',
-            lockKey,
-            origin
-          });
-        } catch (err) {
-          if (env.RENTORA_KV) await env.RENTORA_KV.delete(lockKey).catch(() => {});
-          throw err;
-        }
+        return errorResponse(
+          'برداشت مستقیم موقتاً غیرفعال است؛ این مسیر قدیمی با ماشین حالت payout_operations سازگار نیست.',
+          410,
+          env,
+          undefined,
+          origin
+        );
       }
       if (method === 'GET' && path === '/api/sync/all') {
         requireBindings(env);
