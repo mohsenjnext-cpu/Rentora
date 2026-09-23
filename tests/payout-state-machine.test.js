@@ -132,6 +132,15 @@ test('A2U route does not accept a client-supplied wallet address as the payout a
 });
 
 
+test('A2U create cannot cross a lost lease into a Pi payment creation', () => {
+  const create = gateway.slice(gateway.indexOf('async function createPayoutPayment'));
+  assert.match(create, /const requestedLeaseOwner = leaseOwner \|\| operation\.lease_owner/);
+  assert.match(create, /operation\.status !== 'creating' \|\| operation\.lease_owner !== requestedLeaseOwner/);
+  const guard = create.indexOf("if (!operation || operation.status !== 'creating' || operation.lease_owner !== requestedLeaseOwner)");
+  const piCreate = create.indexOf("piFetch(env, '/payments'");
+  assert.ok(guard >= 0 && piCreate > guard, 'Pi create must occur only after the lease guard');
+});
+
 test('A2U create and incomplete recovery validate before persisting payment binding', () => {
   assert.match(gateway, /validateA2UPayment\(env, \{ \.\.\.operation, pi_payment_id: createdPaymentId \}, created\)/);
   assert.match(gateway, /Created Pi A2U payment failed validation/);
