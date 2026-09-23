@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
@@ -83,6 +83,18 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
   const [payoutTxid, setPayoutTxid] = useState('');
   const [payoutErrorMsg, setPayoutErrorMsg] = useState('');
   const [needsWalletAuth, setNeedsWalletAuth] = useState(false);
+
+  // Stable Idempotency-Key tracking across retries for the active payout operation
+  const activePayoutKeyRef = useRef(null);
+
+  const getOrCreatePayoutKey = useCallback(() => {
+    if (!activePayoutKeyRef.current) {
+      activePayoutKeyRef.current = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `admin_payout_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    }
+    return activePayoutKeyRef.current;
+  }, []);
 
   // Database Cleanup state
   const [isCleaningDb, setIsCleaningDb] = useState(false);
@@ -225,7 +237,7 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
   };
 
   const handleRequestPayout = async (e) => {
-    e.preventDefault();
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
     setPayoutErrorMsg('');
     setPayoutSuccessMsg('');
     setPayoutTxid('');
@@ -241,12 +253,15 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
       return;
     }
 
+    // Acquire or maintain the exact same Idempotency-Key for this operation attempt / retry
+    const currentIdempotencyKey = getOrCreatePayoutKey();
+
     setIsSubmittingPayout(true);
     try {
       if (adminWalletAddress) {
         try { localStorage.setItem('rentora_admin_wallet_addr', adminWalletAddress.trim()); } catch (_) {}
       }
-      const result = await cloudSyncService.requestAdminPayout(amount, payoutMemo, adminWalletAddress.trim());
+      const result = await cloudSyncService.requestAdminPayout(amount, payoutMemo, adminWalletAddress.trim(), currentIdempotencyKey);
       setPayoutSuccessMsg(result.message || l(
         `مبلغ ${amount} π با موفقیت به حساب پای @${currentUser?.username || 'admin'} واریز شد.`,
         `Successfully transferred ${amount} π to your Pi account.`,
@@ -254,13 +269,18 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
         `已成功将 ${amount} π 提现至您的 Pi 账号。`
       ));
       if (result?.txid) setPayoutTxid(result.txid);
+
+      // On SUCCESS: Reset form and clear the active key so the next operation gets a fresh unique key
       setPayoutAmount('');
       setPayoutMemo('');
+      activePayoutKeyRef.current = null;
       setNeedsWalletAuth(false);
       await loadAdminServerData();
       await refreshApp();
       setTimeout(() => { setPayoutSuccessMsg(''); setPayoutTxid(''); }, 10000);
     } catch (err) {
+      // On FAILURE: DO NOT reset activePayoutKeyRef.current!
+      // This ensures that retrying the payout sends the exact same Idempotency-Key
       const msg = String(err?.message || '');
       if (msg.includes('wallet_address') || msg.includes('scope') || msg.includes('public key')) {
         setNeedsWalletAuth(true);
@@ -534,9 +554,21 @@ export default function AdminDashboardPage({ onNavigate, onOpenPublicProfile, on
             )}
 
             {payoutErrorMsg && (
-              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-300 text-xs font-bold flex items-center gap-2 animate-fadeIn">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{payoutErrorMsg}</span>
+              <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-300 text-xs font-bold flex items-center justify-between gap-2 animate-fadeIn">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{payoutErrorMsg}</span>
+                </div>
+                {!needsWalletAuth && (
+                  <button
+                    type="button"
+                    onClick={handleRequestPayout}
+                    disabled={isSubmittingPayout}
+                    className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold shrink-0 cursor-pointer disabled:opacity-50 transition"
+                  >
+                    {l('تلاش مجدد', 'Retry', 'إعادة المحاولة', '重试')}
+                  </button>
+                )}
               </div>
             )}
 

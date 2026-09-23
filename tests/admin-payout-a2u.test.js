@@ -17,10 +17,12 @@ function createMockDb() {
     { id: 'tx_1', payment_intent_id: 'pi_1', pi_payment_id: 'pay_1', pi_txid: 'txid_1', user_id: 'user_regular', amount: 10.0, type: 'platform_fee', status: 'completed', created_at: '2026-01-01T00:00:00.000Z' },
     { id: 'tx_2', payment_intent_id: 'pi_2', pi_payment_id: 'pay_2', pi_txid: 'txid_2', user_id: 'user_regular', amount: 5.5, type: 'platform_fee', status: 'completed', created_at: '2026-01-01T00:00:00.000Z' }
   ];
+  const payout_operations = [];
 
   return {
     users,
     transactions,
+    payout_operations,
     prepare(sql) {
       return {
         bind(...params) {
@@ -31,6 +33,9 @@ function createMockDb() {
               }
               if (sql.includes('FROM users WHERE pi_uid = ?1')) {
                 return users.find(u => u.pi_uid === params[0]) || null;
+              }
+              if (sql.includes('FROM payout_operations WHERE idempotency_key = ?1')) {
+                return payout_operations.find(p => p.idempotency_key === params[0]) || null;
               }
               if (sql.includes("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)")) {
                 const sum = transactions.filter(t => t.status === 'completed' && (t.type === 'platform_fee' || !t.type)).reduce((acc, t) => acc + t.amount, 0);
@@ -58,6 +63,30 @@ function createMockDb() {
                   status: 'completed',
                   created_at: params[6]
                 });
+                return { success: true };
+              }
+              if (sql.includes('INSERT INTO payout_operations')) {
+                payout_operations.push({
+                  id: params[0],
+                  idempotency_key: params[1],
+                  user_id: params[2],
+                  amount: params[3],
+                  type: params[4],
+                  status: 'pending',
+                  metadata: params[5],
+                  created_at: params[6],
+                  updated_at: params[6]
+                });
+                return { success: true };
+              }
+              if (sql.includes('UPDATE payout_operations SET status=')) {
+                const op = payout_operations.find(p => p.idempotency_key === params[3]);
+                if (op) {
+                  op.status = 'completed';
+                  op.pi_payment_id = params[0];
+                  op.pi_txid = params[1];
+                  op.updated_at = params[2];
+                }
                 return { success: true };
               }
               return { success: true };
@@ -132,13 +161,41 @@ test('Admin A2U Payout: non-admin request is rejected with 403', async () => {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'key_non_admin'
     },
     body: JSON.stringify({ amount: 5 })
   });
 
   const res = await worker.fetch(req, env);
   assert.equal(res.status, 403);
+});
+
+test('Admin A2U Payout: Missing Idempotency-Key is rejected with 400', async () => {
+  const db = createMockDb();
+  const kv = createMockKv();
+  const token = await setupSession(kv, db.users[0]);
+
+  const env = {
+    RENTORA_DB: db,
+    RENTORA_KV: kv,
+    PI_API_KEY: 'test_api_key_valid_64_characters_long_1234567890abcdef1234567890abcdef',
+    ADMIN_PI_UIDS: 'uid_admin_123'
+  };
+
+  const req = new Request('http://localhost/api/admin/payout', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ amount: 5 })
+  });
+
+  const res = await worker.fetch(req, env);
+  assert.equal(res.status, 400);
+  const data = await res.json();
+  assert.equal(data.error, 'Idempotency-Key برای پرداخت الزامی است');
 });
 
 test('Admin A2U Payout: amount exceeding available treasury balance is rejected with 400', async () => {
@@ -157,7 +214,8 @@ test('Admin A2U Payout: amount exceeding available treasury balance is rejected 
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'key_exceed_balance'
     },
     body: JSON.stringify({ amount: 100 }) // Total available is 15.5
   });
@@ -222,7 +280,8 @@ test('Admin A2U Payout: successful official Pi A2U flow completes and saves to D
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'key_success_payout_789'
       },
       body: JSON.stringify({ amount: 10, memo: 'Test treasury payout' })
     });
@@ -282,7 +341,8 @@ test('Admin A2U Payout: Pi API failure returns 502 and does NOT insert settlemen
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'key_fail_payout_502'
       },
       body: JSON.stringify({ amount: 5, memo: 'Failing payout attempt' })
     });
@@ -351,7 +411,8 @@ test('Admin A2U Payout: payout with destination wallet address records metadata 
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'key_wallet_101'
       },
       body: JSON.stringify({ amount: 8, walletAddress: 'GD5XYZ9876543210ABCDEF', memo: 'Direct settlement' })
     });
@@ -429,7 +490,8 @@ test('Admin A2U Payout: Idempotent Approve recovery when Pi API returns "Current
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'key_approve_recovery_test'
       },
       body: JSON.stringify({ amount: 5, memo: 'Test approve idempotency' })
     });
@@ -497,7 +559,8 @@ test('Admin A2U Payout: Idempotent Complete recovery when Pi API returns "Curren
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'key_complete_recovery_test'
       },
       body: JSON.stringify({ amount: 5, memo: 'Test complete idempotency' })
     });
@@ -511,6 +574,93 @@ test('Admin A2U Payout: Idempotent Complete recovery when Pi API returns "Curren
     const payoutTx = db.transactions.find(t => t.pi_payment_id === 'pi_pay_a2u_already_comp_test');
     assert.ok(payoutTx);
     assert.equal(payoutTx.status, 'completed');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Admin A2U Payout: Idempotency-Key retry reuses cached operation and avoids duplicate execution', async () => {
+  const db = createMockDb();
+  const kv = createMockKv();
+  const token = await setupSession(kv, db.users[0]);
+
+  const env = {
+    RENTORA_DB: db,
+    RENTORA_KV: kv,
+    PI_API_KEY: 'test_api_key_valid_64_characters_long_1234567890abcdef1234567890abcdef',
+    ADMIN_PI_UIDS: 'uid_admin_123',
+    IS_TEST: true
+  };
+
+  let piCreateCalls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const urlStr = String(url);
+    if (urlStr.includes('/payments/incomplete_server_payments')) {
+      return new Response(JSON.stringify({ incomplete_server_payments: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.endsWith('/payments') && opts.method === 'POST') {
+      piCreateCalls++;
+      return new Response(JSON.stringify({
+        identifier: 'pi_pay_a2u_idemp_key_1',
+        amount: 3,
+        status: { developer_approved: false, developer_completed: false }
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.includes('/payments/pi_pay_a2u_idemp_key_1/approve')) {
+      return new Response(JSON.stringify({
+        identifier: 'pi_pay_a2u_idemp_key_1',
+        amount: 3,
+        status: { developer_approved: true, transaction_verified: true },
+        transaction: { txid: 'chain_txid_idemp_1' }
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.includes('/payments/pi_pay_a2u_idemp_key_1/complete')) {
+      return new Response(JSON.stringify({
+        identifier: 'pi_pay_a2u_idemp_key_1',
+        amount: 3,
+        status: { developer_completed: true }
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return originalFetch(url, opts);
+  };
+
+  try {
+    const stableIdempotencyKey = 'unique_op_uuid_12345';
+
+    // First attempt: executes normally
+    const req1 = new Request('http://localhost/api/admin/payout', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': stableIdempotencyKey
+      },
+      body: JSON.stringify({ amount: 3, memo: 'First attempt' })
+    });
+    const res1 = await worker.fetch(req1, env);
+    assert.equal(res1.status, 200);
+    const data1 = await res1.json();
+    assert.equal(data1.success, true);
+    assert.equal(data1.txid, 'chain_txid_idemp_1');
+    assert.equal(piCreateCalls, 1);
+
+    // Second attempt (retry with the exact same Idempotency-Key): should return idempotent 200 without creating new payment
+    const req2 = new Request('http://localhost/api/admin/payout', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': stableIdempotencyKey
+      },
+      body: JSON.stringify({ amount: 3, memo: 'Retry attempt' })
+    });
+    const res2 = await worker.fetch(req2, env);
+    assert.equal(res2.status, 200);
+    const data2 = await res2.json();
+    assert.equal(data2.success, true);
+    assert.equal(data2.txid, 'chain_txid_idemp_1');
+    assert.equal(piCreateCalls, 1); // No new Pi payment created on replay!
   } finally {
     globalThis.fetch = originalFetch;
   }

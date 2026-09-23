@@ -310,19 +310,23 @@ export class CloudSyncService {
     return data.balance;
   }
 
-  async requestUserWithdrawal(amount, memo) {
+  async requestUserWithdrawal(amount, memo, idempotencyKey) {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const key = idempotencyKey || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `user_payout_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
 
     const res = await fetch(`${apiBase}/api/wallet/withdraw`, {
       method: 'POST',
       headers: {
         ...this.getAuthHeaders(),
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Idempotency-Key': key
       },
       body: JSON.stringify({
         amount: amount !== undefined ? Number(amount) : undefined,
-        memo: memo || undefined
+        memo: memo || undefined,
+        idempotencyKey: key
       })
     });
 
@@ -330,25 +334,30 @@ export class CloudSyncService {
     if (!res.ok || !data.success) {
       const err = new Error(data?.error || 'درخواست انتقال به کیف پول پای ناموفق بود.');
       err.status = res.status;
+      err.data = data;
       throw err;
     }
     return data;
   }
 
-  async requestAdminPayout(amount, memo, walletAddress) {
+  async requestAdminPayout(amount, memo, walletAddress, idempotencyKey) {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const key = idempotencyKey || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `admin_payout_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
 
     const res = await fetch(`${apiBase}/api/admin/payout`, {
       method: 'POST',
       headers: {
         ...this.getAuthHeaders(),
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Idempotency-Key': key
       },
       body: JSON.stringify({
         amount: Number(amount),
         memo: memo || undefined,
-        walletAddress: walletAddress || undefined
+        walletAddress: walletAddress || undefined,
+        idempotencyKey: key
       })
     });
 
@@ -356,6 +365,7 @@ export class CloudSyncService {
     if (!res.ok || !data.success) {
       const err = new Error(data?.error || 'درخواست واریز به حساب پای ادمین ناموفق بود.');
       err.status = res.status;
+      err.data = data;
       throw err;
     }
     return data;

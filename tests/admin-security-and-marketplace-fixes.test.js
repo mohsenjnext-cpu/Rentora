@@ -374,7 +374,8 @@ test('Admin 10: Payout with invalid wallet key is rejected with 400', async () =
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
+      Authorization: `Bearer ${token}`,
+      'Idempotency-Key': 'key_admin_test_10'
     },
     body: JSON.stringify({ amount: 1, walletAddress: 'bad! address with spaces' })
   });

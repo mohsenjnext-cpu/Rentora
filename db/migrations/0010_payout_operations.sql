@@ -1,3 +1,4 @@
+-- Migration 0010: Payout operations table for A2U idempotent state machine
 CREATE TABLE IF NOT EXISTS payout_operations (
   id TEXT PRIMARY KEY,
   operation_key TEXT NOT NULL UNIQUE,

@@ -143,6 +143,20 @@ CREATE TABLE IF NOT EXISTS listing_contacts (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS payout_operations (
+  id TEXT PRIMARY KEY,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  amount REAL NOT NULL,
+  type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','processing','completed','failed')),
+  pi_payment_id TEXT,
+  pi_txid TEXT,
+  metadata TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_listings_owner ON listings(owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_listings_status ON listings(status);
 CREATE INDEX IF NOT EXISTS idx_rentals_renter ON rentals(renter_user_id);
@@ -157,6 +171,8 @@ CREATE INDEX IF NOT EXISTS idx_conversations_listing ON conversations(listing_id
 CREATE INDEX IF NOT EXISTS idx_conversations_rental ON conversations(rental_id);
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_listing_contacts_listing ON listing_contacts(listing_id);
+CREATE INDEX IF NOT EXISTS idx_payout_operations_key ON payout_operations(idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_payout_operations_user ON payout_operations(user_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_rental ON reviews(rental_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_listing ON reviews(listing_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_reviewer ON reviews(reviewer_user_id);

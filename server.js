@@ -879,6 +879,12 @@ app.post('/api/wallet/withdraw', (req, res) => {
 app.post('/api/admin/payout', async (req, res) => {
   const user = getRequestUser(req);
   if (!user.isAdmin) return res.status(403).json({ error: "Admin access required" });
+
+  const idempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body?.idempotencyKey;
+  if (!idempotencyKey) {
+    return res.status(400).json({ error: "Idempotency-Key برای پرداخت الزامی است" });
+  }
+
   const db = readDb();
   const totalPlatformRevenue = (db.transactions || []).filter(t => t.type === 'platform_fee' || !t.type).reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   const totalPayouts = (db.transactions || []).filter(t => t.type === 'admin_payout').reduce((acc, t) => acc + (Number(t.amount) || 0), 0);

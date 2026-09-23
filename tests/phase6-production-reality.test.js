@@ -474,7 +474,8 @@ test('TASK 3: Platform Fee A2U Payout with Horizon Polling for txid', async () =
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
+        'Authorization': `Bearer ${adminToken}`,
+        'Idempotency-Key': 'phase6_payout_key_1'
       },
       body: JSON.stringify({
         amount: 5.0,

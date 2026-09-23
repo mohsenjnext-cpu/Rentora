@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
@@ -40,6 +40,17 @@ export default function WalletModal({ isOpen, onClose }) {
   const [withdrawErrorMsg, setWithdrawErrorMsg] = useState('');
   const [withdrawTxid, setWithdrawTxid] = useState('');
 
+  // Persistent Idempotency-Key across retries for the active withdrawal operation
+  const activeWithdrawalKeyRef = useRef(null);
+  const getOrCreateWithdrawalKey = useCallback(() => {
+    if (!activeWithdrawalKeyRef.current) {
+      activeWithdrawalKeyRef.current = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `user_withdraw_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    }
+    return activeWithdrawalKeyRef.current;
+  }, []);
+
   const loadBalance = async () => {
     if (!isAuthenticated || !currentUser) return;
     setIsLoadingBalance(true);
@@ -72,7 +83,7 @@ export default function WalletModal({ isOpen, onClose }) {
   const myUid = currentUser?.uid || currentUser?.piUid;
 
   const handleWithdrawalSubmit = async (e) => {
-    e.preventDefault();
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
     setWithdrawErrorMsg('');
     setWithdrawSuccessMsg('');
     setWithdrawTxid('');
@@ -88,17 +99,20 @@ export default function WalletModal({ isOpen, onClose }) {
       return;
     }
 
+    const currentKey = getOrCreateWithdrawalKey();
     setIsSubmittingWithdrawal(true);
     try {
-      const res = await cloudSyncService.requestUserWithdrawal(amount);
+      const res = await cloudSyncService.requestUserWithdrawal(amount, undefined, currentKey);
       if (res?.success) {
         setWithdrawSuccessMsg(res.message || l(`مبلغ ${amount} π با موفقیت به کیف پول پای شما واریز شد.`, `Successfully transferred ${amount} π to your Pi wallet.`, `تم التحويل بنجاح.`, `已成功转账至您的 Pi 钱包。`));
         if (res.txid) {
           setWithdrawTxid(res.txid);
         }
+        activeWithdrawalKeyRef.current = null;
         await loadBalance();
       }
     } catch (err) {
+      // Retain activeWithdrawalKeyRef.current on failure so retrying sends the same Idempotency-Key
       setWithdrawErrorMsg(err?.message || l('خطا در انتقال وجه به کیف پول پای.', 'Withdrawal failed.', 'فشل التحويل.', '提现失败。'));
     } finally {
       setIsSubmittingWithdrawal(false);

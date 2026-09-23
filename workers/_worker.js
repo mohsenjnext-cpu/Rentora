@@ -264,7 +264,39 @@ async function recordAdminAuditLog(env, adminUser, action, details = {}) {
   return entry;
 }
 
-async function recordCompletedPayout(env, user, paymentId, txid, amount, metadataType, targetWallet) {
+function payoutIdempotencyKey(request, body) {
+  const key =
+    request.headers.get('Idempotency-Key') ||
+    request.headers.get('X-Idempotency-Key') ||
+    body?.idempotencyKey;
+
+  return key ? String(key).trim().slice(0, 200) : null;
+}
+
+async function claimPayoutOperation(env, { idempotencyKey, userId, amount, type, memo, targetWallet }) {
+  if (!env?.RENTORA_DB || !idempotencyKey) return null;
+  const opId = `pop_${crypto.randomUUID()}`;
+  const metadata = JSON.stringify({ memo, targetWallet, claimedAt: now() });
+  try {
+    const existing = await env.RENTORA_DB.prepare(
+      "SELECT * FROM payout_operations WHERE idempotency_key = ?1 LIMIT 1"
+    ).bind(idempotencyKey).first().catch(() => null);
+
+    if (existing) {
+      return existing;
+    }
+
+    await env.RENTORA_DB.prepare(
+      "INSERT INTO payout_operations(id, idempotency_key, user_id, amount, type, status, metadata, created_at, updated_at) VALUES(?1, ?2, ?3, ?4, ?5, 'pending', ?6, ?7, ?7)"
+    ).bind(opId, idempotencyKey, userId, amount, type, metadata, now()).run().catch(() => {});
+
+    return { id: opId, idempotency_key: idempotencyKey, user_id: userId, amount, type, status: 'pending' };
+  } catch (err) {
+    return null;
+  }
+}
+
+async function recordCompletedPayout(env, user, paymentId, txid, amount, metadataType, targetWallet, idempotencyKey) {
   const txType = metadataType === 'admin_treasury_payout' ? 'admin_payout' : 'user_payout';
   await env.RENTORA_DB.prepare(
     "INSERT INTO transactions(id, payment_intent_id, pi_payment_id, pi_txid, user_id, amount, type, status, created_at) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, 'completed', ?8) ON CONFLICT(pi_payment_id) DO UPDATE SET pi_txid=excluded.pi_txid, status='completed'"
@@ -279,19 +311,50 @@ async function recordCompletedPayout(env, user, paymentId, txid, amount, metadat
     now()
   ).run();
 
+  if (idempotencyKey && env.RENTORA_DB) {
+    try {
+      await env.RENTORA_DB.prepare(
+        "UPDATE payout_operations SET status='completed', pi_payment_id=?1, pi_txid=?2, updated_at=?3 WHERE idempotency_key=?4"
+      ).bind(paymentId, txid, now(), idempotencyKey).run().catch(() => {});
+    } catch (_) {}
+  }
+
   if (metadataType === 'admin_treasury_payout') {
     await recordAdminAuditLog(env, user, 'PAYOUT_COMPLETED', {
       amount,
       paymentId,
       txid,
+      idempotencyKey,
       recipient: targetWallet || user.username
     });
   }
 }
 
-async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataType, lockKey, targetWallet, origin }) {
+async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataType, lockKey, targetWallet, idempotencyKey, origin }) {
   let paymentId = null;
   let paymentInfo = null;
+
+  // 0. If idempotencyKey is already completed in payout_operations, return idempotent success
+  if (idempotencyKey && env.RENTORA_DB) {
+    try {
+      const op = await env.RENTORA_DB.prepare(
+        "SELECT * FROM payout_operations WHERE idempotency_key = ?1 LIMIT 1"
+      ).bind(idempotencyKey).first().catch(() => null);
+
+      if (op && op.status === 'completed' && op.pi_payment_id && op.pi_txid) {
+        const payoutAmount = Number(op.amount || amount);
+        return jsonResponse({
+          success: true,
+          paymentId: op.pi_payment_id,
+          txid: op.pi_txid,
+          amount: payoutAmount,
+          recipient: targetWallet || user.username,
+          idempotent: true,
+          message: `مبلغ ${payoutAmount} π با موفقیت به حساب پای ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username} واریز گردید.`
+        }, 200, env, origin);
+      }
+    } catch (_) {}
+  }
 
   // 1. Check for active unfinalized A2U payment in KV
   const activePaymentKey = `active_a2u_payout:${user.id}`;
@@ -340,7 +403,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
   if (paymentInfo?.status?.developer_completed) {
     const txid = paymentInfo?.transaction?.txid || `txid_completed_${paymentId}`;
     const payoutAmount = Number(paymentInfo.amount || amount);
-    await recordCompletedPayout(env, user, paymentId, txid, payoutAmount, metadataType, targetWallet);
+    await recordCompletedPayout(env, user, paymentId, txid, payoutAmount, metadataType, targetWallet, idempotencyKey);
     if (env.RENTORA_KV) {
       await env.RENTORA_KV.delete(activePaymentKey).catch(() => {});
       if (lockKey) await env.RENTORA_KV.delete(lockKey).catch(() => {});
@@ -366,6 +429,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
         userUid: user.pi_uid,
         username: user.username,
         targetWallet: targetWallet || undefined,
+        idempotencyKey: idempotencyKey || undefined,
         requestedAt: now()
       },
       uid: user.pi_uid
@@ -411,7 +475,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
   if (paymentInfo?.status?.developer_completed) {
     const txid = paymentInfo?.transaction?.txid || `txid_completed_${paymentId}`;
     const payoutAmount = Number(paymentInfo.amount || amount);
-    await recordCompletedPayout(env, user, paymentId, txid, payoutAmount, metadataType, targetWallet);
+    await recordCompletedPayout(env, user, paymentId, txid, payoutAmount, metadataType, targetWallet, idempotencyKey);
     if (env.RENTORA_KV) {
       await env.RENTORA_KV.delete(activePaymentKey).catch(() => {});
       if (lockKey) await env.RENTORA_KV.delete(lockKey).catch(() => {});
@@ -514,7 +578,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
 
   // 9. Record completed transaction in D1
   const finalAmount = Number(paymentInfo?.amount || amount);
-  await recordCompletedPayout(env, user, paymentId, txid, finalAmount, metadataType, targetWallet);
+  await recordCompletedPayout(env, user, paymentId, txid, finalAmount, metadataType, targetWallet, idempotencyKey);
 
   // 10. Clean up active payment state & locks in KV
   if (env.RENTORA_KV) {
@@ -970,6 +1034,13 @@ export default {
       }
       if (method === 'POST' && path === '/api/admin/payout') {
         const { user } = await requireAdmin(request, env);
+        const body = await readJson(request);
+
+        const idempotencyKey = payoutIdempotencyKey(request, body);
+        if (!idempotencyKey) {
+          return errorResponse('Idempotency-Key برای پرداخت الزامی است', 400, env, undefined, origin);
+        }
+
         const [revRow, payoutRow] = await Promise.all([
           env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)").first(),
           env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'").first()
@@ -978,7 +1049,6 @@ export default {
         const totalPayouts = Number(payoutRow?.total || 0);
         const availableBalance = Math.max(0, totalRev - totalPayouts);
 
-        const body = await readJson(request);
         let requestedAmount = Number(body?.amount || 0);
         if (!requestedAmount || isNaN(requestedAmount) || requestedAmount <= 0) {
           requestedAmount = availableBalance;
@@ -993,12 +1063,22 @@ export default {
           return errorResponse('فرمت آدرس کیف پول پای نامعتبر است.', 400, env, undefined, origin);
         }
 
+        await claimPayoutOperation(env, {
+          idempotencyKey,
+          userId: user.id,
+          amount,
+          type: 'admin_treasury_payout',
+          memo: body?.memo,
+          targetWallet
+        });
+
         return await executePiA2UPayoutPipeline(env, {
           user,
           amount,
           memo: body?.memo || `Rentora Treasury Payout to ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username}`,
           metadataType: 'admin_treasury_payout',
           targetWallet,
+          idempotencyKey,
           origin
         });
       }

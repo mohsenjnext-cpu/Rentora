@@ -333,6 +333,38 @@ async function piFetch(env, path, options = {}) {
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   return fetch(`${base}${path}`, { ...options, headers });
 }
+function payoutIdempotencyKey(request, body) {
+  const key =
+    request.headers.get('Idempotency-Key') ||
+    request.headers.get('X-Idempotency-Key') ||
+    body?.idempotencyKey;
+
+  return key ? String(key).trim().slice(0, 200) : null;
+}
+
+async function claimPayoutOperation(env, { idempotencyKey, userId, amount, type, memo, targetWallet }) {
+  if (!env?.RENTORA_DB || !idempotencyKey) return null;
+  const opId = `pop_${crypto.randomUUID()}`;
+  const metadata = JSON.stringify({ memo, targetWallet, claimedAt: now() });
+  try {
+    const existing = await env.RENTORA_DB.prepare(
+      "SELECT * FROM payout_operations WHERE idempotency_key = ?1 LIMIT 1"
+    ).bind(idempotencyKey).first().catch(() => null);
+
+    if (existing) {
+      return existing;
+    }
+
+    await env.RENTORA_DB.prepare(
+      "INSERT INTO payout_operations(id, idempotency_key, user_id, amount, type, status, metadata, created_at, updated_at) VALUES(?1, ?2, ?3, ?4, ?5, 'pending', ?6, ?7, ?7)"
+    ).bind(opId, idempotencyKey, userId, amount, type, metadata, now()).run().catch(() => {});
+
+    return { id: opId, idempotency_key: idempotencyKey, user_id: userId, amount, type, status: 'pending' };
+  } catch (err) {
+    return null;
+  }
+}
+
 function parsePaymentMetadata(raw) {
   if (!raw) return {};
   if (typeof raw === 'object') return raw;
