@@ -113,6 +113,8 @@ test('A2U payout binds Pi payment to operation recipient, amount, direction, net
   assert.match(gateway, /payment amount does not match payout operation/);
   assert.match(gateway, /payment direction is not app-to-user/);
   assert.match(gateway, /payment is not on Pi Testnet/);
+  assert.match(gateway, /payment\?\.direction !== 'app_to_user'/);
+  assert.match(gateway, /payment\?\.network !== 'Pi Testnet'/);
   assert.match(gateway, /metadata does not match payout operation/);
   assert.match(gateway, /Pi A2U completion could not be re-verified/);
 });

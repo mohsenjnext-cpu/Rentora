@@ -163,10 +163,10 @@ async function validateA2UPayment(env, operation, payment) {
   if (!Number.isFinite(actualAmount) || Math.abs(actualAmount - expectedAmount) > 0.0001) {
     throw Object.assign(new Error('Pi A2U payment amount does not match payout operation'), { status: 409 });
   }
-  if (payment?.direction && payment.direction !== 'app_to_user') {
+  if (payment?.direction !== 'app_to_user') {
     throw Object.assign(new Error('Pi payment direction is not app-to-user'), { status: 409 });
   }
-  if (payment?.network && payment.network !== 'Pi Testnet') {
+  if (payment?.network !== 'Pi Testnet') {
     throw Object.assign(new Error('Pi A2U payment is not on Pi Testnet'), { status: 409 });
   }
   const metadata = parsePaymentMetadata(payment?.metadata);
