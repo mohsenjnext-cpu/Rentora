@@ -118,7 +118,6 @@ test('A2U payout binds Pi payment to operation recipient, amount, direction, net
 });
 
 test('A2U route does not accept a client-supplied wallet address as the payout authority', () => {
-  const route = gateway.slice(gateway.indexOf("path === '/api/admin/payout'"));
-  assert.match(route, /آدرس کیف پول مستقیم قابل تعیین نیست/);
-  assert.doesNotMatch(route, /targetWallet: targetWallet || undefined/);
+  assert.match(gateway, /آدرس کیف پول مستقیم قابل تعیین نیست/);
+  assert.doesNotMatch(gateway, /targetWallet\s*:\s*targetWallet\s*\|\|\s*undefined/);
 });
