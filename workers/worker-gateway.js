@@ -4,15 +4,19 @@ function now() {
   return new Date().toISOString();
 }
 
-function isOriginAllowed(origin, requestUrl, env) {
+function parseAllowedOrigins(env) {
+  return String(env?.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+function isOriginAllowed(origin, env) {
+  if (!origin) return false;
+  const configured = parseAllowedOrigins(env);
+  if (configured.length === 0) return false;
+  if (configured.includes('*')) return false;
+  return configured.includes(origin);
+}
+function isRequestOriginAllowed(origin, env) {
   if (!origin) return true;
-  try {
-    const requestOrigin = new URL(requestUrl).origin;
-    if (origin === requestOrigin) return true;
-  } catch (_) {}
-  const configured = (env?.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
-  if (configured.length === 0 || configured.includes('*') || configured.includes(origin)) return true;
-  return false;
+  return isOriginAllowed(origin, env);
 }
 
 function json(data, status, env, origin) {
@@ -22,9 +26,7 @@ function json(data, status, env, origin) {
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
   };
-  const allowOrigin = origin || env?.CORS_ORIGIN || '';
-  if (allowOrigin) {
-    headers['Access-Control-Allow-Origin'] = allowOrigin;
+  if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin;
     headers.Vary = 'Origin';
   }
   return new Response(JSON.stringify(data), { status, headers });

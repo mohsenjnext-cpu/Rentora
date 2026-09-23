@@ -277,15 +277,21 @@ function userView(row, env) {
     isOnline: Boolean(meta.isOnline)
   };
 }
+
+function isOriginAllowed(origin, env) {
+  if (!origin) return false;
+  const configured = String(env?.CORS_ORIGIN || '').split(',').map((v) => v.trim()).filter(Boolean);
+  if (configured.length === 0) return false;
+  if (configured.includes('*')) return false;
+  return configured.includes(origin);
+}
+
 function json(data, status = 200, request = null, env = null) {
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
   const origin = request?.headers?.get('Origin');
-  if (origin) {
-    let allowed = false;
-    try { allowed = origin === new URL(request.url).origin; } catch (_) {}
-    const configured = String(env?.CORS_ORIGIN || '').split(',').map((v) => v.trim()).filter(Boolean);
-    if (configured.length === 0 || configured.includes(origin) || configured.includes('*')) allowed = true;
-    if (allowed) { headers['Access-Control-Allow-Origin'] = origin; headers.Vary = 'Origin'; }
+  if (origin && isOriginAllowed(origin, env)) {
+    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Vary'] = 'Origin';
   }
   return new Response(status === 204 ? null : JSON.stringify(data), { status, headers });
 }
@@ -811,12 +817,8 @@ export default {
       if (request.method === 'OPTIONS') {
         const origin = request.headers.get('Origin');
         const headers = { 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers') || 'Content-Type, Authorization', 'Access-Control-Max-Age': '86400' };
-        if (origin) {
-          let allowed = false;
-          try { allowed = origin === new URL(request.url).origin; } catch (_) {}
-          const configured = String(env?.CORS_ORIGIN || '').split(',').map((v) => v.trim()).filter(Boolean);
-          if (configured.length === 0 || configured.includes(origin) || configured.includes('*')) allowed = true;
-          if (allowed) headers['Access-Control-Allow-Origin'] = origin;
+        if (origin && isOriginAllowed(origin, env)) {
+          headers['Access-Control-Allow-Origin'] = origin;
         }
         return new Response(null, { status: 204, headers });
       }

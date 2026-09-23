@@ -9,11 +9,27 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Enable CORS for frontend running on GitHub Pages or custom domains
+// Secure CORS: explicit allowlist + fail-closed production
+function parseAllowedOrigins() {
+  return String(process.env.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+function isOriginAllowed(origin) {
+  if (!origin) return false;
+  const configured = parseAllowedOrigins();
+  if (configured.length === 0) return false;
+  if (configured.includes('*')) return false;
+  return configured.includes(origin);
+}
+
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (isOriginAllowed(origin)) return callback(null, true);
+    return callback(new Error('Origin not allowed'), false);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-pi-uid', 'x-session-token', 'x-pi-username']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-pi-uid', 'x-session-token', 'x-pi-username', 'Idempotency-Key', 'X-Idempotency-Key', 'X-Payout-Lease-Owner'],
+  credentials: false
 }));
 app.use(express.json({ limit: '10mb' }));
 
