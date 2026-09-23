@@ -118,16 +118,6 @@ async function claimPayoutOperation(env, key, details) {
   return { created: Boolean(operation && Number(reservation?.meta?.changes || 0) > 0), operation, leaseOwner, insufficient: !operation };
 }
 
-async function acquirePayoutLease(env, operation, states = PAYOUT_ACTIVE_STATES) {
-  if (!operation || !states.includes(operation.status)) return null;
-  const leaseOwner = 'lease_' + crypto.randomUUID();
-  const leaseExpires = new Date(Date.now() + PAYOUT_LEASE_MS).toISOString();
-  const placeholders = states.map((_, index) => '?' + (5 + index)).join(',');
-  const result = await env.RENTORA_DB.prepare(`UPDATE payout_operations SET lease_owner=?1, lease_expires_at=?2, updated_at=?3 WHERE operation_key=?4 AND status IN (${placeholders}) AND (lease_expires_at IS NULL OR lease_expires_at < ?3)`).bind(leaseOwner, leaseExpires, now(), operation.operation_key, ...states).run();
-  if (Number(result?.meta?.changes || 0) !== 1) return null;
-  return { ...(await getPayoutOperation(env, operation.operation_key)), lease_owner: leaseOwner };
-}
-
 async function transitionPayoutOperation(env, key, fromStates, toState, fields = {}) {
   if (!fromStates.every((state) => PAYOUT_TRANSITIONS[state]?.includes(toState))) throw new Error(`Invalid payout transition request: ${fromStates.join(',')} -> ${toState}`);
   const sets = ['status=?1', 'updated_at=?2'];
@@ -211,9 +201,6 @@ async function persistCompletedPayout(env, operation, paymentId, txid, verifiedP
 }
 
 async function completePayoutOperation(env, operation) {
-  const leased = await acquirePayoutLease(env, operation, ['approved', 'completing']);
-  if (!leased) return getPayoutOperation(env, operation.operation_key);
-  operation = leased;
   if (!operation?.pi_payment_id) return markPayoutReconciliationRequired(env, operation, 'Cannot complete payout without a durable Pi payment id');
   const current = await fetchPiPayment(env, operation.pi_payment_id);
   if (!current.response.ok) return markPayoutReconciliationRequired(env, operation, `Unable to read Pi payment before completion (${current.response.status})`);
@@ -226,7 +213,7 @@ async function completePayoutOperation(env, operation) {
   const currentTxid = current.payment?.transaction?.txid || operation.txid;
   if (current.status.developer_completed) return persistCompletedPayout(env, operation, operation.pi_payment_id, currentTxid, current.payment);
   if (!currentTxid) return transitionPayoutOperation(env, operation.operation_key, ['approved', 'completing'], 'approved');
-  operation = await transitionPayoutOperation(env, operation.operation_key, ['approved', 'reconciliation_required'], 'completing', { txid: currentTxid, leaseOwner: operation.lease_owner });
+  operation = await transitionPayoutOperation(env, operation.operation_key, ['approved', 'reconciliation_required'], 'completing', { txid: currentTxid });
   const beforeComplete = await fetchPiPayment(env, operation.pi_payment_id);
   if (!beforeComplete.response.ok) return markPayoutReconciliationRequired(env, operation, `Unable to reconcile Pi payment before complete (${beforeComplete.response.status})`);
   try {
@@ -269,9 +256,6 @@ async function resumePayoutOperation(env, operation) {
   if (operation.status === 'creating') return markPayoutReconciliationRequired(env, operation, 'Create phase was interrupted before payment id persistence');
   if (operation.status === 'pi_created') operation = await transitionPayoutOperation(env, operation.operation_key, ['pi_created'], 'approving', { piPaymentId: operation.pi_payment_id });
   if (operation.status === 'approving') {
-    const leased = await acquirePayoutLease(env, operation, ['approving']);
-    if (!leased) return getPayoutOperation(env, operation.operation_key);
-    operation = leased;
     const current = await fetchPiPayment(env, operation.pi_payment_id);
     if (!current.response.ok) return markPayoutReconciliationRequired(env, operation, `Unable to read Pi payment before approval (${current.response.status})`);
     if (current.status.cancelled || current.status.user_cancelled) return transitionPayoutOperation(env, operation.operation_key, ['approving'], 'cancelled', { error: 'Pi payment was cancelled' });
@@ -302,7 +286,7 @@ async function resumePayoutOperation(env, operation) {
         current.payment = reconciled.payment;
       }
     }
-    operation = await transitionPayoutOperation(env, operation.operation_key, ['approving'], 'approved', { piPaymentId: operation.pi_payment_id, clearLease: true });
+    operation = await transitionPayoutOperation(env, operation.operation_key, ['approving'], 'approved', { piPaymentId: operation.pi_payment_id });
   }
   if (operation.status === 'approved' || operation.status === 'completing') return completePayoutOperation(env, operation);
   return operation;
