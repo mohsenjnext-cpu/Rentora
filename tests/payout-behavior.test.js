@@ -143,8 +143,8 @@ test('behavior: reserved retry takes over only after lease expiry', async () => 
   const retry = await hooks.claimPayoutOperation(env(db), 'op', { amount: 5, userId: 'u', recipient: 'r' });
   assert.equal(retry.created, true);
   assert.equal(db.operations.length, 1);
-  const calls = piHarness();
-  const created = await hooks.createPayoutPayment(env(db), retry.operation, retry.leaseOwner, { amount: 5, metadata: { operationKey: 'op' } });
+  const calls = piHarness({ create: () => response({ identifier: 'pi-created', user_uid: 'uid-u', amount: 5, direction: 'app_to_user', network: 'Pi Testnet', metadata: { type: 'admin_treasury_payout', operationKey: 'op' } }) });
+  const created = await hooks.createPayoutPayment(env(db), retry.operation, retry.leaseOwner, { amount: 5, metadata: { type: 'admin_treasury_payout', operationKey: 'op' } });
   assert.equal(created.pi_payment_id, 'pi-created');
   assert.equal(calls.filter((call) => call.path.endsWith('/payments') && call.method === 'POST').length, 1);
 });
@@ -160,6 +160,27 @@ test('behavior: correlated incomplete payment recovers create/persist crash with
   assert.equal(db.operations[0].status, 'approved');
   assert.equal(calls.filter((call) => call.path.endsWith('/payments') && call.method === 'POST').length, 0);
   assert.ok(claim.operation);
+});
+
+
+test('behavior: created A2U payment with mismatched recipient is never advanced to pi_created', async () => {
+  const db = new FakeD1({ available: 10 });
+  const claim = await hooks.claimPayoutOperation(env(db), 'op', { amount: 5, userId: 'u', recipient: 'r' });
+  const calls = piHarness({ create: () => response({ identifier: 'pi-bad', user_uid: 'uid-other', amount: 5, direction: 'app_to_user', network: 'Pi Testnet', metadata: { type: 'admin_treasury_payout', operationKey: 'op' } }) });
+  const result = await hooks.createPayoutPayment(env(db), claim.operation, claim.leaseOwner, { amount: 5, metadata: { type: 'admin_treasury_payout', operationKey: 'op' } });
+  assert.equal(result.status, 'reconciliation_required');
+  assert.equal(db.operations[0].pi_payment_id, null);
+  assert.equal(calls.filter((call) => call.path.endsWith('/payments') && call.method === 'POST').length, 1);
+});
+
+test('behavior: incomplete payment with matching metadata but mismatched amount is not bound', async () => {
+  const db = new FakeD1({ available: 10 });
+  await hooks.claimPayoutOperation(env(db), 'op', { amount: 5, userId: 'u', recipient: 'r' });
+  db.operations[0].status = 'creating';
+  piHarness({ incomplete: [{ identifier: 'pi-bad', metadata: { type: 'admin_treasury_payout', operationKey: 'op' } }], get: { 'pi-bad': { identifier: 'pi-bad', user_uid: 'uid-u', amount: 99, direction: 'app_to_user', network: 'Pi Testnet', metadata: { type: 'admin_treasury_payout', operationKey: 'op' }, status: { developer_approved: true }, transaction: { txid: 'tx-bad' } } } });
+  await hooks.autoResolveIncompleteServerPayments(env(db), { pi_uid: 'u' });
+  assert.equal(db.operations[0].status, 'reconciliation_required');
+  assert.equal(db.operations[0].pi_payment_id, null);
 });
 
 test('behavior: duplicate operation key creates one operation', async () => {
