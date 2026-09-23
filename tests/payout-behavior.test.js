@@ -244,8 +244,9 @@ test('behavior: orphan payout incomplete payment is queued, never silently skipp
 test('behavior: duplicate completion creates one transaction and remains completed', async () => {
   const db = new FakeD1({ operations: [{ operation_key: 'op', status: 'approved', amount: 2, user_id: 'u', recipient: 'r', pi_payment_id: 'pi-1', txid: 'tx-1' }] });
   const operation = db.operations[0];
-  await hooks.persistCompletedPayout(env(db), operation, 'pi-1', 'tx-1');
-  await hooks.persistCompletedPayout(env(db), db.operations[0], 'pi-1', 'tx-1');
+  const payment = { identifier: 'pi-1', user_uid: 'uid-u', amount: 2, direction: 'app_to_user', network: 'Pi Testnet', metadata: { type: 'admin_treasury_payout', operationKey: 'op' }, status: { developer_completed: true }, transaction: { txid: 'tx-1' } };
+  await hooks.persistCompletedPayout(env(db), operation, 'pi-1', 'tx-1', payment);
+  await hooks.persistCompletedPayout(env(db), db.operations[0], 'pi-1', 'tx-1', payment);
   assert.equal(db.transactions.length, 1);
   assert.equal(db.operations[0].status, 'completed');
 });
