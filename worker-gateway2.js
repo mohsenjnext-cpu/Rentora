@@ -881,11 +881,10 @@ async function adminRoute(request, env, path) {
     if (!requestedAmount || Number.isNaN(requestedAmount) || requestedAmount <= 0) requestedAmount = availableBalance;
     const amount = Number(requestedAmount.toFixed(4));
     if (amount <= 0 || amount > availableBalance) return json({ error: `مبلغ درخواستی (${amount} π) از موجودی واقعی کارمزدها (${availableBalance.toFixed(4)} π) بیشتر است.` }, 400, request, env);
-    const targetWallet = String(body?.walletAddress || '').trim();
-    if (targetWallet) return json({ error: 'آدرس کیف پول مستقیم قابل تعیین نیست؛ A2U فقط به کیف پول فعلی کاربر احراز‌شده از طریق Pi UID پرداخت می‌کند.' }, 400, request, env);
+    if (String(body?.walletAddress || '').trim()) return json({ error: 'آدرس کیف پول مستقیم قابل تعیین نیست؛ A2U فقط به کیف پول فعلی کاربر احراز‌شده از طریق Pi UID پرداخت می‌کند.' }, 400, request, env);
     const operationKey = payoutIdempotencyKey(request, body);
     if (!operationKey) return json({ error: 'Idempotency-Key برای پرداخت الزامی است.' }, 400, request, env);
-    let claim = await claimPayoutOperation(env, operationKey, { amount, userId: user.id, recipient: targetWallet || user.username, leaseOwner: request.headers.get('X-Payout-Lease-Owner') || body?.leaseOwner || null });
+    let claim = await claimPayoutOperation(env, operationKey, { amount, userId: user.id, recipient: user.username, leaseOwner: request.headers.get('X-Payout-Lease-Owner') || body?.leaseOwner || null });
     if (!claim.operation) return json({ error: 'موجودی treasury برای reservation کافی نیست.' }, 409, request, env);
     if (!claim.created) {
       if (Number(claim.operation.amount) !== amount || claim.operation.user_id !== user.id) return json({ error: 'کلید idempotency قبلاً برای درخواست دیگری استفاده شده است.' }, 409, request, env);
@@ -902,14 +901,14 @@ async function adminRoute(request, env, path) {
       operation = await transitionPayoutOperation(env, operationKey, ['reserved'], 'creating', { leaseOwner: claim.leaseOwner || operation.lease_owner });
       const paymentPayload = {
         amount,
-        memo: String(body?.memo || `Rentora Treasury Payout to ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username}`).slice(0, 120),
+        memo: String(body?.memo || `Rentora Treasury Payout to @${user.username}`).slice(0, 120),
         metadata: { type: 'admin_treasury_payout', operationKey, adminUid: user.pi_uid, adminUsername: user.username, requestedAt: now() },
         uid: user.pi_uid
       };
       operation = await createPayoutPayment(env, operation, claim.leaseOwner || operation.lease_owner, paymentPayload);
       operation = await resumePayoutOperation(env, operation);
       if (operation?.status === 'completed') {
-        await recordAdminAuditLog(env, user, 'PAYOUT_COMPLETED', { amount, paymentId: operation.pi_payment_id, txid: operation.txid, recipient: targetWallet || user.username, operationKey });
+        await recordAdminAuditLog(env, user, 'PAYOUT_COMPLETED', { amount, paymentId: operation.pi_payment_id, txid: operation.txid, recipient: user.username, operationKey });
       }
       return payoutOperationResponse(operation, request, env);
     } catch (err) {
