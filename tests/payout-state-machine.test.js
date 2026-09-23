@@ -130,3 +130,11 @@ test('A2U route does not accept a client-supplied wallet address as the payout a
   assert.match(gateway, /آدرس کیف پول مستقیم قابل تعیین نیست/);
   assert.doesNotMatch(gateway, /targetWallet\s*:\s*targetWallet\s*\|\|\s*undefined/);
 });
+
+
+test('A2U create and incomplete recovery validate before persisting payment binding', () => {
+  assert.match(gateway, /validateA2UPayment\(env, \{ \.\.\.operation, pi_payment_id: createdPaymentId \}, created\)/);
+  assert.match(gateway, /Created Pi A2U payment failed validation/);
+  assert.match(gateway, /validateA2UPayment\(env, \{ \.\.\.operation, pi_payment_id: pid \}, paymentCandidate\.payment\)/);
+  assert.match(gateway, /Incomplete payout payment failed validation before binding/);
+});
