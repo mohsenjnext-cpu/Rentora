@@ -281,6 +281,10 @@ function userView(row, env, options = {}) {
     view.adminKycStatus = ['verified', 'unverified', 'unknown'].includes(adminKycStatus) ? adminKycStatus : 'unknown';
   }
   return view;
+  if (options.includeAdminReview === true) {
+    view.adminKycStatus = ['verified', 'unverified', 'unknown'].includes(adminKycStatus) ? adminKycStatus : 'unknown';
+  }
+  return view;
 }
 
 function isOriginAllowed(origin, env) {
