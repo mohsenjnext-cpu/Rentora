@@ -122,7 +122,7 @@ test('A2U payout binds Pi payment to operation recipient, amount, direction, net
 test('A2U recovery validates payment identity before approving or binding incomplete payments', () => {
   assert.match(gateway, /validateA2UPayment\(env, operation, current\.payment\)/);
   assert.match(gateway, /Incomplete payout payment failed validation/);
-  assert.match(gateway, /payment failed validation during recovery/);
+  assert.match(gateway, /payment validation failed during recovery/);
   assert.match(gateway, /payment\?\.transaction\?\.txid, current\.payment/);
 });
 
