@@ -246,6 +246,13 @@ test('behavior: stale operation without payment is durably reconciled', async ()
   assert.equal(db.operations[0].status, 'reconciliation_required');
 });
 
+test('behavior: expired no-payment reservation is released after a successful recovery scan', async () => {
+  const db = new FakeD1({ operations: [{ operation_key: 'expired', status: 'creating', amount: 2, user_id: 'u', recipient: 'r', pi_payment_id: null, reservation_expires_at: new Date(Date.now() - 1000).toISOString() }] });
+  piHarness({ incomplete: [] });
+  await hooks.reconcileStalePayoutOperations(env(db));
+  assert.equal(db.operations[0].status, 'cancelled');
+});
+
 test('behavior: all stale payout states follow guarded reconciliation paths', async () => {
   for (const status of ['reserved', 'creating', 'approving', 'completing', 'reconciliation_required']) {
     const db = new FakeD1({ operations: [{ operation_key: `stale-${status}`, status, amount: 1, user_id: 'u', recipient: 'r', pi_payment_id: null }] });
