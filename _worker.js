@@ -599,13 +599,14 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
   }, 200, env, origin);
 }
 function parseMetadata(value) { if (!value) return {}; try { return JSON.parse(value); } catch (_) { return {}; } }
-function userView(row, env) {
+function userView(row, env, options = {}) {
   const meta = parseMetadata(row.metadata);
   const isAdm = env ? (isAdmin(row.pi_uid, env) || isAdmin(row.username, env)) : row.role === 'admin';
-  const isVerifiedPioneer = meta.kycStatus === 'verified' || row.kyc_status === 'verified';
-  const resolvedKycStatus = isVerifiedPioneer ? 'verified' : (meta.kycStatus === 'unverified' ? 'unverified' : 'unknown');
-  return {
-    ...meta,
+  const piKycStatus = meta.kycStatus || row.kyc_status;
+  const resolvedKycStatus = piKycStatus === 'verified' ? 'verified' : (piKycStatus === 'unverified' ? 'unverified' : 'unknown');
+  const { adminKycStatus, ...publicMeta } = meta;
+  const view = {
+    ...publicMeta,
     id: row.id,
     uid: row.pi_uid,
     piUid: row.pi_uid,
@@ -621,6 +622,10 @@ function userView(row, env) {
     isOfficialSdk: true,
     joinedDate: row.created_at ? row.created_at.slice(0, 10) : ''
   };
+  if (options.includeAdminReview === true) {
+    view.adminKycStatus = ['verified', 'unverified', 'unknown'].includes(adminKycStatus) ? adminKycStatus : 'unknown';
+  }
+  return view;
 }
 function listingView(row) {
   const meta = sanitizeListingPublicMetadata(parseMetadata(row.metadata));
@@ -1084,7 +1089,7 @@ export default {
       if (method === 'GET' && path === '/api/admin/users') {
         const { user } = await requireAdmin(request, env);
         const rows = await env.RENTORA_DB.prepare("SELECT * FROM users ORDER BY created_at DESC").all();
-        return jsonResponse({ success: true, users: (rows.results || []).map((u) => userView(u, env)) }, 200, env, origin);
+        return jsonResponse({ success: true, users: (rows.results || []).map((u) => userView(u, env, { includeAdminReview: true })) }, 200, env, origin);
       }
       if (method === 'POST' && path.startsWith('/api/admin/users/') && path.endsWith('/status')) {
         const targetUserId = path.slice('/api/admin/users/'.length, -'/status'.length).trim();
@@ -1116,11 +1121,11 @@ export default {
         const target = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1 OR pi_uid=?1 OR lower(username)=lower(?1) LIMIT 1").bind(targetUserId).first();
         if (!target) return errorResponse('User not found', 404, env, undefined, origin);
         const targetMeta = parseMetadata(target.metadata);
-        const updatedMeta = { ...targetMeta, kycStatus: newKycStatus };
+        const updatedMeta = { ...targetMeta, adminKycStatus: newKycStatus };
         await env.RENTORA_DB.prepare("UPDATE users SET metadata=?1, updated_at=?2 WHERE id=?3").bind(JSON.stringify(updatedMeta), now(), target.id).run();
         await recordAdminAuditLog(env, user, 'USER_KYC_UPDATED', { targetUser: target.username, kycStatus: newKycStatus });
         const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
-        return jsonResponse({ success: true, user: userView(updated, env) }, 200, env, origin);
+        return jsonResponse({ success: true, user: userView(updated, env, { includeAdminReview: true }) }, 200, env, origin);
       }
       if (method === 'POST' && path.startsWith('/api/admin/listings/') && path.endsWith('/status')) {
         const listingId = path.slice('/api/admin/listings/'.length, -'/status'.length).trim();

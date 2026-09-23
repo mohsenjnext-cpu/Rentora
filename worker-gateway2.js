@@ -248,14 +248,15 @@ async function reconcileStalePayoutOperations(env) {
   }
 }
 
-function userView(row, env) {
+function userView(row, env, options = {}) {
   let meta = {};
   try { meta = row.metadata ? JSON.parse(row.metadata) : {}; } catch (_) {}
   const isAdmin = adminAllowed(row.pi_uid, env) || adminAllowed(row.username, env);
-  const isVerifiedPioneer = meta.kycStatus === 'verified' || row.kyc_status === 'verified';
-  const resolvedKycStatus = isVerifiedPioneer ? 'verified' : (meta.kycStatus === 'unverified' ? 'unverified' : 'unknown');
-  return {
-    ...meta,
+  const piKycStatus = meta.kycStatus || row.kyc_status;
+  const resolvedKycStatus = piKycStatus === 'verified' ? 'verified' : (piKycStatus === 'unverified' ? 'unverified' : 'unknown');
+  const { adminKycStatus, ...publicMeta } = meta;
+  const view = {
+    ...publicMeta,
     id: row.id,
     uid: row.pi_uid,
     piUid: row.pi_uid,
@@ -276,6 +277,14 @@ function userView(row, env) {
     logoutCount: Number(meta.logoutCount || 0),
     isOnline: Boolean(meta.isOnline)
   };
+  if (options.includeAdminReview === true) {
+    view.adminKycStatus = ['verified', 'unverified', 'unknown'].includes(adminKycStatus) ? adminKycStatus : 'unknown';
+  }
+  return view;
+  if (options.includeAdminReview === true) {
+    view.adminKycStatus = ['verified', 'unverified', 'unknown'].includes(adminKycStatus) ? adminKycStatus : 'unknown';
+  }
+  return view;
 }
 
 function isOriginAllowed(origin, env) {
