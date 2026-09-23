@@ -337,10 +337,6 @@ function userView(row, env, options = {}) {
     view.adminKycStatus = ['verified', 'unverified', 'unknown'].includes(adminKycStatus) ? adminKycStatus : 'unknown';
   }
   return view;
-  if (options.includeAdminReview === true) {
-    view.adminKycStatus = ['verified', 'unverified', 'unknown'].includes(adminKycStatus) ? adminKycStatus : 'unknown';
-  }
-  return view;
 }
 
 function isOriginAllowed(origin, env) {
@@ -759,15 +755,24 @@ async function autoResolveIncompleteServerPayments(env, user) {
         await enqueuePayoutReconciliation(env, payment, 'Payment id conflicts with payout operation', metadata);
         continue;
       }
+      const paymentCandidate = await fetchPiPayment(env, pid);
+      if (!paymentCandidate.response.ok) { await markPayoutReconciliationRequired(env, operation, 'Incomplete payment could not be fetched'); await enqueuePayoutReconciliation(env, payment, 'Incomplete payment GET failed', metadata); continue; }
       if (!operation.pi_payment_id) {
-        if (operation.status === 'creating') operation = await transitionPayoutOperation(env, operation.operation_key, ['creating'], 'pi_created', { piPaymentId: pid });
-        else if (operation.status !== 'pi_created' && operation.status !== 'approving' && operation.status !== 'approved' && operation.status !== 'completing') {
+        if (operation.status === 'creating') {
+          try {
+            await validateA2UPayment(env, { ...operation, pi_payment_id: pid }, paymentCandidate.payment);
+          } catch (error) {
+            await markPayoutReconciliationRequired(env, operation, error.message || 'Incomplete payout payment failed validation before binding');
+            await enqueuePayoutReconciliation(env, paymentCandidate.payment, error.message || 'Incomplete payout payment failed validation before binding', metadata);
+            continue;
+          }
+          operation = await transitionPayoutOperation(env, operation.operation_key, ['creating'], 'pi_created', { piPaymentId: pid });
+        } else if (operation.status !== 'pi_created' && operation.status !== 'approving' && operation.status !== 'approved' && operation.status !== 'completing') {
           await markPayoutReconciliationRequired(env, operation, 'Incomplete payment cannot be attached from current operation state');
           continue;
         }
       }
-      const current = await fetchPiPayment(env, pid);
-      if (!current.response.ok) { await markPayoutReconciliationRequired(env, operation, 'Incomplete payment could not be fetched'); await enqueuePayoutReconciliation(env, payment, 'Incomplete payment GET failed', metadata); continue; }
+      const current = paymentCandidate;
       if (current.status.cancelled || current.status.user_cancelled) { await transitionPayoutOperation(env, operation.operation_key, PAYOUT_ACTIVE_STATES, 'cancelled', { error: 'Pi incomplete payment was cancelled' }); continue; }
       if (current.status.developer_completed) { await persistCompletedPayout(env, operation, pid, current.payment?.transaction?.txid, current.payment); continue; }
       try {
@@ -798,7 +803,13 @@ async function createPayoutPayment(env, operation, leaseOwner, paymentPayload) {
     return markPayoutReconciliationRequired(env, operation, error.message || 'Pi create request was ambiguous');
   }
   if (!piRes.ok || !created?.identifier) return transitionPayoutOperation(env, operation.operation_key, ['creating'], 'cancelled', { error: piErrorMessage(created, 'Pi payment creation was rejected') });
-  return transitionPayoutOperation(env, operation.operation_key, ['creating'], 'pi_created', { piPaymentId: created.identifier || created.id, leaseOwner: leaseOwner || operation.lease_owner, clearLease: true });
+  const createdPaymentId = created.identifier || created.id;
+  try {
+    await validateA2UPayment(env, { ...operation, pi_payment_id: createdPaymentId }, created);
+  } catch (error) {
+    return markPayoutReconciliationRequired(env, operation, error.message || 'Created Pi A2U payment failed validation');
+  }
+  return transitionPayoutOperation(env, operation.operation_key, ['creating'], 'pi_created', { piPaymentId: createdPaymentId, leaseOwner: leaseOwner || operation.lease_owner, clearLease: true });
 }
 
 async function adminRoute(request, env, path) {
