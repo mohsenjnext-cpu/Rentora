@@ -147,8 +147,43 @@ async function fetchPiPayment(env, paymentId) {
   return { response, payment, status: normalizeStatus(payment?.status) };
 }
 
-async function persistCompletedPayout(env, operation, paymentId, txid) {
+async function validateA2UPayment(env, operation, payment) {
+  const identifier = String(payment?.identifier || payment?.id || '').trim();
+  if (!identifier || identifier !== String(operation?.pi_payment_id || '').trim()) {
+    throw Object.assign(new Error('Pi A2U payment identifier does not match payout operation'), { status: 409 });
+  }
+  const user = await env.RENTORA_DB.prepare('SELECT pi_uid FROM users WHERE id=?1 LIMIT 1').bind(operation.user_id).first();
+  const expectedUid = String(user?.pi_uid || '').trim().toLowerCase();
+  const actualUid = String(payment?.user_uid || payment?.uid || '').trim().toLowerCase();
+  if (!expectedUid || !actualUid || actualUid !== expectedUid) {
+    throw Object.assign(new Error('Pi A2U recipient uid does not match payout operation'), { status: 409 });
+  }
+  const actualAmount = Math.round(Number(payment?.amount || 0) * 10000) / 10000;
+  const expectedAmount = Math.round(Number(operation?.amount || 0) * 10000) / 10000;
+  if (!Number.isFinite(actualAmount) || Math.abs(actualAmount - expectedAmount) > 0.0001) {
+    throw Object.assign(new Error('Pi A2U payment amount does not match payout operation'), { status: 409 });
+  }
+  if (payment?.direction && payment.direction !== 'app_to_user') {
+    throw Object.assign(new Error('Pi payment direction is not app-to-user'), { status: 409 });
+  }
+  if (payment?.network && payment.network !== 'Pi Testnet') {
+    throw Object.assign(new Error('Pi A2U payment is not on Pi Testnet'), { status: 409 });
+  }
+  const metadata = parsePaymentMetadata(payment?.metadata);
+  if (metadata?.type !== 'admin_treasury_payout' || String(metadata?.operationKey || '') !== String(operation.operation_key)) {
+    throw Object.assign(new Error('Pi A2U payment metadata does not match payout operation'), { status: 409 });
+  }
+  return true;
+}
+
+async function persistCompletedPayout(env, operation, paymentId, txid, verifiedPayment = null) {
   if (!txid) return markPayoutReconciliationRequired(env, operation, 'Completed Pi payment has no transaction id');
+  try {
+    const payment = verifiedPayment || (await fetchPiPayment(env, paymentId)).payment;
+    await validateA2UPayment(env, operation, payment);
+  } catch (error) {
+    return markPayoutReconciliationRequired(env, operation, error.message || 'Pi A2U payment validation failed');
+  }
   const existing = await env.RENTORA_DB.prepare('SELECT * FROM transactions WHERE pi_payment_id=?1 OR pi_txid=?2 LIMIT 1').bind(paymentId, txid).first();
   if (existing && (String(existing.pi_txid || '') !== String(txid) || Number(existing.amount) !== Number(operation.amount))) {
     return markPayoutReconciliationRequired(env, operation, 'Payment id is already linked to a conflicting transaction');
@@ -170,13 +205,23 @@ async function completePayoutOperation(env, operation) {
   const current = await fetchPiPayment(env, operation.pi_payment_id);
   if (!current.response.ok) return markPayoutReconciliationRequired(env, operation, `Unable to read Pi payment before completion (${current.response.status})`);
   if (current.status.cancelled || current.status.user_cancelled) return transitionPayoutOperation(env, operation.operation_key, PAYOUT_ACTIVE_STATES, 'cancelled', { error: 'Pi payment was cancelled' });
+  try {
+    await validateA2UPayment(env, operation, current.payment);
+  } catch (error) {
+    return markPayoutReconciliationRequired(env, operation, error.message || 'Pi A2U payment validation failed');
+  }
   const currentTxid = current.payment?.transaction?.txid || operation.txid;
-  if (current.status.developer_completed) return persistCompletedPayout(env, operation, operation.pi_payment_id, currentTxid);
+  if (current.status.developer_completed) return persistCompletedPayout(env, operation, operation.pi_payment_id, currentTxid, current.payment);
   if (!currentTxid) return transitionPayoutOperation(env, operation.operation_key, ['approved', 'completing'], 'approved');
   operation = await transitionPayoutOperation(env, operation.operation_key, ['approved', 'reconciliation_required'], 'completing', { txid: currentTxid });
   const beforeComplete = await fetchPiPayment(env, operation.pi_payment_id);
   if (!beforeComplete.response.ok) return markPayoutReconciliationRequired(env, operation, `Unable to reconcile Pi payment before complete (${beforeComplete.response.status})`);
-  if (beforeComplete.status.developer_completed) return persistCompletedPayout(env, operation, operation.pi_payment_id, beforeComplete.payment?.transaction?.txid || currentTxid);
+  try {
+    await validateA2UPayment(env, operation, beforeComplete.payment);
+  } catch (error) {
+    return markPayoutReconciliationRequired(env, operation, error.message || 'Pi A2U payment validation failed');
+  }
+  if (beforeComplete.status.developer_completed) return persistCompletedPayout(env, operation, operation.pi_payment_id, beforeComplete.payment?.transaction?.txid || currentTxid, beforeComplete.payment);
   let completionResponse;
   let completion;
   try {
@@ -190,7 +235,15 @@ async function completePayoutOperation(env, operation) {
     if (afterError?.response?.ok && afterError.status.developer_completed) return persistCompletedPayout(env, operation, operation.pi_payment_id, afterError.payment?.transaction?.txid || currentTxid);
     return markPayoutReconciliationRequired(env, operation, piErrorMessage(completion, 'Pi completion requires reconciliation'));
   }
-  return persistCompletedPayout(env, operation, operation.pi_payment_id, completion?.transaction?.txid || completion?.status?.txid || currentTxid);
+  const afterComplete = await fetchPiPayment(env, operation.pi_payment_id).catch(() => null);
+  if (!afterComplete?.response?.ok) return markPayoutReconciliationRequired(env, operation, 'Pi A2U completion could not be re-verified');
+  try {
+    await validateA2UPayment(env, operation, afterComplete.payment);
+  } catch (error) {
+    return markPayoutReconciliationRequired(env, operation, error.message || 'Pi A2U payment validation failed after completion');
+  }
+  const verifiedTxid = afterComplete.payment?.transaction?.txid || completion?.transaction?.txid || completion?.status?.txid || currentTxid;
+  return persistCompletedPayout(env, operation, operation.pi_payment_id, verifiedTxid, afterComplete.payment);
 }
 
 async function resumePayoutOperation(env, operation) {
@@ -829,7 +882,7 @@ async function adminRoute(request, env, path) {
     const amount = Number(requestedAmount.toFixed(4));
     if (amount <= 0 || amount > availableBalance) return json({ error: `مبلغ درخواستی (${amount} π) از موجودی واقعی کارمزدها (${availableBalance.toFixed(4)} π) بیشتر است.` }, 400, request, env);
     const targetWallet = String(body?.walletAddress || '').trim();
-    if (targetWallet && !/^[A-Za-z0-9_.-]{12,70}$/.test(targetWallet)) return json({ error: 'فرمت آدرس کیف پول پای نامعتبر است.' }, 400, request, env);
+    if (targetWallet) return json({ error: 'آدرس کیف پول مستقیم قابل تعیین نیست؛ A2U فقط به کیف پول فعلی کاربر احراز‌شده از طریق Pi UID پرداخت می‌کند.' }, 400, request, env);
     const operationKey = payoutIdempotencyKey(request, body);
     if (!operationKey) return json({ error: 'Idempotency-Key برای پرداخت الزامی است.' }, 400, request, env);
     let claim = await claimPayoutOperation(env, operationKey, { amount, userId: user.id, recipient: targetWallet || user.username, leaseOwner: request.headers.get('X-Payout-Lease-Owner') || body?.leaseOwner || null });
@@ -850,7 +903,7 @@ async function adminRoute(request, env, path) {
       const paymentPayload = {
         amount,
         memo: String(body?.memo || `Rentora Treasury Payout to ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username}`).slice(0, 120),
-        metadata: { type: 'admin_treasury_payout', operationKey, adminUid: user.pi_uid, adminUsername: user.username, targetWallet: targetWallet || undefined, requestedAt: now() },
+        metadata: { type: 'admin_treasury_payout', operationKey, adminUid: user.pi_uid, adminUsername: user.username, requestedAt: now() },
         uid: user.pi_uid
       };
       operation = await createPayoutPayment(env, operation, claim.leaseOwner || operation.lease_owner, paymentPayload);
