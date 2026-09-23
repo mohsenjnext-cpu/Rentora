@@ -259,7 +259,12 @@ async function resumePayoutOperation(env, operation) {
     const current = await fetchPiPayment(env, operation.pi_payment_id);
     if (!current.response.ok) return markPayoutReconciliationRequired(env, operation, `Unable to read Pi payment before approval (${current.response.status})`);
     if (current.status.cancelled || current.status.user_cancelled) return transitionPayoutOperation(env, operation.operation_key, ['approving'], 'cancelled', { error: 'Pi payment was cancelled' });
-    if (current.status.developer_completed) return persistCompletedPayout(env, operation, operation.pi_payment_id, current.payment?.transaction?.txid);
+    try {
+      await validateA2UPayment(env, operation, current.payment);
+    } catch (error) {
+      return markPayoutReconciliationRequired(env, operation, error.message || 'Pi A2U payment validation failed before approval');
+    }
+    if (current.status.developer_completed) return persistCompletedPayout(env, operation, operation.pi_payment_id, current.payment?.transaction?.txid, current.payment);
     if (!current.status.developer_approved) {
       let approvedResponse;
       let approved;
@@ -764,7 +769,14 @@ async function autoResolveIncompleteServerPayments(env, user) {
       const current = await fetchPiPayment(env, pid);
       if (!current.response.ok) { await markPayoutReconciliationRequired(env, operation, 'Incomplete payment could not be fetched'); await enqueuePayoutReconciliation(env, payment, 'Incomplete payment GET failed', metadata); continue; }
       if (current.status.cancelled || current.status.user_cancelled) { await transitionPayoutOperation(env, operation.operation_key, PAYOUT_ACTIVE_STATES, 'cancelled', { error: 'Pi incomplete payment was cancelled' }); continue; }
-      if (current.status.developer_completed) { await persistCompletedPayout(env, operation, pid, current.payment?.transaction?.txid); continue; }
+      if (current.status.developer_completed) { await persistCompletedPayout(env, operation, pid, current.payment?.transaction?.txid, current.payment); continue; }
+      try {
+        await validateA2UPayment(env, operation, current.payment);
+      } catch (error) {
+        await markPayoutReconciliationRequired(env, operation, error.message || 'Pi A2U payment validation failed during recovery');
+        await enqueuePayoutReconciliation(env, current.payment, error.message || 'Incomplete payout payment failed validation', metadata);
+        continue;
+      }
       if (current.status.developer_approved || current.status.transaction_verified) {
         if (operation.status === 'pi_created') operation = await transitionPayoutOperation(env, operation.operation_key, ['pi_created'], 'approving', { piPaymentId: pid });
         if (operation.status === 'approving') await transitionPayoutOperation(env, operation.operation_key, ['approving'], 'approved', { piPaymentId: pid, txid: current.payment?.transaction?.txid || null });

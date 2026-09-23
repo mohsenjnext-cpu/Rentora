@@ -154,7 +154,7 @@ test('behavior: correlated incomplete payment recovers create/persist crash with
   const claim = await hooks.claimPayoutOperation(env(db), 'op', { amount: 5, userId: 'u', recipient: 'r' });
   db.operations[0].status = 'creating';
   const incomplete = { identifier: 'pi-1', metadata: { type: 'admin_treasury_payout', operationKey: 'op' } };
-  const calls = piHarness({ incomplete: [incomplete], get: { 'pi-1': { status: { developer_approved: true }, transaction: { txid: 'tx-1' } } } });
+  const calls = piHarness({ incomplete: [incomplete], get: { 'pi-1': { identifier: 'pi-1', user_uid: 'uid-u', amount: 5, direction: 'app_to_user', network: 'Pi Testnet', metadata: { type: 'admin_treasury_payout', operationKey: 'op' }, status: { developer_approved: true }, transaction: { txid: 'tx-1' } } } });
   await hooks.autoResolveIncompleteServerPayments(env(db), { pi_uid: 'u' });
   assert.equal(db.operations[0].pi_payment_id, 'pi-1');
   assert.equal(db.operations[0].status, 'approved');
@@ -171,7 +171,7 @@ test('behavior: duplicate operation key creates one operation', async () => {
 
 test('behavior: already approved skips approve and completes without creating payment', async () => {
   const db = new FakeD1({ operations: [{ operation_key: 'op', status: 'pi_created', amount: 2, user_id: 'u', recipient: 'r', pi_payment_id: 'pi-1', txid: null }] });
-  const calls = piHarness({ get: { 'pi-1': { status: { developer_approved: true }, transaction: { txid: 'tx-1' } } } });
+  const calls = piHarness({ get: { 'pi-1': { identifier: 'pi-1', user_uid: 'uid-u', amount: 2, direction: 'app_to_user', network: 'Pi Testnet', metadata: { type: 'admin_treasury_payout', operationKey: 'op' }, status: { developer_approved: true }, transaction: { txid: 'tx-1' } } } });
   await hooks.resumePayoutOperation(env(db), db.operations[0]);
   assert.equal(calls.filter((call) => call.path.endsWith('/approve')).length, 0);
   assert.equal(calls.filter((call) => call.path.endsWith('/payments') && call.method === 'POST').length, 0);
@@ -180,7 +180,7 @@ test('behavior: already approved skips approve and completes without creating pa
 test('behavior: Current payment is already approved reconciles safely', async () => {
   const db = new FakeD1({ operations: [{ operation_key: 'op', status: 'pi_created', amount: 2, user_id: 'u', recipient: 'r', pi_payment_id: 'pi-1', txid: null }] });
   let reads = 0;
-  const calls = piHarness({ get: () => (++reads === 1 ? { status: {} } : { status: { developer_approved: true }, transaction: { txid: 'tx-1' } }), approve: () => response({ error: 'Current payment is already approved' }, false, 409) });
+  const calls = piHarness({ get: () => (++reads === 1 ? { identifier: 'pi-1', user_uid: 'uid-u', amount: 2, direction: 'app_to_user', network: 'Pi Testnet', metadata: { type: 'admin_treasury_payout', operationKey: 'op' }, status: {}, transaction: { txid: 'tx-1' } } : { identifier: 'pi-1', user_uid: 'uid-u', amount: 2, direction: 'app_to_user', network: 'Pi Testnet', metadata: { type: 'admin_treasury_payout', operationKey: 'op' }, status: { developer_approved: true }, transaction: { txid: 'tx-1' } }), approve: () => response({ error: 'Current payment is already approved' }, false, 409) });
   await hooks.resumePayoutOperation(env(db), db.operations[0]);
   assert.equal(calls.filter((call) => call.path.endsWith('/approve')).length, 1);
   assert.equal(calls.filter((call) => call.path.endsWith('/payments') && call.method === 'POST').length, 0);
