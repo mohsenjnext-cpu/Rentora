@@ -99,7 +99,7 @@ async function sha256(val) {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-test('CORS: OPTIONS preflight permits cross-origin requests when CORS_ORIGIN is empty', async () => {
+test('CORS: OPTIONS preflight is fail-closed when CORS_ORIGIN is empty', async () => {
   const d1 = createMockD1();
   const env = createMockEnv(d1);
   const req = new Request('https://rentora.workers.dev/api/payments/approve', {
@@ -113,7 +113,8 @@ test('CORS: OPTIONS preflight permits cross-origin requests when CORS_ORIGIN is 
 
   const res = await gateway.fetch(req, env, {});
   assert.equal(res.status, 204);
-  assert.equal(res.headers.get('Access-Control-Allow-Origin'), 'https://sandbox.minepi.com');
+  // Fail-closed: empty CORS_ORIGIN must NOT return allow-all or reflected origin
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), null);
 });
 
 test('Auth: Normal authenticated user can access GET /api/auth/me without 403 Forbidden', async () => {

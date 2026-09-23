@@ -12,20 +12,23 @@ const MAX_BODY_BYTES = 16 * 1024;
 
 function now() { return new Date().toISOString(); }
 function cleanUsername(value) { return String(value || '').replace(/^@/, '').trim().toLowerCase(); }
-function isOriginAllowed(origin, requestUrl, env) {
+function parseAllowedOrigins(env) {
+  return String(env?.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+function isOriginAllowed(origin, env) {
+  if (!origin) return false;
+  const configured = parseAllowedOrigins(env);
+  if (configured.length === 0) return false;
+  if (configured.includes('*')) return false;
+  return configured.includes(origin);
+}
+function isRequestOriginAllowed(origin, env) {
   if (!origin) return true;
-  try {
-    const requestOrigin = new URL(requestUrl).origin;
-    if (origin === requestOrigin) return true;
-  } catch (_) {}
-  const configured = (env?.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
-  if (configured.length === 0 || configured.includes('*') || configured.includes(origin)) return true;
-  return false;
+  return isOriginAllowed(origin, env);
 }
 function jsonResponse(data, status, env, origin) {
-  const allowOrigin = origin || env?.CORS_ORIGIN || '';
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=()' };
-  if (allowOrigin) { headers['Access-Control-Allow-Origin'] = allowOrigin; headers['Vary'] = 'Origin'; }
+  if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
   return new Response(JSON.stringify(data), { status: status ?? 200, headers });
 }
 function errorResponse(message, status, env, extra, origin) { return jsonResponse({ error: message, ...(extra || {}) }, status ?? 400, env, origin); }
@@ -781,19 +784,15 @@ function validatePiPayment(payment, intent, user) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url); const path = url.pathname; const method = request.method; const origin = request.headers.get('Origin');
-    const allowed = isOriginAllowed(origin, request.url, env);
+    const allowed = origin ? isOriginAllowed(origin, env) : true;
     if (method === 'OPTIONS') {
-      if (!allowed) return new Response(null, { status: 403 });
-      return new Response(null, {
-        status: 204,
-        headers: {
-          'Access-Control-Allow-Origin': origin || '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          'Access-Control-Max-Age': '86400',
-          'Vary': 'Origin'
-        }
-      });
+      const headers = {
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Max-Age': '86400'
+      };
+      if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+      return new Response(null, { status: 204, headers });
     }
     if (origin && !allowed) return errorResponse('Origin not allowed', 403, env, undefined, origin);
     try {
@@ -1491,8 +1490,7 @@ export default {
           'Referrer-Policy': 'no-referrer',
           'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
         };
-        const allowOrigin = origin || env?.CORS_ORIGIN || '';
-        if (allowOrigin) { headers['Access-Control-Allow-Origin'] = allowOrigin; headers['Vary'] = 'Origin'; }
+        if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
 
         return new Response(JSON.stringify({
           success: true,
@@ -1549,8 +1547,7 @@ export default {
           'Referrer-Policy': 'no-referrer',
           'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
         };
-        const allowOrigin = origin || env?.CORS_ORIGIN || '';
-        if (allowOrigin) { headers['Access-Control-Allow-Origin'] = allowOrigin; headers['Vary'] = 'Origin'; }
+        if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
 
         return new Response(JSON.stringify({
           success: true,
@@ -1665,7 +1662,7 @@ export default {
           'Referrer-Policy': 'no-referrer',
           'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
         };
-        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+        if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
         return new Response(JSON.stringify({ success: true, conversations }), { status: 200, headers });
       }
 
@@ -1781,7 +1778,7 @@ export default {
           'Referrer-Policy': 'no-referrer',
           'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
         };
-        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+        if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
 
         return new Response(JSON.stringify({
           success: true,
@@ -1865,7 +1862,7 @@ export default {
           'Referrer-Policy': 'no-referrer',
           'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
         };
-        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+        if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
 
         return new Response(JSON.stringify({
           success: true,
@@ -1955,7 +1952,7 @@ export default {
           'Referrer-Policy': 'no-referrer',
           'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
         };
-        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+        if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
 
         return new Response(JSON.stringify({
           success: true,
@@ -2066,7 +2063,7 @@ export default {
           'Referrer-Policy': 'no-referrer',
           'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
         };
-        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+        if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
 
         return new Response(JSON.stringify({
           success: true,
@@ -2137,7 +2134,7 @@ export default {
           'Cache-Control': 'public, max-age=15, stale-while-revalidate=30',
           'X-Content-Type-Options': 'nosniff'
         };
-        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+        if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
 
         return new Response(JSON.stringify({
           success: true,
@@ -2201,7 +2198,7 @@ export default {
           'Cache-Control': 'public, max-age=15, stale-while-revalidate=30',
           'X-Content-Type-Options': 'nosniff'
         };
-        if (origin) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
+        if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
 
         return new Response(JSON.stringify({
           success: true,

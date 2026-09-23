@@ -12,8 +12,7 @@ function isOriginAllowed(origin, requestUrl, env) {
 }
 function json(data, status, env, origin) {
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
-  const allowOrigin = origin || env?.CORS_ORIGIN || '';
-  if (allowOrigin) { headers['Access-Control-Allow-Origin'] = allowOrigin; headers.Vary = 'Origin'; }
+  if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers.Vary = 'Origin'; }
   return new Response(JSON.stringify(data), { status, headers });
 }
 function error(message, status, env, extra = {}, origin) { return json({ error: message, ...extra }, status, env, origin); }
@@ -149,7 +148,7 @@ async function complete(request, env) {
   return json({ completed: true, paymentId: body.paymentId, txid: body.txid, recovered: alreadyCompleted }, 200, env);
 }
 export default { async fetch(request, env, ctx) {
-  const url = new URL(request.url), origin = request.headers.get('Origin'); if (!isOriginAllowed(origin, request.url, env)) return error('Origin not allowed', 403, env, {}, origin);
+  const url = new URL(request.url), origin = request.headers.get('Origin'); if (origin && !isOriginAllowed(origin, env)) return error('Origin not allowed', 403, env, {}, origin);
   if (request.method === 'POST' && url.pathname === '/api/sync/rental') { try { return await createRental(request, env, origin); } catch (err) { return error(err?.message || 'Server error', Number(err?.status) || 500, env, {}, origin); } }
   if (request.method === 'POST' && url.pathname === '/api/sync/rental/status') { try { return await updateRentalStatus(request, env, origin); } catch (err) { return error(err?.message || 'Server error', Number(err?.status) || 500, env, {}, origin); } }
   if (request.method === 'POST' && url.pathname === '/api/payments/approve') { try { return await approve(request, env); } catch (err) { return error(err?.message || 'Server error', Number(err?.status) || 500, env, {}, origin); } }
