@@ -1,40 +1,15 @@
-# Rentora Backend API - Pi Network Marketplace
+# Rentora Legacy Express Reference
 
-Production-ready backend server for Rentora P2P Rental Marketplace integrated with official Pi Network Platform SDK v2.0.
+`server.js` in this directory is retained only for legacy development/reference use. It is **not** a production deployment target. Rentora production runs the Cloudflare Worker configured by the repository-root `wrangler.toml` (`worker-gateway2.js`).
 
-## 🚀 Quick Start (Production)
+- Do not deploy this Express server or run it with PM2 in production.
+- `npm start` intentionally exits without starting Express.
+- Use the root Worker deployment workflow for production.
+- Secrets, including `PI_API_KEY`, must remain in the deployment secret store and must never be committed.
 
-### 1. Install Dependencies
-```bash
-npm install --production
-```
+## Local legacy development only
 
-### 2. Configure Environment
-Copy `.env.example` to `.env` and fill in your official Pi Developer Portal Server API Key:
-```bash
-cp .env.example .env
-```
-
-Edit `.env`:
-```env
-PORT=3000
-NODE_ENV=production
-PI_API_URL=https://api.minepi.com/v2
-PI_API_KEY=your_pi_server_api_key_from_develop_pi
-APP_URL=https://your-domain.com
-```
-
-### 3. Start the Server
-```bash
-# Direct run
-npm start
-
-# Or with PM2 (Recommended for 24/7 uptime)
-npm install -g pm2
-pm2 start server.js --name "rentora-api"
-pm2 save
-pm2 startup
-```
+For isolated legacy debugging, install this directory's dependencies and use `npm run dev`. This does not represent the production payment, session, or D1/KV runtime.
 
 ## 📡 API Endpoints List
 

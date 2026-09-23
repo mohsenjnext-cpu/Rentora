@@ -51,14 +51,24 @@ function createMockD1() {
               return { results: [] };
             },
             async run() {
-              if (sql.includes('UPDATE payment_intents SET pi_payment_id=?1')) {
+              if (sql.includes("UPDATE payment_intents SET pi_payment_id=?1,pi_txid=?2,status='completed'")) {
+                const intent = intents.find(i => i.id === args[3]);
+                if (intent) { intent.pi_payment_id = args[0]; intent.pi_txid = args[1]; intent.status = 'completed'; return { meta: { changes: 1 } }; }
+              }
+              if (sql.includes("UPDATE payment_intents SET pi_payment_id=?1,status='approved'")) {
                 const intent = intents.find(i => i.id === args[2]);
-                if (intent) {
-                  intent.pi_payment_id = args[0];
-                  intent.status = 'approved';
-                  intent.updated_at = args[1];
-                  return { meta: { changes: 1 } };
-                }
+                if (intent) { intent.pi_payment_id = args[0]; intent.status = 'approved'; return { meta: { changes: 1 } }; }
+              }
+              if (sql.includes("UPDATE rentals SET payment_status='completed'")) {
+                const rental = rentals.find(r => r.id === args[1]);
+                if (rental) { rental.payment_status = 'completed'; rental.status = 'confirmed'; }
+              }
+              if (sql.includes("UPDATE rentals SET status='payment_approved'")) {
+                const rental = rentals.find(r => r.id === args[1]);
+                if (rental) rental.status = 'payment_approved';
+              }
+              if (sql.includes('INSERT OR IGNORE INTO transactions')) {
+                if (!transactions.some(t => t.pi_payment_id === args[2] || t.pi_txid === args[3])) transactions.push({ pi_payment_id: args[2], pi_txid: args[3] });
               }
               return { meta: { changes: 1 } };
             }
@@ -99,7 +109,7 @@ async function sha256(val) {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-test('CORS: OPTIONS preflight permits cross-origin requests when CORS_ORIGIN is empty', async () => {
+test('CORS: OPTIONS preflight rejects a cross-origin request when CORS_ORIGIN is empty', async () => {
   const d1 = createMockD1();
   const env = createMockEnv(d1);
   const req = new Request('https://rentora.workers.dev/api/payments/approve', {
@@ -112,8 +122,154 @@ test('CORS: OPTIONS preflight permits cross-origin requests when CORS_ORIGIN is 
   });
 
   const res = await gateway.fetch(req, env, {});
+  assert.equal(res.status, 403);
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), null);
+});
+
+
+test('CORS: OPTIONS preflight permits an explicitly configured origin', async () => {
+  const d1 = createMockD1();
+  const env = createMockEnv(d1);
+  env.CORS_ORIGIN = 'https://app.example';
+  const req = new Request('https://rentora.workers.dev/api/payments/approve', {
+    method: 'OPTIONS',
+    headers: { Origin: 'https://app.example', 'Access-Control-Request-Method': 'POST' }
+  });
+  const res = await gateway.fetch(req, env, {});
   assert.equal(res.status, 204);
-  assert.equal(res.headers.get('Access-Control-Allow-Origin'), 'https://sandbox.minepi.com');
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), 'https://app.example');
+});
+
+test('Incomplete payment: anonymous requests are rejected before Pi API access', async () => {
+  const env = createMockEnv(createMockD1());
+  const req = new Request('https://rentora.workers.dev/api/payments/incomplete', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paymentId: 'pay_1', paymentIntentId: 'pii_301' })
+  });
+  const res = await gateway.fetch(req, env, {});
+  assert.equal(res.status, 401);
+});
+
+test('Incomplete payment: another user cannot recover a renter payment intent', async () => {
+  const d1 = createMockD1();
+  const env = createMockEnv(d1);
+  const tokenHash = await sha256('admin_token');
+  await env.RENTORA_KV.put(`session:${tokenHash}`, JSON.stringify({ uid: 'avina60' }));
+  const req = new Request('https://rentora.workers.dev/api/payments/incomplete', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer admin_token' },
+    body: JSON.stringify({ paymentId: 'pay_1', paymentIntentId: 'pii_301' })
+  });
+  const res = await gateway.fetch(req, env, {});
+  assert.equal(res.status, 404);
+});
+
+test('Incomplete payment: mismatched Pi metadata is rejected for the authenticated intent', async () => {
+  const d1 = createMockD1();
+  const env = createMockEnv(d1);
+  const tokenHash = await sha256('renter_incomplete_token');
+  await env.RENTORA_KV.put(`session:${tokenHash}`, JSON.stringify({ uid: 'pi_renter_123' }));
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    identifier: 'pay_1', user: { uid: 'pi_renter_123' }, amount: 0.0002,
+    metadata: { paymentIntentId: 'forged_intent', rentalId: 'rent_201' }, status: {}
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  try {
+    const req = new Request('https://rentora.workers.dev/api/payments/incomplete', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer renter_incomplete_token' },
+      body: JSON.stringify({ paymentId: 'pay_1', paymentIntentId: 'pii_301' })
+    });
+    const res = await gateway.fetch(req, env, {});
+    assert.equal(res.status, 409);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+function validPiPayment(overrides = {}) {
+  return {
+    identifier: 'pay_1',
+    user: { uid: 'pi_renter_123' },
+    amount: 0.0002,
+    memo: 'Rentora Fee #rent_201',
+    metadata: { paymentIntentId: 'pii_301', rentalId: 'rent_201' },
+    status: {},
+    ...overrides
+  };
+}
+
+async function authenticatedIncompleteRequest(env, body = { paymentId: 'pay_1', paymentIntentId: 'pii_301' }) {
+  const token = 'renter_recovery_token';
+  await env.RENTORA_KV.put(`session:${await sha256(token)}`, JSON.stringify({ uid: 'pi_renter_123' }));
+  return new Request('https://rentora.workers.dev/api/payments/incomplete', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body)
+  });
+}
+
+async function withPiPayment(payment, callback) {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => { calls += 1; return new Response(JSON.stringify(payment), { status: 200, headers: { 'Content-Type': 'application/json' } }); };
+  try { return await callback(() => calls); } finally { globalThis.fetch = originalFetch; }
+}
+
+test('Incomplete payment: invalid or expired session is rejected', async () => {
+  const env = createMockEnv(createMockD1());
+  const req = new Request('https://rentora.workers.dev/api/payments/incomplete', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer expired' }, body: JSON.stringify({ paymentId: 'pay_1', paymentIntentId: 'pii_301' }) });
+  assert.equal((await gateway.fetch(req, env, {})).status, 401);
+});
+
+for (const [name, payment, expectedStatus = 409] of [
+  ['missing payer UID', validPiPayment({ user: undefined })],
+  ['wrong payer UID', validPiPayment({ user: { uid: 'other_pioneer' } }), 403],
+  ['missing rentalId', validPiPayment({ metadata: { paymentIntentId: 'pii_301' } })],
+  ['wrong rentalId', validPiPayment({ metadata: { paymentIntentId: 'pii_301', rentalId: 'other_rental' } })],
+  ['missing memo', validPiPayment({ memo: '' })],
+  ['wrong memo', validPiPayment({ memo: 'forged memo' })],
+  ['wrong amount', validPiPayment({ amount: 0.5 })],
+  ['forged metadata', validPiPayment({ metadata: { paymentIntentId: 'forged', rentalId: 'rent_201' } })]
+]) {
+  test(`Incomplete payment: ${name} is rejected`, async () => {
+    const env = createMockEnv(createMockD1());
+    const req = await authenticatedIncompleteRequest(env);
+    await withPiPayment(payment, async () => assert.equal((await gateway.fetch(req, env, {})).status, expectedStatus));
+  });
+}
+
+test('Incomplete payment: completed intent returns without Pi access or duplicate lifecycle writes', async () => {
+  const d1 = createMockD1();
+  d1.intents[0].status = 'completed'; d1.intents[0].pi_payment_id = 'pay_1'; d1.intents[0].pi_txid = 'tx_1';
+  d1.rentals[0].status = 'confirmed'; d1.rentals[0].payment_status = 'completed'; d1.transactions.push({ pi_payment_id: 'pay_1', pi_txid: 'tx_1' });
+  const env = createMockEnv(d1);
+  const req = await authenticatedIncompleteRequest(env);
+  await withPiPayment(validPiPayment({ status: { developer_completed: true }, transaction: { txid: 'tx_1' } }), async (calls) => {
+    const res = await gateway.fetch(req, env, {}); const data = await res.json();
+    assert.equal(res.status, 200); assert.equal(data.idempotent, true); assert.equal(calls(), 0);
+  });
+  assert.equal(d1.transactions.length, 1); assert.equal(d1.rentals[0].status, 'confirmed');
+});
+
+test('Incomplete payment: repeated completed recovery is idempotent and does not duplicate transaction or rental lifecycle', async () => {
+  const d1 = createMockD1(); const env = createMockEnv(d1);
+  await withPiPayment(validPiPayment({ status: { developer_completed: true }, transaction: { txid: 'tx_1' } }), async (calls) => {
+    const first = await gateway.fetch(await authenticatedIncompleteRequest(env), env, {});
+    assert.equal(first.status, 200); assert.equal(calls(), 1);
+    const second = await gateway.fetch(await authenticatedIncompleteRequest(env), env, {});
+    const data = await second.json(); assert.equal(second.status, 200); assert.equal(data.idempotent, true); assert.equal(calls(), 1);
+  });
+  assert.equal(d1.transactions.length, 1); assert.equal(d1.intents[0].status, 'completed'); assert.equal(d1.rentals[0].status, 'confirmed');
+});
+
+test('CORS: actual unauthorized cross-origin request is rejected server-side', async () => {
+  const env = createMockEnv(createMockD1()); env.CORS_ORIGIN = 'https://allowed.example';
+  const req = new Request('https://rentora.workers.dev/api/health', { headers: { Origin: 'https://forbidden.example' } });
+  assert.equal((await gateway.fetch(req, env, {})).status, 403);
+});
+
+test('CORS: same-origin actual request remains allowed', async () => {
+  const env = createMockEnv(createMockD1());
+  const req = new Request('https://rentora.workers.dev/api/health', { headers: { Origin: 'https://rentora.workers.dev' } });
+  assert.equal((await gateway.fetch(req, env, {})).status, 200);
 });
 
 test('Auth: Normal authenticated user can access GET /api/auth/me without 403 Forbidden', async () => {

@@ -5,7 +5,7 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node -e \"console.error('Production runtime is the Cloudflare Worker; use npm run dev for local frontend development.'); process.exit(1)\"",
     "dev": "node --watch server.js"
   },
   "dependencies": {

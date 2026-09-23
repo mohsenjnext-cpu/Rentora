@@ -42,7 +42,7 @@ Rentora follows a **Server-Authoritative, Edge-First Architecture** designed for
 ```
 /Rentora
  ├── src/                   # React 19 Frontend (Components, Contexts, Pages, Services)
- ├── backend/               # Node.js/Express backend server for containerized environments
+ ├── backend/               # Legacy Express reference; not a production runtime
  ├── db/                    # Authoritative D1 Schema and Migrations
  │   ├── migrations/        # Incremental SQL migration scripts
  │   └── schema.sql         # Bootstrap D1 schema with triggers and overlap guards
@@ -90,6 +90,10 @@ npm run build
 ---
 
 ## ☁️ Cloudflare Deployment
+
+### Production Runtime
+
+Cloudflare Worker (`worker-gateway2.js`) is the only production runtime. Do not deploy `server.js` or `backend/server.js`; their `npm start` commands intentionally exit without starting a server.
 
 ### 1. Configure Cloudflare Resources
 

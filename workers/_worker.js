@@ -19,11 +19,12 @@ function isOriginAllowed(origin, requestUrl, env) {
     if (origin === requestOrigin) return true;
   } catch (_) {}
   const configured = (env?.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
-  if (configured.length === 0 || configured.includes('*') || configured.includes(origin)) return true;
+  if (configured.length === 0) return false;
+  if (configured.includes(origin)) return true;
   return false;
 }
 function jsonResponse(data, status, env, origin) {
-  const allowOrigin = origin || env?.CORS_ORIGIN || '';
+  const allowOrigin = origin || '';
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=()' };
   if (allowOrigin) { headers['Access-Control-Allow-Origin'] = allowOrigin; headers['Vary'] = 'Origin'; }
   return new Response(JSON.stringify(data), { status: status ?? 200, headers });
@@ -599,8 +600,9 @@ function parseMetadata(value) { if (!value) return {}; try { return JSON.parse(v
 function userView(row, env) {
   const meta = parseMetadata(row.metadata);
   const isAdm = env ? (isAdmin(row.pi_uid, env) || isAdmin(row.username, env)) : row.role === 'admin';
-  const isVerifiedPioneer = meta.kycStatus === 'verified' || row.kyc_status === 'verified';
-  const resolvedKycStatus = isVerifiedPioneer ? 'verified' : (meta.kycStatus === 'unverified' ? 'unverified' : 'unknown');
+  // Pi KYC is not asserted by a documented server-side source in this Worker.
+  // adminKycStatus is a separate moderation label and never represents Pi verification.
+  const resolvedKycStatus = 'unverified';
   return {
     ...meta,
     id: row.id,
@@ -766,9 +768,7 @@ function validatePiPayment(payment, intent, user) {
     throw Object.assign(new Error('Mainnet payments are not permitted on Pi Testnet'), { status: 409 });
   }
 
-  if (payment?.memo && intent?.memo && String(payment.memo).trim() !== String(intent.memo).trim()) {
-    throw Object.assign(new Error('Pi payment memo mismatch'), { status: 409 });
-  }
+  if (!payment?.memo || !intent?.memo || String(payment.memo).trim() !== String(intent.memo).trim()) throw Object.assign(new Error('Pi payment memo mismatch'), { status: 409 });
 
   if (typeof payment?.status === 'object' && payment?.status !== null) {
     if (payment.status.developer_completed) return 'completed';
@@ -1110,16 +1110,17 @@ export default {
         if (!targetUserId) return errorResponse('Missing user ID', 400, env, undefined, origin);
         const { user } = await requireAdmin(request, env);
         const body = await readJson(request);
-        const newKycStatus = String(body?.kycStatus || '').trim().toLowerCase();
+        const newKycStatus = String(body?.adminKycStatus || '').trim().toLowerCase();
         if (!['verified', 'unverified', 'unknown'].includes(newKycStatus)) {
-          return errorResponse("kycStatus must be 'verified', 'unverified', or 'unknown'", 400, env, undefined, origin);
+          return errorResponse("adminKycStatus must be 'verified', 'unverified', or 'unknown'", 400, env, undefined, origin);
         }
         const target = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1 OR pi_uid=?1 OR lower(username)=lower(?1) LIMIT 1").bind(targetUserId).first();
         if (!target) return errorResponse('User not found', 404, env, undefined, origin);
         const targetMeta = parseMetadata(target.metadata);
-        const updatedMeta = { ...targetMeta, kycStatus: newKycStatus };
+        // This is an admin-managed moderation label, not Pi-verified KYC.
+        const updatedMeta = { ...targetMeta, adminKycStatus: newKycStatus };
         await env.RENTORA_DB.prepare("UPDATE users SET metadata=?1, updated_at=?2 WHERE id=?3").bind(JSON.stringify(updatedMeta), now(), target.id).run();
-        await recordAdminAuditLog(env, user, 'USER_KYC_UPDATED', { targetUser: target.username, kycStatus: newKycStatus });
+        await recordAdminAuditLog(env, user, 'USER_KYC_UPDATED', { targetUser: target.username, adminKycStatus: newKycStatus });
         const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
         return jsonResponse({ success: true, user: userView(updated, env) }, 200, env, origin);
       }
@@ -1150,53 +1151,11 @@ export default {
         const oldMeta = parseMetadata(existing?.metadata);
         const existingKyc = oldMeta?.kycStatus || existing?.kyc_status;
 
-        // Three-state KYC resolution: 'unknown' | 'verified' | 'unverified'
-        let kycStatus = 'unknown';
-        if (existingKyc === 'verified') {
-          // Never downgrade an already verified user on subsequent logins
-          kycStatus = 'verified';
-        } else {
-          const isExplicitlyVerified = Boolean(
-            piUser?.kyc_status === true ||
-            piUser?.kyc_status === 'verified' ||
-            piUser?.is_kyc === true ||
-            piUser?.kyc === true ||
-            piUser?.credentials?.kyc === true ||
-            body?.user?.kyc_status === true ||
-            body?.user?.kyc_status === 'verified' ||
-            body?.user?.is_kyc === true ||
-            body?.user?.kyc === true ||
-            body?.user?.credentials?.kyc === true ||
-            body?.kycStatus === 'verified' ||
-            (Array.isArray(piUser?.roles) && (
-              piUser.roles.includes('kyc') ||
-              piUser.roles.includes('kyced') ||
-              piUser.roles.includes('pioneer_kyc')
-            )) ||
-            (Array.isArray(body?.user?.roles) && (
-              body.user.roles.includes('kyc') ||
-              body.user.roles.includes('kyced') ||
-              body.user.roles.includes('pioneer_kyc')
-            ))
-          );
-          const isExplicitlyUnverified = Boolean(
-            piUser?.kyc_status === false ||
-            piUser?.kyc_status === 'unverified' ||
-            body?.user?.kyc_status === false ||
-            body?.user?.kyc_status === 'unverified' ||
-            body?.kycStatus === 'unverified'
-          );
-
-          if (isExplicitlyVerified) {
-            kycStatus = 'verified';
-          } else if (isExplicitlyUnverified) {
-            kycStatus = 'unverified';
-          } else if (existingKyc) {
-            kycStatus = existingKyc;
-          } else {
-            kycStatus = 'unknown';
-          }
-        }
+        // Pi's authenticated /me response is the only server-verified identity source.
+        // It does not provide a documented KYC assertion that this Worker can safely
+        // authorize against, so KYC remains unverified until a trusted server-side
+        // Pi KYC endpoint is available. Client payload claims are intentionally ignored.
+        const kycStatus = 'unverified';
 
         const loginCount = (Number(oldMeta.loginCount) || 0) + 1;
         const newMeta = {
@@ -1363,27 +1322,42 @@ export default {
         return jsonResponse({ completed: true, paymentId: body.paymentId, txid: body.txid, data: completion }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/payments/incomplete') {
+        const { user } = await requireUser(request, env);
         const body = await readJson(request);
         const paymentObj = body?.payment || {};
         const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
+        const paymentIntentId = String(body?.paymentIntentId || paymentObj?.metadata?.paymentIntentId || '').trim();
         const txid = String(body?.txid || paymentObj?.transaction?.txid || '').trim();
-        if (!paymentId) return jsonResponse({ handled: false, error: 'paymentId is required' }, 400, env, origin);
-        try {
-          const response = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
-          const payment = await response.json().catch(() => ({}));
-          if (response.ok) {
-            const resolvedTxid = txid || payment?.transaction?.txid;
-            if (payment?.status?.developer_completed) {
-              await env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE pi_payment_id=?3").bind(resolvedTxid || null, now(), paymentId).run().catch(() => {});
-            } else if (payment?.status?.transaction_verified && resolvedTxid) {
-              await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, { method: 'POST', body: JSON.stringify({ txid: resolvedTxid }) }).catch(() => {});
-              await env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE pi_payment_id=?3").bind(resolvedTxid, now(), paymentId).run().catch(() => {});
-            } else if (!payment?.status?.developer_approved) {
-              await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, { method: 'POST', body: '{}' }).catch(() => {});
-            }
-          }
-        } catch (_) {}
-        return jsonResponse({ handled: true }, 200, env, origin);
+        if (!paymentId || !paymentIntentId) return errorResponse('paymentId and paymentIntentId are required', 400, env, undefined, origin);
+        const intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(paymentIntentId, user.id).first();
+        if (!intent) return errorResponse('Payment intent not found', 404, env, undefined, origin);
+        if (intent.pi_payment_id && intent.pi_payment_id !== paymentId) return errorResponse('Payment ID does not match intent', 409, env, undefined, origin);
+        if (intent.status === 'completed') return jsonResponse({ handled: true, status: 'completed', paymentId: intent.pi_payment_id || paymentId, txid: intent.pi_txid || null, idempotent: true }, 200, env, origin);
+        const response = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
+        const payment = await response.json().catch(() => ({}));
+        if (!response.ok) return errorResponse('Unable to fetch Pi payment', 502, env, undefined, origin);
+        const status = validatePiPayment(payment, { ...intent, pi_payment_id: paymentId }, user);
+        if (status === 'cancelled') return errorResponse('Pi payment is cancelled', 409, env, undefined, origin);
+        const resolvedTxid = txid || payment?.transaction?.txid || null;
+        if (status === 'completed') {
+          if (!resolvedTxid) return errorResponse('Pi transaction ID is missing', 409, env, undefined, origin);
+          await env.RENTORA_DB.batch([
+            env.RENTORA_DB.prepare("UPDATE payment_intents SET pi_payment_id=?1,pi_txid=?2,status='completed',updated_at=?3 WHERE id=?4 AND user_id=?5").bind(paymentId, resolvedTxid, now(), intent.id, user.id),
+            env.RENTORA_DB.prepare("UPDATE rentals SET payment_status='completed',status='confirmed',updated_at=?1 WHERE id=?2").bind(now(), intent.rental_id),
+            env.RENTORA_DB.prepare("INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)").bind(`tx_${crypto.randomUUID()}`, intent.id, paymentId, resolvedTxid, user.id, intent.amount, now())
+          ]);
+          return jsonResponse({ handled: true, status: 'completed', paymentId, txid: resolvedTxid }, 200, env, origin);
+        }
+        if (status === 'approved') return jsonResponse({ handled: true, status: 'approved', paymentId }, 200, env, origin);
+        const approval = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, { method: 'POST', body: '{}' });
+        const approvalData = await approval.json().catch(() => ({}));
+        const alreadyApproved = approval.status === 400 && String(JSON.stringify(approvalData)).toLowerCase().includes('already');
+        if (!approval.ok && !alreadyApproved) return errorResponse('Pi payment approval failed', 502, env, undefined, origin);
+        await env.RENTORA_DB.batch([
+          env.RENTORA_DB.prepare("UPDATE payment_intents SET pi_payment_id=?1,status='approved',updated_at=?2 WHERE id=?3 AND user_id=?4 AND status IN ('created','approved')").bind(paymentId, now(), intent.id, user.id),
+          env.RENTORA_DB.prepare("UPDATE rentals SET status='payment_approved',updated_at=?1 WHERE id=?2 AND status IN ('pending_payment','payment_approved')").bind(now(), intent.rental_id)
+        ]);
+        return jsonResponse({ handled: true, status: 'approved', paymentId }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/sync/item') { const { user } = await requireUser(request, env); const item = await readJson(request);
         if (!item?.id || !String(item.title || '').trim()) return errorResponse('Invalid listing', 400, env, undefined, origin);
