@@ -105,3 +105,19 @@ test('required operational scenarios are represented by explicit safeguards', ()
   };
   for (const [name, pattern] of Object.entries(scenarios)) assert.match(gateway, pattern, name);
 });
+
+
+test('A2U payout binds Pi payment to operation recipient, amount, direction, network and metadata', () => {
+  assert.match(gateway, /validateA2UPayment/);
+  assert.match(gateway, /recipient uid does not match payout operation/);
+  assert.match(gateway, /payment amount does not match payout operation/);
+  assert.match(gateway, /payment direction is not app-to-user/);
+  assert.match(gateway, /payment is not on Pi Testnet/);
+  assert.match(gateway, /metadata does not match payout operation/);
+  assert.match(gateway, /Pi A2U completion could not be re-verified/);
+});
+
+test('A2U route does not accept a client-supplied wallet address as the payout authority', () => {
+  assert.match(gateway, /آدرس کیف پول مستقیم قابل تعیین نیست/);
+  assert.doesNotMatch(gateway, /targetWallet\s*:\s*targetWallet\s*\|\|\s*undefined/);
+});

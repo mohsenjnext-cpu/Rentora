@@ -23,6 +23,7 @@ class FakeD1 {
   }
 
   async first(sql, values) {
+    if (sql.includes('FROM users WHERE id')) return { pi_uid: values[0] === 'u' ? 'uid-u' : values[0] };
     if (sql.includes('FROM payout_operations') && sql.includes('operation_key')) return this.operations.find((op) => op.operation_key === values[0]) || null;
     if (sql.includes('FROM payout_operations') && sql.includes('pi_payment_id')) return this.operations.find((op) => op.pi_payment_id === values[0]) || null;
     if (sql.includes('FROM transactions')) return this.transactions.find((tx) => tx.pi_payment_id === values[0] || tx.pi_txid === values[1]) || null;
@@ -202,7 +203,7 @@ test('behavior: cancelled Pi payment moves operation to cancelled', async () => 
 
 test('behavior: already completed skips approve and complete and records one transaction', async () => {
   const db = new FakeD1({ operations: [{ operation_key: 'op', status: 'pi_created', amount: 2, user_id: 'u', recipient: 'r', pi_payment_id: 'pi-1', txid: null }] });
-  const calls = piHarness({ get: { 'pi-1': { status: { developer_completed: true }, transaction: { txid: 'tx-1' } } } });
+  const calls = piHarness({ get: { 'pi-1': { identifier: 'pi-1', user_uid: 'uid-u', amount: 2, direction: 'app_to_user', network: 'Pi Testnet', metadata: { type: 'admin_treasury_payout', operationKey: 'op' }, status: { developer_completed: true }, transaction: { txid: 'tx-1' } } } });
   await hooks.resumePayoutOperation(env(db), db.operations[0]);
   assert.equal(calls.filter((call) => call.path.endsWith('/approve')).length, 0);
   assert.equal(calls.filter((call) => call.path.endsWith('/complete')).length, 0);
@@ -243,8 +244,9 @@ test('behavior: orphan payout incomplete payment is queued, never silently skipp
 test('behavior: duplicate completion creates one transaction and remains completed', async () => {
   const db = new FakeD1({ operations: [{ operation_key: 'op', status: 'approved', amount: 2, user_id: 'u', recipient: 'r', pi_payment_id: 'pi-1', txid: 'tx-1' }] });
   const operation = db.operations[0];
-  await hooks.persistCompletedPayout(env(db), operation, 'pi-1', 'tx-1');
-  await hooks.persistCompletedPayout(env(db), db.operations[0], 'pi-1', 'tx-1');
+  const payment = { identifier: 'pi-1', user_uid: 'uid-u', amount: 2, direction: 'app_to_user', network: 'Pi Testnet', metadata: { type: 'admin_treasury_payout', operationKey: 'op' }, status: { developer_completed: true }, transaction: { txid: 'tx-1' } };
+  await hooks.persistCompletedPayout(env(db), operation, 'pi-1', 'tx-1', payment);
+  await hooks.persistCompletedPayout(env(db), db.operations[0], 'pi-1', 'tx-1', payment);
   assert.equal(db.transactions.length, 1);
   assert.equal(db.operations[0].status, 'completed');
 });
