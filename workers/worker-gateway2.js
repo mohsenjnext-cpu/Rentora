@@ -799,7 +799,11 @@ async function autoResolveIncompleteServerPayments(env, user) {
 }
 
 async function createPayoutPayment(env, operation, leaseOwner, paymentPayload) {
-  operation = await transitionPayoutOperation(env, operation.operation_key, ['reserved'], 'creating', { leaseOwner: leaseOwner || operation.lease_owner });
+  const requestedLeaseOwner = leaseOwner || operation.lease_owner;
+  operation = await transitionPayoutOperation(env, operation.operation_key, ['reserved'], 'creating', { leaseOwner: requestedLeaseOwner });
+  if (!operation || operation.status !== 'creating' || operation.lease_owner !== requestedLeaseOwner) {
+    return operation;
+  }
   let piRes;
   let created;
   try {
