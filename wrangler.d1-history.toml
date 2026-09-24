@@ -1,0 +1,8 @@
+name = "rentora-d1-history-test"
+compatibility_date = "2024-09-01"
+
+[[d1_databases]]
+binding = "RENTORA_DB"
+database_name = "rentora"
+database_id = "d8dcbee6-e958-461a-b746-b460f1adb8d5"
+migrations_dir = "db/migrations"

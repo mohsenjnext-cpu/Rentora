@@ -1,36 +1,48 @@
 # Rentora D1 migration policy
 
-## Current migration chain
+## Production migration lineage
 
-The repository now has a complete forward-only chain:
+The repository keeps two distinct D1 migration histories:
 
-- `0001_initial_schema.sql`: reconstructed from the original schema commit immediately before migration 0002.
-- `0002` through `0010`: historical schema evolution already present in the repository.
-- `0011_rental_overlap_policy.sql`: forward-only correction that aligns the historical 30-minute overlap trigger with the current 10-minute pending-payment policy.
+- `db/migrations/`: reconstructed historical schema evolution (`0001` through `0011`). This is an auditable reconstruction used for disposable/local full-chain testing.
+- `db/migrations-production/`: the migration lineage used by the live Rentora production D1 database.
 
-Wrangler is configured to discover migrations from `db/migrations`.
+The production database was originally bootstrapped with SQL/schema operations rather than a verified D1 migration ledger. Its live schema has been reconciled against the reconstructed chain and is already at the `0011` schema state. Its `d1_migrations` table is empty.
+
+Therefore the live database must **not** execute the historical `0001` through `0011` files. Doing so would attempt to recreate objects that already exist.
+
+## Production baseline
+
+`db/migrations-production/0001_baseline_existing_schema.sql` is an intentional no-op baseline migration. It executes `SELECT 1` and records the baseline through Wrangler's normal D1 migration mechanism without changing tables, indexes, triggers, or application data.
+
+This baseline is the first entry in the live database's migration ledger. Future production schema changes must be added as new sequential migrations under `db/migrations-production/`.
+
+Do **not** manually insert rows into `d1_migrations`.
+
+## Verification performed before baseline
+
+1. The remote `d1_migrations` table was inspected and found empty.
+2. The remote schema was inspected.
+3. Remote tables, indexes, and triggers were compared with the schema produced by the complete historical chain.
+4. The remote rental overlap triggers were verified to match the current `0011` policy: a 10-minute pending-payment hold and the same-renter renewal exception.
+5. The complete historical `0001` through `0011` chain was applied successfully to a disposable local D1 database.
+
+The production baseline therefore records the already-existing live schema state rather than replaying historical DDL against production.
 
 ## Production safety rule
 
-The existing production D1 database was originally bootstrapped with SQL/schema operations rather than a verified D1 migration ledger. Therefore **do not run `wrangler d1 migrations apply --remote` against production until the remote `d1_migrations` table has been inspected and reconciled**.
+The deploy workflow intentionally does not apply D1 migrations automatically. Production migrations must be reviewed and applied explicitly.
 
-Cloudflare records applied migration names in `d1_migrations`. The migration chain must match that ledger before any remote migration is applied.
+Before applying a future production migration:
 
-The deploy workflow intentionally does not apply D1 migrations automatically. This remains intentional.
-
-## Adoption procedure
-
-1. Inspect the production D1 migration ledger with Wrangler.
-2. Inspect the actual production schema.
-3. Compare both with the migration chain in this repository.
-4. If the ledger is empty or incomplete while the schema is already at the post-0010 state, establish an explicit, auditable baseline procedure before applying any pending migration.
-5. Test the complete chain on a disposable/staging D1 database first.
-6. Only then apply the reviewed forward migrations to production.
-
-Never manually insert rows into `d1_migrations` or run the migration chain against production merely to make Wrangler report green. The ledger is part of the deployment state, not a cosmetic checklist.
+1. Verify the target database and Wrangler configuration.
+2. Test the migration against a disposable/staging database.
+3. Review the SQL and expected schema/data impact.
+4. Apply the migration explicitly to production.
+5. Verify the resulting schema and `d1_migrations` ledger.
 
 ## Bootstrap schema
 
-`db/schema.sql` remains the current full bootstrap representation. It is useful for creating a fresh database directly, while `db/migrations/*.sql` is the authoritative history for incremental schema evolution.
+`db/schema.sql` remains the full bootstrap representation for a fresh database. It is intentionally separate from the production migration lineage because the live database already exists and already contains its application schema.
 
-The two representations must remain semantically aligned. Any intentional divergence must be represented by a forward migration and documented here.
+The historical migration chain remains available for full-chain reconstruction and regression testing. Any future schema change must be represented by a new forward production migration and, where appropriate, reflected in `db/schema.sql`.
