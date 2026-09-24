@@ -123,12 +123,11 @@ class PiNetworkService {
           })
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data?.sessionToken || !data?.user?.uid) throw new Error(data?.error || 'احراز هویت Pi در سرور رد شد.');
+        if (!response.ok || !data?.user?.uid) throw new Error(data?.error || 'احراز هویت Pi در سرور رد شد.');
         return {
           accessToken,
           uid: data.user.uid,
           username: data.user.username,
-          sessionToken: data.sessionToken,
           isOfficialSdk: true,
           kycStatus: data.user.kycStatus === 'verified' ? 'verified' : 'unverified',
           user: data.user
@@ -142,9 +141,7 @@ class PiNetworkService {
   }
 
   getSessionHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    try { const raw = localStorage.getItem('rentora_live_v1_session'); const session = raw ? JSON.parse(raw) : null; if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`; } catch (_) {}
-    return headers;
+    return { 'Content-Type': 'application/json', credentials: 'include' };
   }
 
   async ensurePaymentIntent(paymentIntentId, rentalId) {
