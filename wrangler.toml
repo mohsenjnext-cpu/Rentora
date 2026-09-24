@@ -21,6 +21,8 @@ id = "11f55c0a333b45cb81ce9a1692d2207a"
 
 [vars]
 PI_API_URL = "https://api.minepi.com/v2"
+PI_HORIZON_URL = "https://api.testnet.minepi.com"
+PI_NETWORK_PASSPHRASE = "Pi Testnet"
 NODE_ENV = "production"
 PLATFORM_FEE_RATE = "0.05"
 CORS_ORIGIN = "https://rentora.mohsenjnext.workers.dev"
@@ -28,6 +30,7 @@ ADMIN_PI_UIDS = "avina60,mohsenjnext"
 
 # Required secret (Cloudflare secret, never [vars]):
 # - PI_API_KEY
+# - PI_WALLET_PRIVATE_SEED (A2U developer wallet secret seed, starts with S)
 #
 # Media storage: KV fallback is used when RENTORA_MEDIA/R2 is not configured.
 # This Testnet deployment intentionally does not require a paid R2 bucket.
