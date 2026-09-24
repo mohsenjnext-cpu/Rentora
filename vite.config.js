@@ -31,7 +31,7 @@ function devApiProxy() {
 }
 
 export default defineConfig({
-  base: './',
+  base: '/',
   plugins: [react(), tailwindcss()],
   server: {
     host: '0.0.0.0',
