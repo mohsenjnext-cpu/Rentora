@@ -358,7 +358,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
         "SELECT * FROM payout_operations WHERE operation_key = ?1 LIMIT 1"
       ).bind(idempotencyKey).first().catch(() => null);
 
-      if (op && op.status === 'completed' && op.pi_payment_id && op.pi_txid) {
+      if (op && op.status === 'completed' && op.pi_payment_id && op.txid) {
         const payoutAmount = Number(op.amount || amount);
         return jsonResponse({
           success: true,
