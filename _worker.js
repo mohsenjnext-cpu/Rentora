@@ -1163,6 +1163,21 @@ export default {
         const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
         return jsonResponse({ success: true, user: userView(updated, env, { includeAdminReview: true }) }, 200, env, origin);
       }
+      if (method === 'POST' && path.startsWith('/api/admin/reports/') && path.endsWith('/status')) {
+        const reportId = path.slice('/api/admin/reports/'.length, -'/status'.length).trim();
+        if (!reportId) return errorResponse('Missing report ID', 400, env, undefined, origin);
+        const { user } = await requireAdmin(request, env);
+        const body = await readJson(request);
+        const newStatus = String(body?.status || '').trim().toLowerCase();
+        if (!['open','reviewing','resolved','dismissed'].includes(newStatus)) {
+          return errorResponse("Status must be 'open', 'reviewing', 'resolved', or 'dismissed'", 400, env, undefined, origin);
+        }
+        const existing = await env.RENTORA_DB.prepare("SELECT * FROM reports WHERE id=?1 LIMIT 1").bind(reportId).first();
+        if (!existing) return errorResponse('Report not found', 404, env, undefined, origin);
+        await env.RENTORA_DB.prepare("UPDATE reports SET status=?1, updated_at=?2 WHERE id=?3").bind(newStatus, now(), reportId).run();
+        await recordAdminAuditLog(env, user, 'REPORT_STATUS_UPDATED', { reportId, from: existing.status, to: newStatus });
+        return jsonResponse({ success: true, reportId, status: newStatus }, 200, env, origin);
+      }
       if (method === 'POST' && path.startsWith('/api/admin/listings/') && path.endsWith('/status')) {
         const listingId = path.slice('/api/admin/listings/'.length, -'/status'.length).trim();
         if (!listingId) return errorResponse('Missing listing ID', 400, env, undefined, origin);
