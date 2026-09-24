@@ -1,4 +1,5 @@
 import legacyWorker from './_worker.js';
+import { Horizon, TransactionBuilder, Operation, Asset, Keypair, Memo } from '@stellar/stellar-sdk';
 
 function now() { return new Date().toISOString(); }
 function adminAllowed(value, env) {
@@ -323,7 +324,31 @@ async function resumePayoutOperation(env, operation) {
     }
     operation = await transitionPayoutOperation(env, operation.operation_key, ['approving'], 'approved', { piPaymentId: operation.pi_payment_id, clearLease: true });
   }
-  if (operation.status === 'approved' || operation.status === 'completing') return completePayoutOperation(env, operation);
+  if (operation.status === 'approved' || operation.status === 'completing') {
+    if (operation.status === 'approved') {
+      const current = await fetchPiPayment(env, operation.pi_payment_id);
+      if (!current.response.ok) return markPayoutReconciliationRequired(env, operation, `Unable to read Pi payment before blockchain submission (${current.response.status})`);
+      try {
+        await validateA2UPayment(env, operation, current.payment);
+      } catch (error) {
+        return markPayoutReconciliationRequired(env, operation, error.message || 'Pi A2U payment validation failed before blockchain submission');
+      }
+      if (!current.status.developer_completed && !current.payment?.transaction?.txid) {
+        try {
+          operation = await renewPayoutLease(env, operation);
+          if (!operation) return getPayoutOperation(env, operation?.operation_key);
+          const txid = await submitA2UTransaction(env, current.payment);
+          operation = await transitionPayoutOperation(env, operation.operation_key, ['approved'], 'completing', {
+            txid,
+            leaseOwner: operation.lease_owner
+          });
+        } catch (error) {
+          return markPayoutReconciliationRequired(env, operation, error.message || 'Pi A2U blockchain submission failed');
+        }
+      }
+    }
+    return completePayoutOperation(env, operation);
+  }
   return operation;
 }
 
@@ -905,6 +930,50 @@ async function autoResolveIncompleteServerPayments(env, user) {
     }
   } catch (err) { console.warn('autoResolveIncompleteServerPayments warning:', err); return false; }
   return true;
+}
+
+async function submitA2UTransaction(env, payment) {
+  const seed = String(env?.PI_WALLET_PRIVATE_SEED || '').trim();
+  if (!seed) throw Object.assign(new Error('Pi A2U wallet secret is not configured. Set the Cloudflare secret PI_WALLET_PRIVATE_SEED.'), { status: 503 });
+
+  let keypair;
+  try {
+    keypair = Keypair.fromSecret(seed);
+  } catch (_) {
+    throw Object.assign(new Error('Pi A2U wallet secret is invalid.'), { status: 503 });
+  }
+
+  const recipient = String(payment?.recipient || payment?.to_address || '').trim();
+  const paymentId = String(payment?.identifier || payment?.id || '').trim();
+  const amount = Number(payment?.amount);
+  if (!recipient || !paymentId || !Number.isFinite(amount) || amount <= 0) {
+    throw Object.assign(new Error('Pi A2U payment is missing a valid recipient, payment id, or amount.'), { status: 502 });
+  }
+
+  const horizonUrl = String(env?.PI_HORIZON_URL || 'https://api.testnet.minepi.com').replace(/\/$/, '');
+  const networkPassphrase = String(env?.PI_NETWORK_PASSPHRASE || 'Pi Testnet');
+  const server = new Horizon.Server(horizonUrl);
+  const account = await server.loadAccount(keypair.publicKey());
+  const baseFee = await server.fetchBaseFee();
+  const timebounds = await server.fetchTimebounds(180);
+
+  let transaction = new TransactionBuilder(account, {
+    fee: String(baseFee),
+    networkPassphrase,
+    timebounds
+  })
+    .addOperation(Operation.payment({
+      destination: recipient,
+      asset: Asset.native(),
+      amount: amount.toFixed(7)
+    }))
+    .addMemo(Memo.text(paymentId))
+    .build();
+
+  transaction.sign(keypair);
+  const submitted = await server.submitTransaction(transaction);
+  if (!submitted?.id) throw Object.assign(new Error('Pi blockchain did not return a transaction id.'), { status: 502 });
+  return submitted.id;
 }
 
 async function createPayoutPayment(env, operation, leaseOwner, paymentPayload) {
