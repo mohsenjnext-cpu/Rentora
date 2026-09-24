@@ -203,10 +203,14 @@ async function persistCompletedPayout(env, operation, paymentId, txid, verifiedP
     await transitionPayoutOperation(env, operation.operation_key, ['approving', 'approved', 'completing', 'reconciliation_required', 'completed'], 'completed', { piPaymentId: paymentId, txid });
     return getPayoutOperation(env, operation.operation_key);
   }
-  await env.RENTORA_DB.batch([
+  const batchResults = await env.RENTORA_DB.batch([
     env.RENTORA_DB.prepare("INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,NULL,?2,?3,?4,?5,'admin_payout','completed',?6)").bind(`tx_${crypto.randomUUID()}`, paymentId, txid, operation.user_id, operation.amount, now()),
-    env.RENTORA_DB.prepare("UPDATE payout_operations SET status='completed',pi_payment_id=COALESCE(?1,pi_payment_id),txid=?2,error=NULL,updated_at=?3 WHERE operation_key=?4 AND status IN ('approving','approved','completing','reconciliation_required')").bind(paymentId, txid, now(), operation.operation_key)
+    env.RENTORA_DB.prepare("UPDATE payout_operations SET status='completed',pi_payment_id=COALESCE(?1,pi_payment_id),txid=?2,error=NULL,updated_at=?3,lease_owner=NULL,lease_expires_at=NULL WHERE operation_key=?4 AND status IN ('approving','approved','completing','reconciliation_required') AND EXISTS (SELECT 1 FROM transactions WHERE pi_payment_id=?1 AND pi_txid=?2 AND user_id=?5 AND amount=?6 AND type='admin_payout' AND status='completed')").bind(paymentId, txid, now(), operation.operation_key, operation.user_id, operation.amount)
   ]);
+  const completionUpdate = batchResults?.[1];
+  if (Number(completionUpdate?.meta?.changes || 0) !== 1) {
+    return markPayoutReconciliationRequired(env, operation, 'Completed payout transaction was not durably linked to the payout operation');
+  }
   return getPayoutOperation(env, operation.operation_key);
 }
 
