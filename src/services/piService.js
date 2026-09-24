@@ -12,6 +12,17 @@ class PiNetworkService {
     return typeof window !== 'undefined' && !!window.Pi && typeof window.Pi.authenticate === 'function';
   }
 
+  async waitForSdk(timeoutMs = 12000) {
+    if (this.hasPiSdk()) return true;
+    if (typeof window === 'undefined') return false;
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      if (this.hasPiSdk()) return true;
+    }
+    return false;
+  }
+
   setSandboxMode() {
     this.isSandbox = false;
     this.isInitialized = false;
@@ -68,7 +79,7 @@ class PiNetworkService {
   }
 
   async authenticate(customIncompleteHandler = null, scopes = ['payments', 'username', 'wallet_address']) {
-    if (!this.hasPiSdk()) throw new Error('NOT_IN_PI_BROWSER');
+    if (!(await this.waitForSdk())) throw new Error('NOT_IN_PI_BROWSER');
     if (this.authPromise) return this.authPromise;
 
     this.authPromise = (async () => {
@@ -176,8 +187,8 @@ class PiNetworkService {
   }
 
   async createPayment({ paymentData, callbacks, paymentIntentId }) {
+    if (!(await this.waitForSdk()) || typeof window.Pi.createPayment !== 'function') throw new Error('پرداخت Pi فقط در Pi Browser رسمی امکان‌پذیر است.');
     await this.init();
-    if (!this.hasPiSdk() || typeof window.Pi.createPayment !== 'function') throw new Error('پرداخت Pi فقط در Pi Browser رسمی امکان‌پذیر است.');
 
     const serverIntent = await this.ensurePaymentIntent(paymentIntentId, paymentData?.metadata?.rentalId);
     const amount = serverIntent.amount;
