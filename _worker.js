@@ -1595,7 +1595,8 @@ export default {
           if (!obligation || obligation.pi_payment_id !== body.paymentId || !['approved','completed'].includes(obligation.status)) return errorResponse('Payment obligation was concurrently claimed by another payment', 409, env, undefined, origin);
         }
         if (obligation.rental_id) {
-          await env.RENTORA_DB.prepare(`UPDATE rentals SET ${obligation.role === 'renter' ? "renter_fee_payment_status='approved'" : "owner_fee_payment_status='approved'}, updated_at=?1 WHERE id=?2`).bind(now(), obligation.rental_id).run();
+          const approvedField = obligation.role === 'renter' ? "renter_fee_payment_status='approved'" : "owner_fee_payment_status='approved'";
+          await env.RENTORA_DB.prepare(`UPDATE rentals SET ${approvedField}, updated_at=?1 WHERE id=?2`).bind(now(), obligation.rental_id).run();
         } else {
           await env.RENTORA_DB.prepare("UPDATE listings SET owner_fee_payment_status='approved', owner_fee_obligation_id=?1, updated_at=?2 WHERE id=?3").bind(obligation.id, now(), obligation.listing_id).run();
         }
