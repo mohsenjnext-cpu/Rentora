@@ -305,6 +305,20 @@ Immediate next actions:
 ## 15. Change Log
 
 ### 2026-09-24
+- Completed second audit pass: traced core user flows from UI/context/service to backend endpoints.
+- Booking flow: BookingModal -> `POST /api/rentals/quote` -> `POST /api/rentals` -> Pi SDK payment -> `POST /api/payments/approve` -> `POST /api/payments/complete` -> private contact unlock. This is the primary migration-critical flow.
+- Authentication flow: PiAuthContext -> `/api/auth/me` session restoration -> Pi login -> `/api/auth/pi-login` -> HttpOnly session cookie. Redesign must not recreate auth state in UI.
+- Rental lifecycle actions in Activity/Owner Hub call `POST /api/sync/rental/status`; UI should represent the authoritative state machine rather than inventing client states.
+- Messaging uses `/api/conversations` and message/archive endpoints. Chat is a real feature, not a UI-only modal.
+- Admin treasury uses `GET /api/admin/console` and `POST /api/admin/payout`; wallet balance uses `GET /api/wallet/balance`. Legacy `/api/wallet/withdraw` is 410 and must not be presented as active.
+- Important integration gap confirmed: admin console exposes platform fee rate but no discovered write endpoint exists, so platform fee editing is currently a backend capability gap, not merely a UI bug.
+- Important UX/data gap confirmed: Owner Hub's "revenue" is rental gross/direct-P2P value, while Admin Treasury revenue is Rentora platform-fee revenue. Redesign must use distinct labels and financial cards.
+- Important legacy debt confirmed: some contact/status wrappers still attempt to read `rentora_live_v1_session` from localStorage despite the server-cookie architecture. This should be removed during service-layer cleanup, not reintroduced in the new UI.
+- Home has a separate mobile-only ItemCard implementation, confirming card-system duplication.
+- BookingModal still computes a client-side fallback fee for display/compatibility. The authoritative server quote remains the source for actual payment, but the redesigned UI should visibly distinguish "estimated/fallback display" from server-confirmed financial values and prefer the server quote whenever available.
+- No backend rebuild is planned. The next audit step is the complete component/route inventory and state-pattern matrix before Design System definition.
+
+### 2026-09-24
 - Admin UID issue diagnosed: admin authorization expects Pi UID, not username.
 - Verified `avina60` Pi UID: `8184ab4d-367c-402d-baf94a44`.
 - Admin recognition was corrected in Cloudflare configuration and confirmed resolved by the user.
