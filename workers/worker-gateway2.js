@@ -861,7 +861,7 @@ async function createPayoutPayment(env, operation, leaseOwner, paymentPayload) {
   } catch (error) {
     return markPayoutReconciliationRequired(env, operation, error.message || 'Created Pi A2U payment failed validation');
   }
-  return transitionPayoutOperation(env, operation.operation_key, ['creating'], 'pi_created', { piPaymentId: createdPaymentId, leaseOwner: leaseOwner || operation.lease_owner, clearLease: true });
+  return transitionPayoutOperation(env, operation.operation_key, ['creating'], 'pi_created', { piPaymentId: createdPaymentId, leaseOwner: operation.lease_owner, clearLease: true });
 }
 
 async function adminRoute(request, env, path) {
