@@ -70,6 +70,7 @@ function createMockDb() {
           };
         }
       };
+      return query;
     }
   };
 }
