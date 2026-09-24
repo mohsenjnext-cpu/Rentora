@@ -69,19 +69,7 @@ export class CloudSyncService {
   }
 
   getAuthHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    try {
-      if (typeof localStorage !== 'undefined') {
-        const userRaw = localStorage.getItem(STORAGE_USER_KEY);
-        if (userRaw) {
-          const u = JSON.parse(userRaw);
-          if (u.sessionToken) {
-            headers['Authorization'] = `Bearer ${u.sessionToken}`;
-          }
-        }
-      }
-    } catch (e) {}
-    return headers;
+    return { 'Content-Type': 'application/json' };
   }
 
   async compressImage(file, maxWidth = 800, quality = 0.7) {
@@ -949,7 +937,12 @@ export class CloudSyncService {
 
   saveCachedUsers(users) {
     try {
-      localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(users || []));
+      const safeUsers = (Array.isArray(users) ? users : []).map((user) => {
+        if (!user || typeof user !== 'object') return user;
+        const { sessionToken, accessToken, ...safeUser } = user;
+        return safeUser;
+      });
+      localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(safeUsers));
     } catch (e) {}
   }
 
