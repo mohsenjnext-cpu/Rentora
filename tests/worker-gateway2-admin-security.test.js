@@ -31,3 +31,14 @@ test('gateway2 requires both configured Pi UID and persisted admin role', () => 
   assert.doesNotMatch(entrypoint, /adminAllowed\(user\.username, env\)/);
   assert.doesNotMatch(entrypoint, /adminAllowed\(row\.username, env\)/);
 });
+
+
+const legacyWorker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+
+test('legacy worker does not derive admin privilege from username', () => {
+  assert.match(legacyWorker, /const isAdm = env \? \(row\.role === 'admin' && isAdmin\(row\.pi_uid, env\)\)/);
+  assert.match(legacyWorker, /const isAdminUser = user \? \(user\.role === 'admin' && isAdmin\(user\.pi_uid, env\)\) : false;/);
+  assert.doesNotMatch(legacyWorker, /isAdmin\(row\.username, env\)/);
+  assert.doesNotMatch(legacyWorker, /isAdmin\(user\.username, env\)/);
+  assert.doesNotMatch(legacyWorker, /isAdmin\(username, env\)/);
+});
