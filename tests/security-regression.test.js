@@ -46,7 +46,7 @@ test('payment completion requires an approved obligation and strict Pi binding',
   assert.match(worker, /Pi payment identifier mismatch/);
   assert.match(worker, /Pi payment amount mismatch/);
   assert.match(worker, /Pi payment memo mismatch/);
-  assert.match(worker, /payment metadata binding is missing or invalid/);
+  assert.match(worker, /Pi payment metadata obligation binding is invalid/);
   assert.match(complete, /\['approved','completed','complete'\]/);
 });
 
