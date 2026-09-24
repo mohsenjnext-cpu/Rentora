@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx wrangler d1 info rentora --remote
+          npx wrangler d1 info rentora
           echo "Target database ID: $RENTORA_D1_DATABASE_ID"
 
       - name: Apply reviewed production migrations
