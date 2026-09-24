@@ -115,6 +115,17 @@ export default function AdminDashboardPage({ onNavigate }) {
     finally { setBusyId(''); }
   };
 
+  const retryReconciliation = async (queueId) => {
+    setBusyId(queueId); setError('');
+    try {
+      const res = await fetch(`${api}/api/admin/reconciliation/${encodeURIComponent(queueId)}/retry`, { method:'POST', headers:headers() });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.error || 'تطبیق پرداخت ناموفق بود.');
+      await load();
+    } catch (e) { setError(e.message || 'تطبیق پرداخت ناموفق بود.'); }
+    finally { setBusyId(''); }
+  };
+
   const submitPayout = async (e) => {
     e.preventDefault(); setPayoutMessage('');
     const amount = Number(payoutAmount);
@@ -161,7 +172,7 @@ export default function AdminDashboardPage({ onNavigate }) {
   const page = () => {
     if (section === 'overview') return <Overview cards={cards} o={o} reports={reports} payouts={payouts} go={go}/>;
     if (section.startsWith('treasury')) return <Treasury t={t} system={system} go={go}/>;
-    if (section.startsWith('payout')) return <Payouts payouts={payouts} reconciliation={reconciliation} section={section} submitPayout={submitPayout} payoutAmount={payoutAmount} setPayoutAmount={setPayoutAmount} payoutMemo={payoutMemo} setPayoutMemo={setPayoutMemo} walletAddress={walletAddress} setWalletAddress={setWalletAddress} payoutMessage={payoutMessage}/>;
+    if (section.startsWith('payout')) return <Payouts payouts={payouts} reconciliation={reconciliation} section={section} submitPayout={submitPayout} payoutAmount={payoutAmount} setPayoutAmount={setPayoutAmount} payoutMemo={payoutMemo} setPayoutMemo={setPayoutMemo} walletAddress={walletAddress} setWalletAddress={setWalletAddress} payoutMessage={payoutMessage} retryReconciliation={retryReconciliation} busyId={busyId}/>;
     if (section === 'users-details') {
       const selected = users.find(u => (u.id || u.uid) === selectedUserId) || users[0];
       return <UserDetails user={selected} onBack={() => go('users-all')} />;
@@ -229,7 +240,7 @@ function Treasury({t,system,go}) {
     <div className="rentora-card p-5"><div className="flex items-center gap-2 font-bold"><Wallet className="w-4 h-4"/> Wallet Status</div><div className="mt-4 text-xs grid sm:grid-cols-3 gap-3"><span>Pi API: {system.piApiConfigured?'Configured':'Not configured'}</span><span>Available: {money(t.available)}</span><span>Reserved: {money(t.reserved)}</span></div><button onClick={()=>go('payout-create')} className="btn-primary px-4 py-2 text-xs mt-4">Create Payout</button></div></div>;
 }
 
-function Payouts({payouts,reconciliation,section,submitPayout,payoutAmount,setPayoutAmount,payoutMemo,setPayoutMemo,walletAddress,setWalletAddress,payoutMessage}) {
+function Payouts({payouts,reconciliation,section,submitPayout,payoutAmount,setPayoutAmount,payoutMemo,setPayoutMemo,walletAddress,setWalletAddress,payoutMessage,retryReconciliation,busyId}) {
   if(section==='payout-create') return <form onSubmit={submitPayout} className="rentora-card p-5 max-w-xl space-y-3"><h3 className="font-bold">Create Treasury Payout</h3><input value={payoutAmount} onChange={e=>setPayoutAmount(e.target.value)} type="number" min="0" step="0.0001" placeholder="Amount (π)" className="w-full p-3 rounded-lg border bg-transparent text-sm"/><input value={walletAddress} onChange={e=>setWalletAddress(e.target.value)} placeholder="Pi wallet address (optional)" className="w-full p-3 rounded-lg border bg-transparent text-sm"/><input value={payoutMemo} onChange={e=>setPayoutMemo(e.target.value)} placeholder="Memo" className="w-full p-3 rounded-lg border bg-transparent text-sm"/>{payoutMessage&&<div className="text-xs p-3 rounded-lg bg-slate-50 dark:bg-slate-800">{payoutMessage}</div>}<button className="btn-primary px-4 py-2 text-xs flex items-center gap-2"><ArrowUpRight className="w-4 h-4"/> ثبت پرداخت</button><p className="text-[10px] text-slate-500">پرداخت از مسیر A2U موجود انجام می‌شود و کلید idempotency برای retry حفظ می‌شود.</p></form>;
   let rows=payouts;
   if(section==='payout-pending') rows=rows.filter(x=>['reserved'].includes(x.status));
@@ -237,7 +248,7 @@ function Payouts({payouts,reconciliation,section,submitPayout,payoutAmount,setPa
   if(section==='payout-completed') rows=rows.filter(x=>x.status==='completed');
   if(section==='payout-failed') rows=rows.filter(x=>['cancelled'].includes(x.status) || x.error);
   if(section==='payout-reconcile') rows=reconciliation;
-  return <div className="rentora-card overflow-x-auto"><table className="w-full min-w-[720px] text-xs"><thead><tr className="border-b"><th className="p-3 text-right">Operation</th><th className="p-3 text-right">Amount</th><th className="p-3 text-right">Status</th><th className="p-3 text-right">Recipient</th><th className="p-3 text-right">Updated</th></tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={r.id||i} className="border-b last:border-0"><td className="p-3">{r.operation_key||r.id}</td><td className="p-3">{money(r.amount)}</td><td className="p-3"><Status s={r.status}/></td><td className="p-3">{r.recipient||r.pi_payment_id||'—'}</td><td className="p-3">{date(r.updated_at)}</td></tr>):<tr><td colSpan="5" className="p-8 text-center text-slate-400">موردی وجود ندارد.</td></tr>}</tbody></table></div>;
+  return <div className="rentora-card overflow-x-auto"><table className="w-full min-w-[820px] text-xs"><thead><tr className="border-b"><th className="p-3 text-right">Operation</th><th className="p-3 text-right">Amount</th><th className="p-3 text-right">Status</th><th className="p-3 text-right">Recipient</th><th className="p-3 text-right">Updated</th><th className="p-3 text-right">Action</th></tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={r.id||i} className="border-b last:border-0"><td className="p-3">{r.operation_key||r.id}</td><td className="p-3">{money(r.amount)}</td><td className="p-3"><Status s={r.status}/></td><td className="p-3">{r.recipient||r.pi_payment_id||'—'}</td><td className="p-3">{date(r.updated_at)}</td><td className="p-3">{section==='payout-reconcile'?<button disabled={busyId===r.id} onClick={()=>retryReconciliation(r.id)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{busyId===r.id?'...':'Retry / Resolve'}</button>:'—'}</td></tr>):<tr><td colSpan="6" className="p-8 text-center text-slate-400">موردی وجود ندارد.</td></tr>}</tbody></table></div>;
 }
 
 function UsersView({rows,section,busyId,updateUser,onDetails,renderTable}) {
