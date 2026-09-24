@@ -1122,6 +1122,9 @@ export default {
 
         // A2U recipient is resolved by Pi from the verified app-user UID.
         // Never let an admin-supplied wallet address become the payment destination.
+        if (body?.walletAddress !== undefined && body?.walletAddress !== null && String(body.walletAddress).trim()) {
+          return errorResponse('مقصد پرداخت از شناسه کاربر تأییدشده پای تعیین می‌شود و قابل تغییر از کلاینت نیست.', 400, env, undefined, origin);
+        }
         const targetWallet = '';
         const claimedOperation = await claimPayoutOperation(env, {
           idempotencyKey,
