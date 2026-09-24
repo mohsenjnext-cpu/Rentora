@@ -2668,7 +2668,16 @@ export default {
         }
         return assetResponse;
       }
-      return errorResponse('Route Not Found', 404, env, undefined, origin); else if (msg.includes('UNIQUE constraint')) {
+      return errorResponse('Route Not Found', 404, env, undefined, origin);
+    } catch (err) {
+      console.error('Rentora worker error', err);
+      const msg = String(err?.message || '');
+      let status = Number(err?.status) || 500;
+      let displayMessage = err?.message || 'Server error';
+      if (msg.includes('already reserved') || msg.includes('overlap')) {
+        status = 409;
+        displayMessage = 'این کالا برای تاریخ‌های انتخابی در دسترس نیست یا قبلاً رزرو شده است.';
+      } else if (msg.includes('UNIQUE constraint')) {
         status = 409;
         displayMessage = 'این درخواست قبلاً ثبت شده است.';
       }
