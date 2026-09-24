@@ -11,9 +11,13 @@ async function sha256(value) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+function parseCookies(request) { const raw = request.headers.get('Cookie') || ''; const out = {}; for (const part of raw.split(';')) { const i = part.indexOf('='); if (i < 0) continue; out[part.slice(0,i).trim()] = part.slice(i+1).trim(); } return out; }
 async function requireUser(request, env) {
   if (!env?.RENTORA_DB || !env?.RENTORA_KV) throw Object.assign(new Error('Storage bindings (RENTORA_DB, RENTORA_KV) are required'), { status: 503 });
+  const cookies = parseCookies(request);
+  const cookieToken = cookies.rentora_session ? decodeURIComponent(cookies.rentora_session) : '';
   const auth = request.headers.get('Authorization') || '';
+  if (cookieToken) { request = new Request(request, { headers: new Headers(request.headers) }); request.headers.set('Authorization', `Bearer ${cookieToken}`); }
   if (!auth.startsWith('Bearer ')) throw Object.assign(new Error('Authentication required'), { status: 401 });
   const token = auth.slice(7).trim();
   const raw = await env.RENTORA_KV.get(`session:${await sha256(token)}`);
@@ -416,7 +420,7 @@ function isOriginAllowed(origin, env) {
 function json(data, status = 200, request = null, env = null) {
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
   const origin = request?.headers?.get('Origin');  if (origin && isOriginAllowed(origin, env)) {
-    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Origin'] = origin; headers['Access-Control-Allow-Credentials'] = 'true';
     headers['Vary'] = 'Origin';
   }
   return new Response(status === 204 ? null : JSON.stringify(data), { status, headers });
@@ -1144,7 +1148,7 @@ export default {
     try {
       if (request.method === 'OPTIONS') {
         const origin = request.headers.get('Origin');
-        const headers = { 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers') || 'Content-Type, Authorization', 'Access-Control-Max-Age': '86400' };
+        const headers = { 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers') || 'Content-Type, Authorization, X-Rentora-Client', 'Access-Control-Allow-Credentials': 'true', 'Access-Control-Max-Age': '86400' };
         if (origin && isOriginAllowed(origin, env)) {
           headers['Access-Control-Allow-Origin'] = origin;
         }
@@ -1193,6 +1197,18 @@ export default {
         };
         const healthy = Boolean(checks.piApiKeyConfigured && checks.databaseBound && checks.sessionStoreBound);
         return json({ ok: healthy, checks }, healthy ? 200 : 503, request, env);
+      }
+      if (request.method === 'POST' && path === '/api/auth/pi-login') {
+        const loginResponse = await legacyWorker.fetch(request, env, ctx);
+        if (!loginResponse.ok) return loginResponse;
+        const data = await loginResponse.clone().json().catch(() => null);
+        if (!data?.sessionToken) return loginResponse;
+        const headers = new Headers(loginResponse.headers);
+        headers.set('Set-Cookie', `rentora_session=${encodeURIComponent(data.sessionToken)}; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=None`);
+        const cleanData = { ...data };
+        delete cleanData.sessionToken;
+        headers.set('Content-Type', 'application/json; charset=utf-8');
+        return new Response(JSON.stringify(cleanData), { status: loginResponse.status, headers });
       }
       if (request.method === 'POST' && path === '/api/payments/incomplete') return await handleIncompletePayment(request, env);
       if (request.method === 'POST' && path === '/api/payments/approve') return await approvePayment(request, env);
