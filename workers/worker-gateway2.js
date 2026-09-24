@@ -941,12 +941,13 @@ async function adminRoute(request, env, path) {
     return json({ success: true, users: (rows.results || []).map((row) => userView(row, env)) }, 200, request, env);
   }
   if (path === '/api/admin/overview') {
-    const [usersCount, listingsCount, rentalsCount, transactionsCount, revRow, payoutRow, reportsCount, usersMetaRows] = await Promise.all([
+    const [usersCount, listingsCount, rentalsCount, transactionsCount, revRow, payoutRow, reservedPayoutRow, reportsCount, usersMetaRows] = await Promise.all([
       env.RENTORA_DB.prepare('SELECT COUNT(*) AS c FROM users').first(),
       env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM listings WHERE status != 'deleted'").first(),      env.RENTORA_DB.prepare('SELECT COUNT(*) AS c FROM rentals').first(),
       env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)").first(),
       env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)").first(),
       env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'").first(),
+      env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM payout_operations WHERE status IN ('reserved','creating','pi_created','approving','approved','completing','reconciliation_required')").first(),
       env.RENTORA_DB.prepare("SELECT COUNT(*) AS c FROM reports WHERE status='open'").first().catch(() => ({ c: 0 })),
       env.RENTORA_DB.prepare("SELECT metadata FROM users").all().catch(() => ({ results: [] }))
     ]);
@@ -962,7 +963,8 @@ async function adminRoute(request, env, path) {
     }
     const totalRev = Number(revRow?.total || 0);
     const totalPayouts = Number(payoutRow?.total || 0);
-    const availableBalance = Math.max(0, totalRev - totalPayouts);
+    const reservedPayouts = Number(reservedPayoutRow?.total || 0);
+    const availableBalance = Math.max(0, totalRev - totalPayouts - reservedPayouts);
     let auditLogs = [];
     if (env?.RENTORA_KV && typeof env.RENTORA_KV.get === 'function') {
       try {
@@ -978,6 +980,7 @@ async function adminRoute(request, env, path) {
         totalTransactions: Number(transactionsCount?.c || 0),
         totalPlatformRevenue: totalRev,
         totalPayouts,
+        reservedPayouts,
         availableBalance,
         adminRecipient: user.username,
         openReports: Number(reportsCount?.c || 0),
@@ -1016,15 +1019,19 @@ async function adminRoute(request, env, path) {
   if (path === '/api/admin/payout' && request.method === 'POST') {
     await reconcileStalePayoutOperations(env);
     const body = await readJson(request);
-    const [revRow, payoutRow] = await Promise.all([
+    const [revRow, payoutRow, reservedPayoutRow] = await Promise.all([
       env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)").first(),
-      env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'").first()
+      env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'").first(),
+      env.RENTORA_DB.prepare("SELECT SUM(amount) AS total FROM payout_operations WHERE status IN ('reserved','creating','pi_created','approving','approved','completing','reconciliation_required')").first()
     ]);
-    const availableBalance = Math.max(0, Number(revRow?.total || 0) - Number(payoutRow?.total || 0));
+    const totalRevenue = Number(revRow?.total || 0);
+    const totalPayouts = Number(payoutRow?.total || 0);
+    const reservedPayouts = Number(reservedPayoutRow?.total || 0);
+    const availableBalance = Math.max(0, totalRevenue - totalPayouts - reservedPayouts);
     let requestedAmount = Number(body?.amount || 0);
     if (!requestedAmount || Number.isNaN(requestedAmount) || requestedAmount <= 0) requestedAmount = availableBalance;
     const amount = Number(requestedAmount.toFixed(4));
-    if (amount <= 0 || amount > availableBalance) return json({ error: `مبلغ درخواستی (${amount} π) از موجودی واقعی کارمزدها (${availableBalance.toFixed(4)} π) بیشتر است.` }, 400, request, env);
+    if (amount <= 0 || amount > availableBalance) return json({ error: `مبلغ درخواستی (${amount} π) از موجودی آزاد کارمزدها (${availableBalance.toFixed(4)} π) بیشتر است.` }, 400, request, env);
     if (String(body?.walletAddress || '').trim()) return json({ error: 'آدرس کیف پول مستقیم قابل تعیین نیست؛ A2U فقط به کیف پول فعلی کاربر احراز‌شده از طریق Pi UID پرداخت می‌کند.' }, 400, request, env);
     const operationKey = payoutIdempotencyKey(request, body);
     if (!operationKey) return json({ error: 'Idempotency-Key برای پرداخت الزامی است.' }, 400, request, env);
