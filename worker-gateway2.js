@@ -805,7 +805,12 @@ async function autoResolveIncompleteServerPayments(env, user) {
       }
       if (current.status.developer_approved || current.status.transaction_verified) {
         if (operation.status === 'pi_created') operation = await transitionPayoutOperation(env, operation.operation_key, ['pi_created'], 'approving', { piPaymentId: pid });
-        if (operation.status === 'approving') await transitionPayoutOperation(env, operation.operation_key, ['approving'], 'approved', { piPaymentId: pid, txid: current.payment?.transaction?.txid || null });
+        if (operation.status === 'approving') {
+          const leased = await acquirePayoutLease(env, operation, ['approving']);
+          if (!leased) continue;
+          operation = leased;
+          operation = await transitionPayoutOperation(env, operation.operation_key, ['approving'], 'approved', { piPaymentId: pid, txid: current.payment?.transaction?.txid || null, clearLease: true, leaseOwner: operation.lease_owner });
+        }
         continue;
       }
       await markPayoutReconciliationRequired(env, operation, 'Incomplete payment has no safely actionable Pi state');

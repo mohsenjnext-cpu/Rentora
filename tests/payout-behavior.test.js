@@ -162,6 +162,7 @@ test('behavior: correlated incomplete payment recovers create/persist crash with
   const db = new FakeD1({ available: 10 });
   const claim = await hooks.claimPayoutOperation(env(db), 'op', { amount: 5, userId: 'u', recipient: 'r' });
   db.operations[0].status = 'creating';
+  db.operations[0].lease_expires_at = new Date(Date.now() - 1000).toISOString();
   const incomplete = { identifier: 'pi-1', metadata: { type: 'admin_treasury_payout', operationKey: 'op' } };
   const calls = piHarness({ incomplete: [incomplete], get: { 'pi-1': { identifier: 'pi-1', user_uid: 'uid-u', amount: 5, direction: 'app_to_user', network: 'Pi Testnet', metadata: { type: 'admin_treasury_payout', operationKey: 'op' }, status: { developer_approved: true }, transaction: { txid: 'tx-1' } } } });
   await hooks.autoResolveIncompleteServerPayments(env(db), { pi_uid: 'u' });
