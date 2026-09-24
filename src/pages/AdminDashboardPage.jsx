@@ -45,6 +45,7 @@ export default function AdminDashboardPage({ onNavigate }) {
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [busyId, setBusyId] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [payoutAmount, setPayoutAmount] = useState('');
   const [payoutMemo, setPayoutMemo] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
@@ -161,9 +162,13 @@ export default function AdminDashboardPage({ onNavigate }) {
     if (section === 'overview') return <Overview cards={cards} o={o} reports={reports} payouts={payouts} go={go}/>;
     if (section.startsWith('treasury')) return <Treasury t={t} system={system} go={go}/>;
     if (section.startsWith('payout')) return <Payouts payouts={payouts} reconciliation={reconciliation} section={section} submitPayout={submitPayout} payoutAmount={payoutAmount} setPayoutAmount={setPayoutAmount} payoutMemo={payoutMemo} setPayoutMemo={setPayoutMemo} walletAddress={walletAddress} setWalletAddress={setWalletAddress} payoutMessage={payoutMessage}/>;
+    if (section === 'users-details') {
+      const selected = users.find(u => (u.id || u.uid) === selectedUserId) || users[0];
+      return <UserDetails user={selected} onBack={() => go('users-all')} />;
+    }
     if (section.startsWith('users')) {
       const rows = section === 'users-kyc' ? users.filter(u => u.kycStatus !== 'verified') : section === 'users-suspended' ? users.filter(u => u.status === 'suspended') : filtered(users,['username','display_name','pi_uid','status','kycStatus']);
-      return <UsersView rows={rows} section={section} busyId={busyId} updateUser={updateUser} renderTable={renderTable}/>;
+      return <UsersView rows={rows} section={section} busyId={busyId} updateUser={updateUser} onDetails={(u)=>{setSelectedUserId(u.id || u.uid); go('users-details')}} renderTable={renderTable}/>;
     }
     if (section.startsWith('listings')) {
       let rows = filtered(listings,['title','owner_username','location','status']);
@@ -221,7 +226,7 @@ function Overview({cards,o,reports,payouts,go}) {
 function Treasury({t,system,go}) {
   const rows=[['Total Revenue',t.totalRevenue],['Available',t.available],['Reserved',t.reserved],['Paid Out',t.paidOut]];
   return <div className="space-y-3"><div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">{rows.map(([l,v])=><div key={l} className="rentora-card p-4"><div className="text-[10px] text-slate-500">{l}</div><div className="text-xl font-black mt-2">{money(v)}</div></div>)}</div>
-    <div className="rentora-card p-5"><div className="flex items-center gap-2 font-bold"><Wallet className="w-4 h-4"/> Wallet Status</div><div className="mt-4 text-xs grid sm:grid-cols-3 gap-3"><span>Pi API: {system.piApiConfigured?'Connected':'Not configured'}</span><span>Available: {money(t.available)}</span><span>Reserved: {money(t.reserved)}</span></div><button onClick={()=>go('payout-create')} className="btn-primary px-4 py-2 text-xs mt-4">Create Payout</button></div></div>;
+    <div className="rentora-card p-5"><div className="flex items-center gap-2 font-bold"><Wallet className="w-4 h-4"/> Wallet Status</div><div className="mt-4 text-xs grid sm:grid-cols-3 gap-3"><span>Pi API: {system.piApiConfigured?'Configured':'Not configured'}</span><span>Available: {money(t.available)}</span><span>Reserved: {money(t.reserved)}</span></div><button onClick={()=>go('payout-create')} className="btn-primary px-4 py-2 text-xs mt-4">Create Payout</button></div></div>;
 }
 
 function Payouts({payouts,reconciliation,section,submitPayout,payoutAmount,setPayoutAmount,payoutMemo,setPayoutMemo,walletAddress,setWalletAddress,payoutMessage}) {
@@ -235,8 +240,13 @@ function Payouts({payouts,reconciliation,section,submitPayout,payoutAmount,setPa
   return <div className="rentora-card overflow-x-auto"><table className="w-full min-w-[720px] text-xs"><thead><tr className="border-b"><th className="p-3 text-right">Operation</th><th className="p-3 text-right">Amount</th><th className="p-3 text-right">Status</th><th className="p-3 text-right">Recipient</th><th className="p-3 text-right">Updated</th></tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={r.id||i} className="border-b last:border-0"><td className="p-3">{r.operation_key||r.id}</td><td className="p-3">{money(r.amount)}</td><td className="p-3"><Status s={r.status}/></td><td className="p-3">{r.recipient||r.pi_payment_id||'—'}</td><td className="p-3">{date(r.updated_at)}</td></tr>):<tr><td colSpan="5" className="p-8 text-center text-slate-400">موردی وجود ندارد.</td></tr>}</tbody></table></div>;
 }
 
-function UsersView({rows,section,busyId,updateUser,renderTable}) {
-  return renderTable([['Username',r=>`@${r.username||'—'}`],['Status',r=><Status s={r.status}/>],['KYC',r=><Status s={r.kycStatus||'unknown'}/>],['Role',r=>r.role],['Joined',r=>date(r.created_at||r.joinedDate)],['Actions',r=><div className="flex gap-1"><button disabled={busyId===r.id} onClick={()=>updateUser(r,'status')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'Suspend':'Activate'}</button><button disabled={busyId===r.id} onClick={()=>updateUser(r,'kyc')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.kycStatus==='verified'?'Unverify':'Verify KYC'}</button></div>]],rows);
+function UsersView({rows,section,busyId,updateUser,onDetails,renderTable}) {
+  return renderTable([['Username',r=>`@${r.username||'—'}`],['Status',r=><Status s={r.status}/>],['KYC',r=><Status s={r.kycStatus||'unknown'}/>],['Role',r=>r.role],['Joined',r=>date(r.created_at||r.joinedDate)],['Actions',r=><div className="flex gap-1"><button disabled={busyId===r.id} onClick={()=>updateUser(r,'status')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'Suspend':'Activate'}</button><button disabled={busyId===r.id} onClick={()=>updateUser(r,'kyc')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.kycStatus==='verified'?'Unverify':'Verify KYC'}</button><button onClick={()=>onDetails(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Details</button></div>]],rows);
+}
+function UserDetails({user,onBack}) {
+  if (!user) return <div className="rentora-card p-6 text-sm text-slate-500">کاربری برای نمایش وجود ندارد.</div>;
+  const fields=[['Username',user.username?`@${user.username}`:'—'],['Pi UID',user.piUid || user.uid || '—'],['Role',user.role || 'user'],['Status',user.status || '—'],['KYC',user.kycStatus || 'unknown'],['Joined',user.joinedDate || user.created_at || '—'],['Display Name',user.displayName || '—'],['Location',user.location || '—'],['Bio',user.bio || '—']];
+  return <div className="space-y-3"><button onClick={onBack} className="btn-secondary px-3 py-2 text-xs">بازگشت به کاربران</button><div className="rentora-card p-5 grid sm:grid-cols-2 gap-4">{fields.map(([label,value])=><div key={label}><div className="text-[10px] text-slate-500">{label}</div><div className="text-sm font-bold mt-1 break-words">{String(value)}</div></div>)}</div></div>;
 }
 function ListingsView({rows,busyId,updateListing,renderTable}) { return renderTable([['Title','title'],['Owner',r=>`@${r.owner_username||'—'}`],['Price',r=>money(r.price_per_day)],['Status',r=><Status s={r.status}/>],['Updated',r=>date(r.updated_at)],['Action',r=><button disabled={busyId===r.id} onClick={()=>updateListing(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'Pause':'Activate'}</button>]],rows); }
 function ReportsView({rows,busyId,updateReport,renderTable}) { return renderTable([['Reporter',r=>`@${r.reporter_username||'—'}`],['Target',r=>`${r.target_type} / ${r.target_id}`],['Reason','reason'],['Status',r=><Status s={r.status}/>],['Date',r=>date(r.created_at)],['Action',r=><div className="flex gap-1">{r.status==='open'&&<button disabled={busyId===r.id} onClick={()=>updateReport(r,'reviewing')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Review</button>}{r.status==='reviewing'&&<button disabled={busyId===r.id} onClick={()=>updateReport(r,'resolved')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Resolve</button>}</div>]],rows); }
