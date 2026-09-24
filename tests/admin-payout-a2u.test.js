@@ -156,3 +156,84 @@ test('Admin A2U uses the D1 operation_key state and is idempotent', async () => 
 });
 
 // CI schema-alignment follow-up.
+
+
+test('Admin A2U preserves failure without creating a settlement transaction', async () => {
+  const db = createMockDb(), kv = createMockKv(), token = await setupSession(kv, db.users[0]), env = envFor(db, kv);
+  const initialTxCount = db.transactions.length;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const u = String(url);
+    if (u.includes('/payments/incomplete_server_payments')) return new Response(JSON.stringify({ incomplete_server_payments: [] }), { status: 200 });
+    if (u.endsWith('/payments') && opts?.method === 'POST') {
+      return new Response(JSON.stringify({ error_message: 'Pi Network A2U service temporarily unavailable' }), { status: 500 });
+    }
+    return originalFetch(url, opts);
+  };
+  try {
+    const res = await worker.fetch(new Request('http://localhost/api/admin/payout', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', 'Idempotency-Key': 'failure_no_settlement' },
+      body: JSON.stringify({ amount: 5 })
+    }), env);
+    assert.equal(res.status, 502);
+    assert.equal(db.transactions.length, initialTxCount);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Admin A2U sends the destination wallet in Pi metadata', async () => {
+  const db = createMockDb(), kv = createMockKv(), token = await setupSession(kv, db.users[0]), env = envFor(db, kv);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const u = String(url);
+    if (u.includes('/payments/incomplete_server_payments')) return new Response(JSON.stringify({ incomplete_server_payments: [] }), { status: 200 });
+    if (u.endsWith('/payments') && opts?.method === 'POST') {
+      const payload = JSON.parse(opts.body);
+      assert.equal(payload.payment.metadata.targetWallet, 'GD5XYZ9876543210ABCDEF');
+      return new Response(JSON.stringify({ identifier: 'wallet_pay_1', amount: 5, status: { developer_approved: false, developer_completed: false } }), { status: 200 });
+    }
+    if (u.includes('/payments/wallet_pay_1/approve')) return new Response(JSON.stringify({ identifier: 'wallet_pay_1', amount: 5, status: { developer_approved: true, transaction_verified: true }, transaction: { txid: 'wallet_tx_1' } }), { status: 200 });
+    if (u.includes('/payments/wallet_pay_1/complete')) return new Response(JSON.stringify({ identifier: 'wallet_pay_1', amount: 5, status: { developer_completed: true } }), { status: 200 });
+    return originalFetch(url, opts);
+  };
+  try {
+    const res = await worker.fetch(new Request('http://localhost/api/admin/payout', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', 'Idempotency-Key': 'wallet_metadata_1' },
+      body: JSON.stringify({ amount: 5, walletAddress: 'GD5XYZ9876543210ABCDEF' })
+    }), env);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.txid, 'wallet_tx_1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Admin A2U recovers when Pi reports the payment already approved', async () => {
+  const db = createMockDb(), kv = createMockKv(), token = await setupSession(kv, db.users[0]), env = envFor(db, kv);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const u = String(url);
+    if (u.includes('/payments/incomplete_server_payments')) return new Response(JSON.stringify({ incomplete_server_payments: [] }), { status: 200 });
+    if (u.endsWith('/payments') && opts?.method === 'POST') return new Response(JSON.stringify({ identifier: 'already_approved_1', amount: 5, status: { developer_approved: false, developer_completed: false } }), { status: 200 });
+    if (u.includes('/payments/already_approved_1/approve')) return new Response(JSON.stringify({ error_message: 'Current payment is already approved' }), { status: 400 });
+    if (u.endsWith('/payments/already_approved_1')) return new Response(JSON.stringify({ identifier: 'already_approved_1', amount: 5, status: { developer_approved: true, transaction_verified: true }, transaction: { txid: 'recovered_tx_1' } }), { status: 200 });
+    if (u.includes('/payments/already_approved_1/complete')) return new Response(JSON.stringify({ identifier: 'already_approved_1', amount: 5, status: { developer_completed: true } }), { status: 200 });
+    return originalFetch(url, opts);
+  };
+  try {
+    const res = await worker.fetch(new Request('http://localhost/api/admin/payout', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', 'Idempotency-Key': 'already_approved_1' },
+      body: JSON.stringify({ amount: 5 })
+    }), env);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.txid, 'recovered_tx_1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
