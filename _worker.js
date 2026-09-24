@@ -1516,7 +1516,21 @@ export default {
         ).bind(rental.id, requestedRole).first();
         if (!obligation) return errorResponse('Payment obligation not found', 409, env, undefined, origin);
 
-        const existingActive = ['created','approved'].includes(String(obligation.status || '').toLowerCase()) &&
+        const obligationStatus = String(obligation.status || '').toLowerCase();
+        if (obligationStatus === 'completed') {
+          return jsonResponse({
+            paymentIntentId: obligation.id,
+            id: obligation.id,
+            amount: toCanonicalDecimal(obligation.amount),
+            memo: obligation.memo,
+            metadata: parseMetadata(obligation.metadata),
+            expiresAt: obligation.expires_at,
+            completed: true,
+            idempotent: true
+          }, 200, env, origin);
+        }
+
+        const existingActive = ['created','approved'].includes(obligationStatus) &&
           obligation.expires_at && new Date(obligation.expires_at) > new Date();
 
         const obligationId = existingActive ? obligation.id : `obl_${crypto.randomUUID()}`;
