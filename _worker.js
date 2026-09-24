@@ -1452,6 +1452,35 @@ export default {
         }
         return jsonResponse({ success: true }, 200, env, origin);
       }
+      if (method === 'GET' && path.startsWith('/api/rentals/') && path.endsWith('/fees')) {
+        const rentalId = path.slice('/api/rentals/'.length, -'/fees'.length).trim();
+        if (!rentalId) return errorResponse('Missing rental ID', 400, env, undefined, origin);
+        const { user } = await requireUser(request, env);
+        const rental = await env.RENTORA_DB.prepare(
+          `SELECT r.*, l.owner_user_id, l.id listing_id
+           FROM rentals r JOIN listings l ON l.id=r.listing_id
+           WHERE r.id=?1 LIMIT 1`
+        ).bind(rentalId).first();
+        if (!rental) return errorResponse('Rental not found', 404, env, undefined, origin);
+        if (rental.renter_user_id !== user.id && rental.owner_user_id !== user.id && !isAdmin(user.pi_uid, env)) {
+          return errorResponse('Access denied to rental fees', 403, env, undefined, origin);
+        }
+        const obligations = await env.RENTORA_DB.prepare(
+          `SELECT id, role, purpose, amount, currency, status, pi_payment_id, pi_txid, memo, expires_at, created_at, updated_at
+           FROM payment_obligations WHERE rental_id=?1 ORDER BY role ASC`
+        ).bind(rentalId).all();
+        return jsonResponse({
+          success: true,
+          rentalId,
+          platformFeeTotal: rental.platform_fee_total ?? rental.platform_fee,
+          ownerPlatformFee: rental.owner_platform_fee ?? 0,
+          renterPlatformFee: rental.renter_platform_fee ?? rental.platform_fee,
+          ownerFeePaymentStatus: rental.owner_fee_payment_status || 'not_required',
+          renterFeePaymentStatus: rental.renter_fee_payment_status || rental.payment_status || 'unpaid',
+          obligations: obligations.results || []
+        }, 200, env, origin);
+      }
+
       if (method === 'POST' && path === '/api/payments/intent') {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
