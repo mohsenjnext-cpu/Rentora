@@ -1125,7 +1125,7 @@ export default {
           return errorResponse('فرمت آدرس کیف پول پای نامعتبر است.', 400, env, undefined, origin);
         }
 
-        await claimPayoutOperation(env, {
+        const claimedOperation = await claimPayoutOperation(env, {
           idempotencyKey,
           userId: user.id,
           amount,
@@ -1134,7 +1134,28 @@ export default {
           targetWallet
         });
 
-        return await executePiA2UPayoutPipeline(env, {
+        // Count active payout reservations before touching the Pi API.
+        // This prevents concurrent admin requests from over-committing treasury.
+        if (claimedOperation && claimedOperation.status === 'reserved') {
+          const reservedRow = await env.RENTORA_DB.prepare(
+            "SELECT COALESCE(SUM(amount),0) AS total FROM payout_operations WHERE status IN ('reserved','creating','pi_created','approving','approved','completing')"
+          ).first();
+          const reservedTotal = Number(reservedRow?.total || 0);
+          if (reservedTotal > availableBalance + 0.0000001) {
+            await updatePayoutOperationStatus(env, idempotencyKey, 'cancelled', {
+              error: 'Treasury reservation exceeds available platform-fee balance'
+            });
+            return errorResponse(
+              'این پرداخت همزمان با عملیات دیگری درخواست شده و موجودی قابل رزرو کافی نیست.',
+              409,
+              env,
+              undefined,
+              origin
+            );
+          }
+        }
+
+        const payoutResponse = await executePiA2UPayoutPipeline(env, {
           user,
           amount,
           memo: body?.memo || `Rentora Treasury Payout to ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username}`,
@@ -1143,6 +1164,25 @@ export default {
           idempotencyKey,
           origin
         });
+
+        // Do not leave a permanent treasury reservation after a failed A2U.
+        // If Pi created a payment, preserve it for reconciliation instead.
+        if (payoutResponse.status >= 400 && idempotencyKey && env.RENTORA_DB) {
+          const op = await env.RENTORA_DB.prepare(
+            "SELECT status, pi_payment_id FROM payout_operations WHERE operation_key=?1 LIMIT 1"
+          ).bind(idempotencyKey).first().catch(() => null);
+          if (op && !op.pi_payment_id && ['reserved','creating'].includes(op.status)) {
+            await updatePayoutOperationStatus(env, idempotencyKey, 'cancelled', {
+              error: 'A2U payout failed before a Pi payment was created'
+            });
+          } else if (op && op.pi_payment_id && !['completed','cancelled'].includes(op.status)) {
+            await updatePayoutOperationStatus(env, idempotencyKey, 'reconciliation_required', {
+              error: 'A2U payout failed after a Pi payment was created'
+            });
+          }
+        }
+
+        return payoutResponse;
       }
       if (method === 'GET' && path === '/api/admin/users') {
         const { user } = await requireAdmin(request, env);
