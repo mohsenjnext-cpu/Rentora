@@ -48,6 +48,7 @@ export function PiAuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    try { localStorage.removeItem('rentora_live_v1_session'); } catch (_) {}
     const restoreFetch = installSessionFetchBridge(handleSessionInvalid);
     return restoreFetch;
   }, [handleSessionInvalid]);
