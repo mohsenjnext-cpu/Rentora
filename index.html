@@ -173,6 +173,28 @@
     </style>
   </head>
   <body class="bg-[#FAFAFC] dark:bg-[#0E0D1B] text-[#111827] dark:text-[#F3F4F6] antialiased selection:bg-[#534AB7]/20 selection:text-[#26215C] transition-colors duration-200">
+    <script>
+      // Bootstrap watchdog: if the Vite/React module fails before React can mount,
+      // never leave the user staring at the static HTML splash forever.
+      window.__RENTORA_BOOT_STARTED__ = Date.now();
+      window.addEventListener('error', function (event) {
+        window.__RENTORA_BOOT_ERROR__ = String(event && (event.error?.message || event.message) || 'Unknown bootstrap error');
+        var root = document.getElementById('root');
+        if (root && !window.__RENTORA_REACT_MOUNTED__) {
+          root.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#0E1017;color:#fff;font-family:system-ui,sans-serif;direction:rtl;text-align:center"><div><div style="font-size:18px;font-weight:800;margin-bottom:10px">رنتورا (Rentora)</div><div style="font-size:13px;color:#CBD5E1;max-width:340px">بارگذاری برنامه با خطا متوقف شد. لطفاً یک‌بار صفحه را دوباره بارگذاری کنید.</div></div></div>';
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function (event) {
+        window.__RENTORA_BOOT_ERROR__ = String(event && (event.reason?.message || event.reason) || 'Unhandled promise rejection');
+      });
+      window.setTimeout(function () {
+        if (window.__RENTORA_REACT_MOUNTED__) return;
+        var root = document.getElementById('root');
+        if (root && root.querySelector('[data-rentora-app]') === null) {
+          root.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#0E1017;color:#fff;font-family:system-ui,sans-serif;direction:rtl;text-align:center"><div><div style="font-size:18px;font-weight:800;margin-bottom:10px">رنتورا (Rentora)</div><div style="font-size:13px;color:#CBD5E1;max-width:340px">اجرای برنامه شروع نشد. اتصال و فایل‌های برنامه بررسی می‌شوند.</div></div></div>';
+        }
+      }, 10000);
+    </script>
     <div id="root">
       <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #FAFAFC; font-family: system-ui, -apple-system, sans-serif; direction: rtl;">
         <div style="width: 52px; height: 52px; border-radius: 14px; background: #26215C; display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-size: 26px; font-weight: bold; box-shadow: 0 6px 16px rgba(38,33,92,0.25);">
