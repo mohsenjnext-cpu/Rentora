@@ -132,12 +132,13 @@ class ErrorBoundary extends React.Component {
         </div>
       );
     }
-    return this.props.children;
+    return <div data-rentora-app>{this.props.children}</div>;
   }
 }
 
 const rootElement = document.getElementById('root');
 if (rootElement) {
+  window.__RENTORA_REACT_MOUNTED__ = true;
   ReactDOM.createRoot(rootElement).render(
     <ErrorBoundary>
       <App />
