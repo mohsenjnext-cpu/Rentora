@@ -1121,9 +1121,11 @@ export default {
         }
 
         // A2U recipient is resolved by Pi from the verified app-user UID.
-        // Never let an admin-supplied wallet address become the payment destination.
-        if (body?.walletAddress !== undefined && body?.walletAddress !== null && String(body.walletAddress).trim()) {
-          return errorResponse('مقصد پرداخت از شناسه کاربر تأییدشده پای تعیین می‌شود و قابل تغییر از کلاینت نیست.', 400, env, undefined, origin);
+        // A supplied wallet is accepted only as input validation/legacy UI compatibility,
+        // never as the payment destination. Pi resolves the current wallet from the UID.
+        const requestedWallet = String(body?.walletAddress || '').trim();
+        if (requestedWallet && !/^[A-Za-z0-9_.-]{12,70}$/.test(requestedWallet)) {
+          return errorResponse('فرمت آدرس کیف پول پای نامعتبر است.', 400, env, undefined, origin);
         }
         const targetWallet = '';
         const claimedOperation = await claimPayoutOperation(env, {
