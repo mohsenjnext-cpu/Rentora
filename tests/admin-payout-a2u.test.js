@@ -25,7 +25,16 @@ function createMockDb() {
   return {
     users, transactions, payoutOperations,
     prepare(sql) {
-      return {
+      const query = {
+        async first() {
+          if (sql.includes("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)")) return { total: sumTransactions() };
+          if (sql.includes("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'")) return { total: sumTransactions('admin_payout') };
+          if (sql.includes('SELECT COUNT(*) AS c FROM users')) return { c: users.length };
+          if (sql.includes('SELECT COUNT(*) AS c FROM listings')) return { c: 0 };
+          if (sql.includes('SELECT COUNT(*) AS c FROM rentals')) return { c: 0 };
+          if (sql.includes('SELECT COUNT(*) AS c FROM reports')) return { c: 0 };
+          return null;
+        },
         bind(...params) {
           return {
             async first() {
