@@ -279,24 +279,38 @@ function payoutIdempotencyKey(request, body) {
 async function claimPayoutOperation(env, { idempotencyKey, userId, amount, type, memo, targetWallet }) {
   if (!env?.RENTORA_DB || !idempotencyKey) return null;
   const opId = `pop_${crypto.randomUUID()}`;
-  const metadata = JSON.stringify({ memo, targetWallet, claimedAt: now() });
+  const timestamp = now();
+  const recipient = String(targetWallet || '').trim() || String(userId || '').trim();
   try {
     const existing = await env.RENTORA_DB.prepare(
-      "SELECT * FROM payout_operations WHERE idempotency_key = ?1 LIMIT 1"
+      "SELECT * FROM payout_operations WHERE operation_key = ?1 LIMIT 1"
     ).bind(idempotencyKey).first().catch(() => null);
 
-    if (existing) {
-      return existing;
-    }
+    if (existing) return existing;
 
     await env.RENTORA_DB.prepare(
-      "INSERT INTO payout_operations(id, idempotency_key, user_id, amount, type, status, metadata, created_at, updated_at) VALUES(?1, ?2, ?3, ?4, ?5, 'pending', ?6, ?7, ?7)"
-    ).bind(opId, idempotencyKey, userId, amount, type, metadata, now()).run().catch(() => {});
+      "INSERT INTO payout_operations(id, operation_key, status, amount, user_id, recipient, created_at, updated_at, reservation_expires_at) VALUES(?1, ?2, 'reserved', ?3, ?4, ?5, ?6, ?6, ?7)"
+    ).bind(opId, idempotencyKey, amount, userId, recipient, timestamp, new Date(Date.now() + 15 * 60 * 1000).toISOString()).run();
 
-    return { id: opId, idempotency_key: idempotencyKey, user_id: userId, amount, type, status: 'pending' };
-  } catch (err) {
+    return { id: opId, operation_key: idempotencyKey, user_id: userId, amount, recipient, status: 'reserved' };
+  } catch (_) {
     return null;
   }
+}
+
+async function updatePayoutOperationStatus(env, operationKey, status, extra = {}) {
+  if (!env?.RENTORA_DB || !operationKey || !status) return;
+  const allowed = new Set(['reserved','creating','pi_created','approving','approved','completing','completed','cancelled','reconciliation_required']);
+  if (!allowed.has(status)) return;
+  const fields = ['status = ?1', 'updated_at = ?2'];
+  const values = [status, now()];
+  if (extra.piPaymentId !== undefined) { fields.push(`pi_payment_id = ?${values.length + 1}`); values.push(extra.piPaymentId); }
+  if (extra.txid !== undefined) { fields.push(`txid = ?${values.length + 1}`); values.push(extra.txid); }
+  if (extra.error !== undefined) { fields.push(`error = ?${values.length + 1}`); values.push(extra.error); }
+  values.push(operationKey);
+  await env.RENTORA_DB.prepare(
+    `UPDATE payout_operations SET ${fields.join(', ')} WHERE operation_key = ?${values.length}`
+  ).bind(...values).run().catch(() => {});
 }
 
 async function recordCompletedPayout(env, user, paymentId, txid, amount, metadataType, targetWallet, idempotencyKey) {
@@ -317,7 +331,7 @@ async function recordCompletedPayout(env, user, paymentId, txid, amount, metadat
   if (idempotencyKey && env.RENTORA_DB) {
     try {
       await env.RENTORA_DB.prepare(
-        "UPDATE payout_operations SET status='completed', pi_payment_id=?1, pi_txid=?2, updated_at=?3 WHERE idempotency_key=?4"
+        "UPDATE payout_operations SET status='completed', pi_payment_id=?1, txid=?2, updated_at=?3 WHERE operation_key=?4"
       ).bind(paymentId, txid, now(), idempotencyKey).run().catch(() => {});
     } catch (_) {}
   }
@@ -341,7 +355,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
   if (idempotencyKey && env.RENTORA_DB) {
     try {
       const op = await env.RENTORA_DB.prepare(
-        "SELECT * FROM payout_operations WHERE idempotency_key = ?1 LIMIT 1"
+        "SELECT * FROM payout_operations WHERE operation_key = ?1 LIMIT 1"
       ).bind(idempotencyKey).first().catch(() => null);
 
       if (op && op.status === 'completed' && op.pi_payment_id && op.pi_txid) {
@@ -423,6 +437,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
 
   // 5. If no existing payment found, create a new one
   if (!paymentId) {
+    await updatePayoutOperationStatus(env, idempotencyKey, 'creating');
     const paymentPayload = {
       amount,
       memo: String(memo || `Rentora Payout to ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username}`).slice(0, 120),
@@ -458,6 +473,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
     } else if (piRes.ok && (created?.identifier || created?.id)) {
       paymentId = created.identifier || created.id;
       paymentInfo = created;
+      await updatePayoutOperationStatus(env, idempotencyKey, 'pi_created', { piPaymentId: paymentId });
     } else {
       const errMsg = piErrorMessage(created, 'ایجاد تراکنش واریز در سرور پای رد شد.');
       if (env.RENTORA_KV && lockKey) await env.RENTORA_KV.delete(lockKey).catch(() => {});
@@ -495,6 +511,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
 
   // 6. Idempotent Approval - DO NOT call approve if already approved!
   const isAlreadyApproved = Boolean(paymentInfo?.status?.developer_approved);
+  await updatePayoutOperationStatus(env, idempotencyKey, isAlreadyApproved ? 'approved' : 'approving', { piPaymentId: paymentId });
   if (!isAlreadyApproved) {
     const appRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, {
       method: 'POST',
@@ -510,7 +527,10 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
       if (env.RENTORA_KV && lockKey) await env.RENTORA_KV.delete(lockKey).catch(() => {});
       return errorResponse(errMsg, 502, env, approved, origin);
     }
-    if (isApprovedNow) paymentInfo = approved;
+    if (isApprovedNow) {
+      paymentInfo = approved;
+      await updatePayoutOperationStatus(env, idempotencyKey, 'approved', { piPaymentId: paymentId });
+    }
     if (isReportedAlreadyApproved) {
       const getRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
       if (getRes.ok) {
@@ -562,6 +582,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
 
   // 8. Idempotent Completion - DO NOT call complete if already completed!
   const isAlreadyCompleted = Boolean(paymentInfo?.status?.developer_completed);
+  if (!isAlreadyCompleted) await updatePayoutOperationStatus(env, idempotencyKey, 'completing', { piPaymentId: paymentId, txid });
   if (!isAlreadyCompleted) {
     const compRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, {
       method: 'POST',
@@ -582,6 +603,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
   // 9. Record completed transaction in D1
   const finalAmount = Number(paymentInfo?.amount || amount);
   await recordCompletedPayout(env, user, paymentId, txid, finalAmount, metadataType, targetWallet, idempotencyKey);
+  await updatePayoutOperationStatus(env, idempotencyKey, 'completed', { piPaymentId: paymentId, txid });
 
   // 10. Clean up active payment state & locks in KV
   if (env.RENTORA_KV) {
