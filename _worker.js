@@ -1267,53 +1267,10 @@ export default {
         const oldMeta = parseMetadata(existing?.metadata);
         const existingKyc = oldMeta?.kycStatus || existing?.kyc_status;
 
-        // Three-state KYC resolution: 'unknown' | 'verified' | 'unverified'
-        let kycStatus = 'unknown';
-        if (existingKyc === 'verified') {
-          // Never downgrade an already verified user on subsequent logins
-          kycStatus = 'verified';
-        } else {
-          const isExplicitlyVerified = Boolean(
-            piUser?.kyc_status === true ||
-            piUser?.kyc_status === 'verified' ||
-            piUser?.is_kyc === true ||
-            piUser?.kyc === true ||
-            piUser?.credentials?.kyc === true ||
-            body?.user?.kyc_status === true ||
-            body?.user?.kyc_status === 'verified' ||
-            body?.user?.is_kyc === true ||
-            body?.user?.kyc === true ||
-            body?.user?.credentials?.kyc === true ||
-            body?.kycStatus === 'verified' ||
-            (Array.isArray(piUser?.roles) && (
-              piUser.roles.includes('kyc') ||
-              piUser.roles.includes('kyced') ||
-              piUser.roles.includes('pioneer_kyc')
-            )) ||
-            (Array.isArray(body?.user?.roles) && (
-              body.user.roles.includes('kyc') ||
-              body.user.roles.includes('kyced') ||
-              body.user.roles.includes('pioneer_kyc')
-            ))
-          );
-          const isExplicitlyUnverified = Boolean(
-            piUser?.kyc_status === false ||
-            piUser?.kyc_status === 'unverified' ||
-            body?.user?.kyc_status === false ||
-            body?.user?.kyc_status === 'unverified' ||
-            body?.kycStatus === 'unverified'
-          );
-
-          if (isExplicitlyVerified) {
-            kycStatus = 'verified';
-          } else if (isExplicitlyUnverified) {
-            kycStatus = 'unverified';
-          } else if (existingKyc) {
-            kycStatus = existingKyc;
-          } else {
-            kycStatus = 'unknown';
-          }
-        }
+        // KYC is server-authoritative. The Pi /me response is the identity source of truth,
+        // while client-supplied KYC fields must never be accepted as proof of verification.
+        // Preserve an existing server/admin verification; otherwise remain unknown.
+        let kycStatus = existingKyc === 'verified' ? 'verified' : 'unknown';
 
         const loginCount = (Number(oldMeta.loginCount) || 0) + 1;
         const newMeta = {
