@@ -329,6 +329,7 @@ async function resumePayoutOperation(env, operation) {
 
 async function reconcileStalePayoutOperations(env) {
   const recoveryScanSucceeded = await autoResolveIncompleteServerPayments(env, null);
+  await processPayoutReconciliationQueue(env);
   const cutoff = new Date(Date.now() - PAYOUT_STALE_MS).toISOString();
   const rows = await env.RENTORA_DB.prepare(`SELECT * FROM payout_operations WHERE status IN ('reserved','creating','pi_created','approving','approved','completing','reconciliation_required') AND updated_at < ?1 LIMIT 50`).bind(cutoff).all();
   for (const operation of rows?.results || []) {
@@ -770,6 +771,74 @@ async function enqueuePayoutReconciliation(env, payment, reason, metadata = {}) 
   return paymentId;
 }
 
+async function processPayoutReconciliationQueue(env) {
+  const rows = await env.RENTORA_DB.prepare(
+    "SELECT * FROM payout_reconciliation_queue WHERE status='reconciliation_required' ORDER BY updated_at ASC LIMIT 50"
+  ).all();
+  for (const row of rows?.results || []) {
+    try {
+      let operation = row.operation_key
+        ? await getPayoutOperation(env, row.operation_key)
+        : await env.RENTORA_DB.prepare('SELECT * FROM payout_operations WHERE pi_payment_id=?1 LIMIT 1').bind(row.pi_payment_id).first();
+      if (!operation) continue;
+
+      const paymentId = row.pi_payment_id || operation.pi_payment_id;
+      if (!paymentId) continue;
+      if (operation.pi_payment_id && operation.pi_payment_id !== paymentId) continue;
+
+      const current = await fetchPiPayment(env, paymentId);
+      if (!current.response.ok) continue;
+
+      if (current.status.cancelled || current.status.user_cancelled) {
+        operation = await transitionPayoutOperation(
+          env,
+          operation.operation_key,
+          PAYOUT_ACTIVE_STATES,
+          'cancelled',
+          { error: 'Reconciled Pi payment was cancelled', clearLease: true }
+        );
+      } else {
+        if (!operation.pi_payment_id) {
+          if (operation.status !== 'creating') continue;
+          try {
+            await validateA2UPayment(env, { ...operation, pi_payment_id: paymentId }, current.payment);
+          } catch (_) {
+            continue;
+          }
+          operation = await transitionPayoutOperation(env, operation.operation_key, ['creating'], 'pi_created', { piPaymentId: paymentId });
+        }
+        if (!operation) continue;
+
+        try {
+          await validateA2UPayment(env, operation, current.payment);
+        } catch (_) {
+          continue;
+        }
+
+        if (current.status.developer_completed) {
+          operation = await persistCompletedPayout(
+            env,
+            operation,
+            paymentId,
+            current.payment?.transaction?.txid,
+            current.payment
+          );
+        } else if (current.status.developer_approved || current.status.transaction_verified) {
+          operation = await resumePayoutOperation(env, operation);
+        }
+      }
+
+      if (operation?.status === 'completed' || operation?.status === 'cancelled') {
+        await env.RENTORA_DB.prepare(
+          "UPDATE payout_reconciliation_queue SET status='resolved', updated_at=?1 WHERE pi_payment_id=?2 AND status='reconciliation_required'"
+        ).bind(now(), paymentId).run();
+      }
+    } catch (error) {
+      console.warn('processPayoutReconciliationQueue warning:', error);
+    }
+  }
+}
+
 async function autoResolveIncompleteServerPayments(env, user) {
   try {
     const res = await piFetch(env, '/payments/incomplete_server_payments');
@@ -1081,5 +1150,6 @@ export const __payoutTestHooks = {
   persistCompletedPayout,
   reconcileStalePayoutOperations,
   autoResolveIncompleteServerPayments,
+  processPayoutReconciliationQueue,
   PAYOUT_TRANSITIONS
 };
