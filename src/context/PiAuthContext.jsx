@@ -84,7 +84,7 @@ export function PiAuthProvider({ children }) {
     setAuthError(null);
     try {
       const authData = await piService.authenticate();
-      if (!authData?.sessionToken || !authData?.uid) throw new Error('سرور رنتورا یک نشست معتبر صادر نکرد.');
+      if (!authData?.uid) throw new Error('سرور رنتورا یک نشست معتبر صادر نکرد.');
       const isAdminRole = authData.user?.role === 'admin';
       setIsServerVerifiedAdmin(isAdminRole);
       const userObj = {
@@ -136,7 +136,7 @@ export function PiAuthProvider({ children }) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${currentUser.sessionToken}`
+        credentials: 'include'
       },
       body: JSON.stringify(allowed)
     });
