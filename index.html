@@ -49,16 +49,11 @@
     </script>
     
     <!-- Official Pi Network SDK -->
-    <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+    <!-- Load Pi SDK without blocking React bootstrap. piService initializes it when needed. -->
+    <script defer src="https://sdk.minepi.com/pi-sdk.js"></script>
     <script>
       window.global = window;
       window.process = window.process || { env: { NODE_ENV: 'production' } };
-      try {
-        if (window.Pi && typeof window.Pi.init === 'function') {
-          window.Pi.init({ version: "2.0", sandbox: false });
-          window.__PI_INITIALIZED__ = true;
-        }
-      } catch (e) {}
     </script>
 
     <!-- Vazirmatn font for Persian & Arabic, Inter for English -->
