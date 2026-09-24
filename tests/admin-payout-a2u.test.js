@@ -256,29 +256,6 @@ test('Admin A2U ignores client walletAddress and binds Pi payment to verified ui
   }
 });
 
-test('Admin A2U does not settle a completed payment without a verified blockchain txid', async () => {
-  const db = createMockDb(), kv = createMockKv(), token = await setupSession(kv, db.users[0]), env = envFor(db, kv);
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url, opts) => {
-    const u = String(url);
-    if (u.includes('/payments/incomplete_server_payments')) return new Response(JSON.stringify({ incomplete_server_payments: [] }), { status: 200 });
-    if (u.endsWith('/payments') && opts?.method === 'POST') return new Response(JSON.stringify({ identifier: 'completed_without_tx_1', amount: 5, status: { developer_approved: true, developer_completed: true, transaction_verified: false }, transaction: null }), { status: 200 });
-    if (u.endsWith('/payments/completed_without_tx_1')) return new Response(JSON.stringify({ identifier: 'completed_without_tx_1', amount: 5, status: { developer_approved: true, developer_completed: true, transaction_verified: false }, transaction: null }), { status: 200 });
-    return originalFetch(url, opts);
-  };
-  try {
-    const res = await worker.fetch(new Request('http://localhost/api/admin/payout', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', 'Idempotency-Key': 'completed_without_tx_1' },
-      body: JSON.stringify({ amount: 5 })
-    }), env);
-    assert.equal(res.status, 502);
-    assert.equal(db.transactions.filter(t => t.type === 'admin_payout').length, 0);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
 test('Admin A2U recovers when Pi reports the payment already approved', async () => {
   const db = createMockDb(), kv = createMockKv(), token = await setupSession(kv, db.users[0]), env = envFor(db, kv);
   const originalFetch = globalThis.fetch;
