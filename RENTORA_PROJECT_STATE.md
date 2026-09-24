@@ -90,7 +90,26 @@ Known product priority:
 
 ## 7. UI/UX Audit Status
 
-Status: **NOT STARTED YET**
+Status: **IN PROGRESS**
+
+Initial product-wide audit findings:
+- App shell is state-driven in `src/App.jsx`, with page navigation, global modals and mobile/desktop navigation tightly coupled in one component.
+- Current user IA is fragmented across Home, Discover, Activity, Owner Hub, Profile, Settings, plus modal-only Chat/Wallet/Help/Security/Support/Booking experiences.
+- Mobile navigation is optimized for four destinations while several high-value actions remain hidden in a drawer or modal, creating discoverability debt.
+- `ItemCard` and Home contain separate card implementations, creating visual/behavioral duplication that should converge into one listing-card system.
+- `RentoraContext` still persists platform fee configuration and favorites/read-state in localStorage. Platform fee configuration is especially important because financial configuration must be server-authoritative; the redesign must not treat client config as the source of truth.
+- `SettingsPage` is primarily a preferences/help hub. It has no backend-authoritative platform configuration surface, so admin settings cannot be treated as a working settings system yet.
+- `AdminDashboardPage` is a large monolithic command center combining overview, finance, operations, users, listings, reports, audit and system concerns. It needs decomposition by information architecture and task.
+- Admin console currently exposes `system.platformFeeRate` as read-only data. No discovered admin endpoint currently provides a write operation for platform fee settings, so the UI should not imply that this setting is editable until a real backend contract exists.
+- `/api/wallet/withdraw` is explicitly retired with HTTP 410. Real payout behavior is now under payout operations, so Wallet UI and admin Treasury/Payout UI must distinguish legacy withdrawal from active payout lifecycle.
+- Owner Hub currently calculates "revenue" from completed rental totals, while platform treasury revenue is based on completed platform-fee transactions. These are different financial concepts and must be separated clearly in the redesign.
+- Booking UI already communicates the non-escrow P2P model and isolates the Rentora fee as the online Pi payment. This information hierarchy should be preserved, but the flow should be redesigned as a clearer multi-step transaction state experience.
+- Activity is a dense 700+ line surface containing rental state, review/report/contact/handover interactions. It should become a task-oriented rental center with clear lifecycle states and contextual actions.
+- List Item and Activity are among the largest user pages, indicating substantial form/workflow complexity that should be handled with progressive disclosure rather than simply restyled.
+- RTL/Persian is a first-class requirement, but the current implementation mixes directional utility classes, hard-coded Persian fallbacks and English-only admin labels. The redesign needs centralized localization and direction-aware primitives.
+- Visual system is partially centralized in `src/index.css` but many components still use hard-coded utility colors, radii and shadows. This creates token drift and should be replaced incrementally with design tokens.
+- Existing loading/empty/error/success states are present across major flows, but they are implemented locally rather than through a consistent state-pattern system.
+- No backend rebuild is implied by these findings. The redesign should consume the existing APIs/services and only add backend contracts where a missing product capability is proven necessary.
 
 The next phase is a complete product-wide UI/UX audit before implementation.
 
