@@ -17,7 +17,7 @@ async function requireUser(request, env) {
   const cookies = parseCookies(request);
   const cookieToken = cookies.rentora_session ? decodeURIComponent(cookies.rentora_session) : '';
   const auth = request.headers.get('Authorization') || '';
-  if (cookieToken) { request = new Request(request, { headers: new Headers(request.headers) }); request.headers.set('Authorization', `Bearer ${cookieToken}`); }
+  if (cookieToken) { const headers = new Headers(request.headers); headers.set('Authorization', `Bearer ${cookieToken}`); request = new Request(request, { headers }); }
   if (!auth.startsWith('Bearer ')) throw Object.assign(new Error('Authentication required'), { status: 401 });
   const token = auth.slice(7).trim();
   const raw = await env.RENTORA_KV.get(`session:${await sha256(token)}`);
