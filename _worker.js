@@ -1120,11 +1120,9 @@ export default {
           return errorResponse(`مبلغ درخواستی (${amount} π) از موجودی واقعی کارمزدها (${availableBalance.toFixed(4)} π) بیشتر است.`, 400, env, undefined, origin);
         }
 
-        const targetWallet = String(body?.walletAddress || '').trim();
-        if (targetWallet && !/^[A-Za-z0-9_.-]{12,70}$/.test(targetWallet)) {
-          return errorResponse('فرمت آدرس کیف پول پای نامعتبر است.', 400, env, undefined, origin);
-        }
-
+        // A2U recipient is resolved by Pi from the verified app-user UID.
+        // Never let an admin-supplied wallet address become the payment destination.
+        const targetWallet = '';
         const claimedOperation = await claimPayoutOperation(env, {
           idempotencyKey,
           userId: user.id,
@@ -1158,7 +1156,7 @@ export default {
         const payoutResponse = await executePiA2UPayoutPipeline(env, {
           user,
           amount,
-          memo: body?.memo || `Rentora Treasury Payout to ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username}`,
+          memo: body?.memo || `Rentora Treasury Payout to @${user.username}`,
           metadataType: 'admin_treasury_payout',
           targetWallet,
           idempotencyKey,
