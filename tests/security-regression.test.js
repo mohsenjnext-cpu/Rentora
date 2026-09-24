@@ -12,21 +12,20 @@ function section(start, end) {
   return worker.slice(from, to === -1 ? worker.length : to);
 }
 
-test('payment intent amount is server-owned', () => {
+test('payment intent amount is server-owned and obligation-bound', () => {
   const intent = section("path === '/api/payments/intent'", "path === '/api/payments/approve'");
-  assert.match(intent, /SELECT r\.,?\s*\*?,?\s*l\.title/);
-  assert.match(intent, /bind\(body\.rentalId, user\.id\)/);
-  assert.match(intent, /rental\.platform_fee/);
+  assert.match(intent, /payment_obligations/);
+  assert.match(intent, /obligation\.amount/);
   assert.doesNotMatch(intent, /body\.amount/);
+  assert.match(intent, /body\.paymentIntentId/);
 });
 
-test('payment approval route requires an authenticated, user-bound intent', () => {
+test('payment approval route requires an authenticated, obligation-bound payment', () => {
   const approve = section("path === '/api/payments/approve'", "path === '/api/payments/complete'");
   assert.match(approve, /requireUser\(request, env\)/);
-  assert.match(approve, /payment_intents WHERE id=\?1 AND user_id=\?2/);
+  assert.match(approve, /payment_obligations WHERE id=\?1 AND user_id=\?2/);
   assert.match(approve, /body\.paymentIntentId/);
-  assert.match(approve, /validatePiPayment\(payment, intent, user\)/);
-  assert.match(approve, /\['created','pending','approved'\]/);
+  assert.match(approve, /validatePiPayment\(payment, obligation, user\)/);
   assert.match(worker, /const payerUid = payment\?\.user\?\.uid \|\| payment\?\.from_address\?\.uid/);
   assert.match(worker, /Pi payer mismatch/);
   assert.match(worker, /metadataIntent/);
@@ -40,9 +39,9 @@ test('payment approval uses an atomic D1 claim for the Pi payment ID', () => {
   assert.match(approve, /concurrently claimed by another payment/);
 });
 
-test('payment completion requires an approved intent and strict Pi binding', () => {
+test('payment completion requires an approved obligation and strict Pi binding', () => {
   const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
-  assert.match(complete, /intent\.pi_payment_id && intent\.pi_payment_id !== body\.paymentId/);
+  assert.match(complete, /obligation\.pi_payment_id && obligation\.pi_payment_id !== body\.paymentId/);
   assert.match(complete, /\['approved','completed'\]\.includes/);
   assert.match(worker, /Pi payment identifier mismatch/);
   assert.match(worker, /Pi payment amount mismatch/);
@@ -51,13 +50,26 @@ test('payment completion requires an approved intent and strict Pi binding', () 
   assert.match(complete, /\['approved','completed','complete'\]/);
 });
 
-test('payment completion can recover when Pi is already completed but D1 has not finalized it', () => {
+test('payment completion reconciles the authoritative Pi transaction hash', () => {
   const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
-  assert.match(complete, /\['approved','completed','complete'\]\.includes\(status\)/);
-  assert.match(complete, /if \(!completionResponse\.ok && !\['completed','complete'\]\.includes\(status\)\)/);
-  assert.match(complete, /UPDATE payment_intents SET pi_payment_id=\?1,pi_txid=\?2,status='completed'/);
-  assert.match(complete, /UPDATE rentals SET payment_status='completed',status='confirmed'/);
+  assert.match(complete, /verifiedPayment\?\.transaction\?\.txid/);
+  assert.match(complete, /const actualTxid/);
+  assert.match(complete, /Pi transaction hash mismatch/);
+  assert.match(complete, /UPDATE payment_obligations SET pi_payment_id=\?1, pi_txid=\?2, status='completed'/);
   assert.match(complete, /INSERT OR IGNORE INTO transactions/);
+});
+
+test('owner completion activates the listing only after owner fee completion', () => {
+  const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
+  assert.match(complete, /owner_fee_payment_status='completed'/);
+  assert.match(complete, /status='active'/);
+  assert.match(complete, /activated_at/);
+});
+
+test('renter completion requires owner activation fee completion', () => {
+  const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
+  assert.match(complete, /Owner activation fee is not completed/);
+  assert.match(complete, /renter_fee_payment_status='completed'/);
 });
 
 test('server logout revokes the KV session', () => {
