@@ -158,6 +158,47 @@ test('Admin A2U uses the D1 operation_key state and is idempotent', async () => 
 // CI schema-alignment follow-up.
 
 
+test('Admin A2U does not over-reserve treasury across sequential requests', async () => {
+  const db = createMockDb(), kv = createMockKv(), token = await setupSession(kv, db.users[0]), env = envFor(db, kv);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    const u = String(url);
+    if (u.includes('/payments/incomplete_server_payments')) return new Response(JSON.stringify({ incomplete_server_payments: [] }), { status: 200 });
+    if (u.endsWith('/payments') && opts?.method === 'POST') {
+      const payload = JSON.parse(opts.body);
+      const id = payload.payment.metadata.idempotencyKey === 'reserve_one' ? 'reserve_pay_1' : 'reserve_pay_2';
+      return new Response(JSON.stringify({ identifier: id, amount: 10, status: { developer_approved: false, developer_completed: false } }), { status: 200 });
+    }
+    if (u.includes('/payments/reserve_pay_1/approve') || u.includes('/payments/reserve_pay_2/approve')) {
+      const id = u.includes('reserve_pay_1') ? 'reserve_pay_1' : 'reserve_pay_2';
+      return new Response(JSON.stringify({ identifier: id, amount: 10, status: { developer_approved: true }, transaction: {} }), { status: 200 });
+    }
+    if (u.endsWith('/payments/reserve_pay_1') || u.endsWith('/payments/reserve_pay_2')) {
+      const id = u.includes('reserve_pay_1') ? 'reserve_pay_1' : 'reserve_pay_2';
+      return new Response(JSON.stringify({ identifier: id, amount: 10, status: { developer_approved: true, developer_completed: false }, transaction: {} }), { status: 200 });
+    }
+    return originalFetch(url, opts);
+  };
+  try {
+    const first = await worker.fetch(new Request('http://localhost/api/admin/payout', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', 'Idempotency-Key': 'reserve_one' },
+      body: JSON.stringify({ amount: 10 })
+    }), env);
+    assert.equal(first.status, 202);
+
+    const second = await worker.fetch(new Request('http://localhost/api/admin/payout', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', 'Idempotency-Key': 'reserve_two' },
+      body: JSON.stringify({ amount: 10 })
+    }), env);
+    assert.equal(second.status, 409);
+    assert.equal(db.payoutOperations.find(p => p.operation_key === 'reserve_two')?.status, 'cancelled');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Admin A2U preserves failure without creating a settlement transaction', async () => {
   const db = createMockDb(), kv = createMockKv(), token = await setupSession(kv, db.users[0]), env = envFor(db, kv);
   const initialTxCount = db.transactions.length;
