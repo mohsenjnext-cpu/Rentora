@@ -298,6 +298,23 @@ async function claimPayoutOperation(env, { idempotencyKey, userId, amount, type,
   }
 }
 
+async function enqueuePayoutReconciliation(env, { paymentId = null, operationKey = null, payload = {}, error = null } = {}) {
+  if (!env?.RENTORA_DB) return;
+  try {
+    const existing = paymentId
+      ? await env.RENTORA_DB.prepare("SELECT id FROM payout_reconciliation_queue WHERE pi_payment_id = ?1 LIMIT 1").bind(paymentId).first().catch(() => null)
+      : null;
+    if (existing) {
+      await env.RENTORA_DB.prepare("UPDATE payout_reconciliation_queue SET status='reconciliation_required', operation_key=?1, payload=?2, updated_at=?3 WHERE id=?4")
+        .bind(operationKey, JSON.stringify({ ...payload, error }), now(), existing.id).run().catch(() => {});
+      return;
+    }
+    await env.RENTORA_DB.prepare(
+      "INSERT INTO payout_reconciliation_queue(id, pi_payment_id, operation_key, status, payload, created_at, updated_at) VALUES(?1, ?2, ?3, 'reconciliation_required', ?4, ?5, ?5)"
+    ).bind("prq_" + crypto.randomUUID(), paymentId, operationKey, JSON.stringify({ ...payload, error }), now()).run().catch(() => {});
+  } catch (_) {}
+}
+
 async function updatePayoutOperationStatus(env, operationKey, status, extra = {}) {
   if (!env?.RENTORA_DB || !operationKey || !status) return;
   const allowed = new Set(['reserved','creating','pi_created','approving','approved','completing','completed','cancelled','reconciliation_required']);
@@ -425,6 +442,12 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
       await updatePayoutOperationStatus(env, idempotencyKey, 'reconciliation_required', {
         piPaymentId: paymentId,
         error: 'Pi reports developer_completed without a verified blockchain transaction'
+      });
+      await enqueuePayoutReconciliation(env, {
+        paymentId,
+        operationKey: idempotencyKey,
+        payload: { userId: user.id, uid: user.pi_uid, amount: Number(paymentInfo?.amount || amount), status: paymentInfo?.status || {} },
+        error: 'completed_without_verified_txid'
       });
       return errorResponse('پرداخت در پای تکمیل گزارش شده، اما تراکنش بلاکچین قابل تأیید نیست؛ تسویه در صف تطبیق قرار گرفت.', 502, env, undefined, origin);
     }
