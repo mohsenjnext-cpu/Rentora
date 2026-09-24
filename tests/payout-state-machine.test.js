@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+// Keep CI anchored to the current branch head after security regression changes.
 import fs from 'node:fs';
 
 const migration = fs.readFileSync(new URL('../db/migrations/0010_payout_operations.sql', import.meta.url), 'utf8');
