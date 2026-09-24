@@ -13,6 +13,7 @@ run_worker_first = true
 binding = "RENTORA_DB"
 database_name = "rentora"
 database_id = "d8dcbee6-e958-461a-b746-b460f1adb8d5"
+migrations_dir = "db/migrations"
 
 [[kv_namespaces]]
 binding = "RENTORA_KV"
