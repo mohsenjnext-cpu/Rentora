@@ -1,0 +1,262 @@
+-- Rentora production D1 bootstrap/reconciliation.
+-- 0002 is intentionally immutable and only establishes the production lineage.
+-- This migration makes a newly-created D1 database reconstruct the authoritative
+-- schema without replaying the historical migrations or changing existing data.
+-- Existing objects are preserved by IF NOT EXISTS; future schema changes belong
+-- in subsequent numbered production migrations.
+
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  pi_uid TEXT NOT NULL UNIQUE,
+  username TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  avatar_url TEXT,
+  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user','admin')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
+  metadata TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS listings (
+  id TEXT PRIMARY KEY,
+  owner_user_id TEXT NOT NULL REFERENCES users(id),
+  title TEXT NOT NULL,
+  description TEXT,
+  category TEXT,
+  location TEXT,
+  price_per_day REAL NOT NULL CHECK (price_per_day >= 0),
+  deposit_amount REAL NOT NULL DEFAULT 0 CHECK (deposit_amount >= 0),
+  platform_fee_rate REAL NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('draft','active','paused','deleted')),
+  metadata TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS rentals (
+  id TEXT PRIMARY KEY,
+  listing_id TEXT NOT NULL REFERENCES listings(id),
+  renter_user_id TEXT NOT NULL REFERENCES users(id),
+  owner_user_id TEXT REFERENCES users(id),
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  rental_amount REAL NOT NULL CHECK (rental_amount >= 0),
+  deposit_amount REAL NOT NULL DEFAULT 0 CHECK (deposit_amount >= 0),
+  platform_fee REAL NOT NULL CHECK (platform_fee > 0),
+  total_amount REAL NOT NULL CHECK (total_amount >= 0),
+  status TEXT NOT NULL DEFAULT 'pending_payment' CHECK (status IN ('draft','pending_payment','paid','confirmed','active','completed','cancelled','disputed')),
+  payment_status TEXT NOT NULL DEFAULT 'unpaid' CHECK (payment_status IN ('unpaid','pending','approved','completed','failed','cancelled')),
+  metadata TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS payment_intents (
+  id TEXT PRIMARY KEY,
+  rental_id TEXT NOT NULL UNIQUE REFERENCES rentals(id),
+  user_id TEXT NOT NULL REFERENCES users(id),
+  amount REAL NOT NULL CHECK (amount > 0),
+  memo TEXT NOT NULL,
+  pi_payment_id TEXT UNIQUE,
+  pi_txid TEXT,
+  status TEXT NOT NULL DEFAULT 'created' CHECK (status IN ('created','approved','completed','cancelled','failed')),
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+  id TEXT PRIMARY KEY,
+  payment_intent_id TEXT REFERENCES payment_intents(id),
+  pi_payment_id TEXT NOT NULL UNIQUE,
+  pi_txid TEXT NOT NULL UNIQUE,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  amount REAL NOT NULL CHECK (amount > 0),
+  type TEXT NOT NULL DEFAULT 'platform_fee',
+  status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('completed','reversed')),
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS reviews (
+  id TEXT PRIMARY KEY,
+  rental_id TEXT NOT NULL REFERENCES rentals(id) ON DELETE CASCADE,
+  listing_id TEXT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+  reviewer_user_id TEXT NOT NULL REFERENCES users(id),
+  reviewee_user_id TEXT NOT NULL REFERENCES users(id),
+  rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  review_text TEXT,
+  status TEXT NOT NULL DEFAULT 'approved' CHECK (status IN ('approved', 'hidden', 'flagged')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(rental_id, reviewer_user_id, reviewee_user_id)
+);
+
+CREATE TABLE IF NOT EXISTS reports (
+  id TEXT PRIMARY KEY,
+  reporter_user_id TEXT NOT NULL REFERENCES users(id),
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','reviewing','resolved','dismissed')),
+  metadata TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY,
+  listing_id TEXT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
+  rental_id TEXT REFERENCES rentals(id) ON DELETE SET NULL,
+  owner_user_id TEXT NOT NULL REFERENCES users(id),
+  renter_user_id TEXT NOT NULL REFERENCES users(id),
+  type TEXT NOT NULL DEFAULT 'pre_booking' CHECK (type IN ('pre_booking', 'post_booking')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'blocked')),
+  last_message_text TEXT,
+  last_message_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(listing_id, renter_user_id, type)
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  sender_user_id TEXT NOT NULL REFERENCES users(id),
+  message_text TEXT NOT NULL,
+  message_type TEXT NOT NULL DEFAULT 'text' CHECK (message_type IN ('text', 'system', 'handover_notice', 'status_update')),
+  moderation_status TEXT NOT NULL DEFAULT 'approved' CHECK (moderation_status IN ('approved', 'flagged', 'blocked')),
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS listing_contacts (
+  listing_id TEXT PRIMARY KEY REFERENCES listings(id) ON DELETE CASCADE,
+  contact_name TEXT,
+  contact_phone TEXT,
+  whatsapp TEXT,
+  preferred_contact_method TEXT DEFAULT 'phone',
+  contact_hours TEXT,
+  coordination_notes TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS payout_operations (
+  id TEXT PRIMARY KEY,
+  operation_key TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL CHECK (status IN ('reserved','creating','pi_created','approving','approved','completing','completed','cancelled','reconciliation_required')),
+  amount REAL NOT NULL CHECK (amount > 0),
+  user_id TEXT NOT NULL,
+  recipient TEXT NOT NULL,
+  pi_payment_id TEXT UNIQUE,
+  txid TEXT,
+  error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  reservation_expires_at TEXT,
+  lease_owner TEXT,
+  lease_expires_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS payout_reconciliation_queue (
+  id TEXT PRIMARY KEY,
+  pi_payment_id TEXT UNIQUE,
+  operation_key TEXT,
+  status TEXT NOT NULL CHECK (status IN ('reconciliation_required','resolved')),
+  payload TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_listings_owner ON listings(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_listings_status ON listings(status);
+CREATE INDEX IF NOT EXISTS idx_listings_owner_status ON listings(owner_user_id,status);
+CREATE INDEX IF NOT EXISTS idx_rentals_renter ON rentals(renter_user_id);
+CREATE INDEX IF NOT EXISTS idx_rentals_owner ON rentals(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_rentals_listing ON rentals(listing_id);
+CREATE INDEX IF NOT EXISTS idx_rentals_listing_dates_status ON rentals(listing_id,start_date,end_date,status);
+CREATE INDEX IF NOT EXISTS idx_payment_intents_user ON payment_intents(user_id);
+CREATE INDEX IF NOT EXISTS idx_payment_intents_status ON payment_intents(status);
+CREATE INDEX IF NOT EXISTS idx_payment_intents_rental_status ON payment_intents(rental_id,status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_intents_pi_payment_id ON payment_intents(pi_payment_id) WHERE pi_payment_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_intents_pi_txid ON payment_intents(pi_txid) WHERE pi_txid IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
+CREATE INDEX IF NOT EXISTS idx_conversations_participants ON conversations(owner_user_id,renter_user_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_listing ON conversations(listing_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_rental ON conversations(rental_id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id,created_at);
+CREATE INDEX IF NOT EXISTS idx_listing_contacts_listing ON listing_contacts(listing_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_rental ON reviews(rental_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_listing ON reviews(listing_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_reviewer ON reviews(reviewer_user_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_reviewee ON reviews(reviewee_user_id);
+CREATE INDEX IF NOT EXISTS idx_payout_operations_status_updated ON payout_operations(status,updated_at);
+CREATE INDEX IF NOT EXISTS idx_payout_operations_payment_id ON payout_operations(pi_payment_id);
+CREATE INDEX IF NOT EXISTS idx_payout_reconciliation_queue_status ON payout_reconciliation_queue(status,updated_at);
+
+CREATE TRIGGER IF NOT EXISTS listings_status_transition_guard
+BEFORE UPDATE OF status ON listings
+FOR EACH ROW
+WHEN NEW.status <> OLD.status
+  AND NOT ((OLD.status='active' AND NEW.status IN ('paused','deleted')) OR (OLD.status='paused' AND NEW.status IN ('active','deleted')))
+BEGIN SELECT RAISE(ABORT,'invalid listing status transition'); END;
+
+CREATE TRIGGER IF NOT EXISTS rentals_overlap_guard_insert
+BEFORE INSERT ON rentals
+FOR EACH ROW
+WHEN NEW.status IN ('pending_payment','paid','confirmed','active')
+  AND EXISTS (
+    SELECT 1 FROM rentals r
+    WHERE r.listing_id=NEW.listing_id AND r.id<>NEW.id
+      AND r.status IN ('pending_payment','paid','confirmed','active')
+      AND julianday(r.end_date)>julianday(NEW.start_date)
+      AND julianday(r.start_date)<julianday(NEW.end_date)
+      AND (r.status<>'pending_payment' OR (r.renter_user_id<>NEW.renter_user_id AND julianday(r.created_at)>=julianday('now','-10 minutes')))
+  )
+BEGIN SELECT RAISE(ABORT,'listing is already reserved for the requested dates'); END;
+
+CREATE TRIGGER IF NOT EXISTS rentals_overlap_guard_update
+BEFORE UPDATE OF listing_id,start_date,end_date,status ON rentals
+FOR EACH ROW
+WHEN NEW.status IN ('pending_payment','paid','confirmed','active')
+  AND EXISTS (
+    SELECT 1 FROM rentals r
+    WHERE r.listing_id=NEW.listing_id AND r.id<>NEW.id
+      AND r.status IN ('pending_payment','paid','confirmed','active')
+      AND julianday(r.end_date)>julianday(NEW.start_date)
+      AND julianday(r.start_date)<julianday(NEW.end_date)
+      AND (r.status<>'pending_payment' OR (r.renter_user_id<>NEW.renter_user_id AND julianday(r.created_at)>=julianday('now','-10 minutes')))
+  )
+BEGIN SELECT RAISE(ABORT,'listing is already reserved for the requested dates'); END;
+
+CREATE TRIGGER IF NOT EXISTS rentals_owner_reference_insert
+AFTER INSERT ON rentals
+FOR EACH ROW
+BEGIN
+  UPDATE rentals SET owner_user_id=(SELECT l.owner_user_id FROM listings l WHERE l.id=NEW.listing_id) WHERE id=NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS rentals_owner_reference_listing_update
+AFTER UPDATE OF listing_id ON rentals
+FOR EACH ROW
+BEGIN
+  UPDATE rentals SET owner_user_id=(SELECT l.owner_user_id FROM listings l WHERE l.id=NEW.listing_id) WHERE id=NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS payout_operations_transition_guard
+BEFORE UPDATE OF status ON payout_operations
+FOR EACH ROW
+WHEN NEW.status<>OLD.status
+  AND NOT (
+    (OLD.status='reserved' AND NEW.status IN ('creating','cancelled','reconciliation_required')) OR
+    (OLD.status='creating' AND NEW.status IN ('pi_created','cancelled','reconciliation_required')) OR
+    (OLD.status='pi_created' AND NEW.status IN ('approving','cancelled','reconciliation_required')) OR
+    (OLD.status='approving' AND NEW.status IN ('approved','completed','cancelled','reconciliation_required')) OR
+    (OLD.status='approved' AND NEW.status IN ('completing','completed','cancelled','reconciliation_required')) OR
+    (OLD.status='completing' AND NEW.status IN ('completed','cancelled','reconciliation_required')) OR
+    (OLD.status IN ('completed','cancelled') AND NEW.status=OLD.status) OR
+    (OLD.status='reconciliation_required' AND NEW.status IN ('approving','approved','completing','completed','cancelled','reconciliation_required'))
+  )
+BEGIN SELECT RAISE(ABORT,'invalid payout operation transition'); END;
