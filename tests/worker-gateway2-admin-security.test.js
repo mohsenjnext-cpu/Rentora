@@ -23,3 +23,11 @@ test('gateway2 binds completed Pi payment to the reported blockchain transaction
   assert.match(entrypoint, /Pi transaction ID is missing/);
   assert.match(entrypoint, /validateTransactionTxid\(completion, body\.txid, true\)/);
 });
+
+
+test('gateway2 requires both configured Pi UID and persisted admin role', () => {
+  assert.match(entrypoint, /user\.role === 'admin' && adminAllowed\(user\.pi_uid, env\)/);
+  assert.match(entrypoint, /adminAllowed\(row\.pi_uid, env\) && row\.role === 'admin'/);
+  assert.doesNotMatch(entrypoint, /adminAllowed\(user\.username, env\)/);
+  assert.doesNotMatch(entrypoint, /adminAllowed\(row\.username, env\)/);
+});
