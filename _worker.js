@@ -853,9 +853,8 @@ function validatePiPayment(payment, intent, user) {
   }
 
   const payerUid = payment?.user?.uid || payment?.from_address?.uid || payment?.user_uid || payment?.uid || '';
-  const cleanPayerUid = String(payerUid).trim();
-  if (!cleanPayerUid) throw Object.assign(new Error('Pi payment payer identity is missing'), { status: 409 });
-  if (cleanPayerUid.toLowerCase() !== String(user.pi_uid).trim().toLowerCase()) {
+  if (!payerUid) throw Object.assign(new Error('Pi payment payer identity is missing'), { status: 409 });
+  if (String(payerUid).trim().toLowerCase() !== String(user.pi_uid).trim().toLowerCase()) {
     throw Object.assign(new Error('Pi payer mismatch'), { status: 403 });
   }
 
@@ -863,12 +862,23 @@ function validatePiPayment(payment, intent, user) {
   if (typeof paymentMeta === 'string') {
     try { paymentMeta = JSON.parse(paymentMeta); } catch (_) {}
   }
-  const metadataIntent = paymentMeta?.paymentIntentId || paymentMeta?.intentId || paymentMeta?.id;
-  if (!metadataIntent || String(metadataIntent) !== String(intent.id)) {
-    throw Object.assign(new Error('Pi payment metadata binding is missing or invalid'), { status: 409 });
+  if (!paymentMeta || String(paymentMeta.paymentIntentId || '') !== String(intent.id)) {
+    throw Object.assign(new Error('Pi payment metadata obligation binding is invalid'), { status: 409 });
   }
-  if (paymentMeta?.rentalId && String(paymentMeta.rentalId) !== String(intent.rental_id)) {
+  if (String(paymentMeta.role || '').toLowerCase() !== String(intent.role || '').toLowerCase()) {
+    throw Object.assign(new Error('Pi payment metadata role mismatch'), { status: 409 });
+  }
+  if (String(paymentMeta.purpose || '').toLowerCase() !== String(intent.purpose || '').toLowerCase()) {
+    throw Object.assign(new Error('Pi payment metadata purpose mismatch'), { status: 409 });
+  }
+  if (paymentMeta.rentalId && String(paymentMeta.rentalId) !== String(intent.rental_id || '')) {
     throw Object.assign(new Error('Pi payment rental binding mismatch'), { status: 409 });
+  }
+  if (paymentMeta.listingId && String(paymentMeta.listingId) !== String(intent.listing_id || '')) {
+    throw Object.assign(new Error('Pi payment listing binding mismatch'), { status: 409 });
+  }
+  if (intent.activation_cycle && String(paymentMeta.activationCycle || '') !== String(intent.activation_cycle)) {
+    throw Object.assign(new Error('Pi payment activation-cycle binding mismatch'), { status: 409 });
   }
 
   const payerAmount = toCanonicalDecimal(payment?.amount);
@@ -1484,105 +1494,72 @@ export default {
       if (method === 'POST' && path === '/api/payments/intent') {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
+        const requestedRole = String(body?.role || '').trim().toLowerCase();
+        const paymentIntentId = String(body?.paymentIntentId || '').trim();
         const rentalId = String(body?.rentalId || '').trim();
-        if (!rentalId) return errorResponse('rentalId is required', 400, env, undefined, origin);
+        if (!['owner','renter'].includes(requestedRole)) return errorResponse('Invalid payment role', 400, env, undefined, origin);
+        if (!paymentIntentId && !rentalId) return errorResponse('paymentIntentId or rentalId is required', 400, env, undefined, origin);
 
-        const requestedRole = String(body?.role || 'renter').trim().toLowerCase();
-        if (!['owner', 'renter'].includes(requestedRole)) return errorResponse('Invalid payment role', 400, env, undefined, origin);
+        let obligation = paymentIntentId
+          ? await env.RENTORA_DB.prepare('SELECT * FROM payment_obligations WHERE id=?1 AND user_id=?2 LIMIT 1').bind(paymentIntentId, user.id).first()
+          : await env.RENTORA_DB.prepare('SELECT * FROM payment_obligations WHERE rental_id=?1 AND user_id=?2 AND role=?3 AND purpose=\'platform_fee\' LIMIT 1').bind(rentalId, user.id, requestedRole).first();
+        if (!obligation) return errorResponse('Payment obligation not found', 404, env, undefined, origin);
+        if (String(obligation.role).toLowerCase() !== requestedRole || obligation.purpose !== 'platform_fee') return errorResponse('Payment obligation role/purpose mismatch', 403, env, undefined, origin);
 
-        const rental = await env.RENTORA_DB.prepare(
-          `SELECT r.*, l.title, l.id listing_id, l.owner_user_id, l.price_per_day, l.deposit_amount,
-                  ou.pi_uid owner_pi_uid
-           FROM rentals r
-           JOIN listings l ON l.id=r.listing_id
-           JOIN users ou ON ou.id=l.owner_user_id
-           WHERE r.id=?1 LIMIT 1`
-        ).bind(rentalId).first();
-        if (!rental) return errorResponse('Rental not found', 404, env, undefined, origin);
-
-        const isOwner = rental.owner_user_id === user.id;
-        const isRenter = rental.renter_user_id === user.id;
-        if ((requestedRole === 'owner' && !isOwner) || (requestedRole === 'renter' && !isRenter)) {
-          return errorResponse('Payment obligation does not belong to authenticated user', 403, env, undefined, origin);
-        }
-        if (!['draft','pending_payment','payment_approved'].includes(rental.status)) {
-          return errorResponse('Rental is not payable', 409, env, undefined, origin);
-        }
-
-        const obligation = await env.RENTORA_DB.prepare(
-          `SELECT * FROM payment_obligations
-           WHERE rental_id=?1 AND role=?2 AND purpose='platform_fee'
-           LIMIT 1`
-        ).bind(rental.id, requestedRole).first();
-        if (!obligation) return errorResponse('Payment obligation not found', 409, env, undefined, origin);
-
-        const obligationStatus = String(obligation.status || '').toLowerCase();
-        if (obligationStatus === 'completed') {
-          return jsonResponse({
-            paymentIntentId: obligation.id,
-            id: obligation.id,
-            amount: toCanonicalDecimal(obligation.amount),
-            memo: obligation.memo,
-            metadata: parseMetadata(obligation.metadata),
-            expiresAt: obligation.expires_at,
-            completed: true,
-            idempotent: true
-          }, 200, env, origin);
+        const listing = obligation.listing_id
+          ? await env.RENTORA_DB.prepare('SELECT * FROM listings WHERE id=?1 LIMIT 1').bind(obligation.listing_id).first()
+          : null;
+        const rental = obligation.rental_id
+          ? await env.RENTORA_DB.prepare('SELECT * FROM rentals WHERE id=?1 LIMIT 1').bind(obligation.rental_id).first()
+          : null;
+        if (requestedRole === 'owner') {
+          if (!listing || listing.owner_user_id !== user.id) return errorResponse('Owner payment obligation is not bound to this listing owner', 403, env, undefined, origin);
+          if (!obligation.activation_cycle) return errorResponse('Owner activation cycle is missing', 409, env, undefined, origin);
+        } else {
+          if (!rental || rental.renter_user_id !== user.id || rental.listing_id !== obligation.listing_id) return errorResponse('Renter payment obligation is not bound to this rental', 403, env, undefined, origin);
+          if (!['draft','pending_payment','payment_approved'].includes(rental.status)) return errorResponse('Rental is not payable', 409, env, undefined, origin);
         }
 
-        const existingActive = ['created','approved'].includes(obligationStatus) &&
-          obligation.expires_at && new Date(obligation.expires_at) > new Date();
+        const status = String(obligation.status || '').toLowerCase();
+        if (status === 'completed') {
+          return jsonResponse({ paymentIntentId: obligation.id, id: obligation.id, amount: toCanonicalDecimal(obligation.amount), memo: obligation.memo, metadata: parseMetadata(obligation.metadata), expiresAt: obligation.expires_at, completed: true, idempotent: true }, 200, env, origin);
+        }
+        if (status === 'cancelled' || status === 'failed') return errorResponse('Payment obligation is not payable', 409, env, undefined, origin);
 
-        const obligationId = existingActive ? obligation.id : `obl_${crypto.randomUUID()}`;
-        const memo = obligation.memo || `Rentora ${requestedRole === 'owner' ? 'Owner' : 'Renter'} Fee #${String(rental.id).slice(-12)}`;
-        const expires = existingActive
-          ? obligation.expires_at
-          : new Date(Date.now() + PAYMENT_INTENT_TTL * 1000).toISOString();
+        const expires = obligation.expires_at && new Date(obligation.expires_at) > new Date()
+          ? obligation.expires_at : new Date(Date.now() + PAYMENT_INTENT_TTL * 1000).toISOString();
         const amount = toCanonicalDecimal(obligation.amount);
         const metadata = {
-          obligationId,
-          rentalId: rental.id,
-          listingId: rental.listing_id,
+          paymentIntentId: obligation.id,
+          obligationId: obligation.id,
+          rentalId: obligation.rental_id || null,
+          listingId: obligation.listing_id || null,
           role: requestedRole,
-          purpose: 'platform_fee',
+          purpose: obligation.purpose,
+          activationCycle: obligation.activation_cycle || null,
           expectedAmount: amount,
-          currency: 'PI',
-          memo
+          currency: obligation.currency || 'PI',
+          memo: obligation.memo
         };
 
-        if (!existingActive) {
+        await env.RENTORA_DB.prepare(
+          `UPDATE payment_obligations SET status=CASE WHEN status='approved' THEN status ELSE 'created' END, metadata=?1, expires_at=?2, updated_at=?3 WHERE id=?4 AND user_id=?5`
+        ).bind(JSON.stringify(metadata), expires, now(), obligation.id, user.id).run();
+
+        if (rental) {
           await env.RENTORA_DB.prepare(
-            `UPDATE payment_obligations
-             SET id=?1, status='created', pi_payment_id=NULL, pi_txid=NULL, memo=?2,
-                 metadata=?3, expires_at=?4, updated_at=?5
-             WHERE rental_id=?6 AND role=?7 AND purpose='platform_fee'`
-          ).bind(obligationId, memo, JSON.stringify(metadata), expires, now(), rental.id, requestedRole).run();
+            `UPDATE rentals SET ${requestedRole === 'renter' ? "renter_fee_payment_status='pending', payment_status='pending'" : "owner_fee_payment_status='pending'"}, updated_at=?1 WHERE id=?2`
+          ).bind(now(), rental.id).run();
         } else {
-          await env.RENTORA_DB.prepare(
-            `UPDATE payment_obligations SET metadata=?1, updated_at=?2 WHERE id=?3`
-          ).bind(JSON.stringify(metadata), now(), obligation.id).run();
+          await env.RENTORA_DB.prepare("UPDATE listings SET owner_fee_payment_status='pending', updated_at=?1 WHERE id=?2 AND owner_user_id=?3").bind(now(), listing.id, user.id).run();
         }
 
-        await env.RENTORA_DB.prepare(
-          `UPDATE rentals SET
-             ${requestedRole === 'owner' ? "owner_fee_payment_status='pending'" : "renter_fee_payment_status='pending', payment_status='pending'"},
-             updated_at=?1 WHERE id=?2`
-        ).bind(now(), rental.id).run();
-
         await env.RENTORA_KV.put(
-          `payment-obligation:${obligationId}`,
-          JSON.stringify({ userId: user.id, rentalId: rental.id, listingId: rental.listing_id, role: requestedRole, amount, memo, metadata }),
+          `payment-obligation:${obligation.id}`,
+          JSON.stringify({ userId: user.id, rentalId: obligation.rental_id, listingId: obligation.listing_id, role: requestedRole, activationCycle: obligation.activation_cycle || null, amount, memo: obligation.memo, metadata }),
           { expirationTtl: PAYMENT_INTENT_TTL }
         );
-
-        return jsonResponse({
-          paymentIntentId: obligationId,
-          id: obligationId,
-          amount,
-          memo,
-          metadata,
-          expiresAt: expires
-        }, 201, env, origin);
+        return jsonResponse({ paymentIntentId: obligation.id, id: obligation.id, amount, memo: obligation.memo, metadata, expiresAt: expires }, 201, env, origin);
       }
 
       if (method === 'POST' && path === '/api/payments/approve') {
@@ -1591,23 +1568,16 @@ export default {
         if (!body.paymentId || !body.paymentIntentId) return errorResponse('paymentId and paymentIntentId are required', 400, env, undefined, origin);
 
         let obligation = await env.RENTORA_DB.prepare(
-          `SELECT po.*, r.renter_user_id, r.owner_user_id, r.status rental_status
-           FROM payment_obligations po
-           JOIN rentals r ON r.id=po.rental_id
-           WHERE po.id=?1 AND po.user_id=?2 LIMIT 1`
+          'SELECT * FROM payment_obligations WHERE id=?1 AND user_id=?2 LIMIT 1'
         ).bind(body.paymentIntentId, user.id).first();
         if (!obligation) return errorResponse('Payment obligation not found', 404, env, undefined, origin);
-        if (!obligation.expires_at || new Date(obligation.expires_at) <= new Date()) {
-          return errorResponse('Payment obligation is invalid or expired', 409, env, undefined, origin);
-        }
-        if (obligation.status === 'completed') return jsonResponse({ approved: true, paymentId: body.paymentId, idempotent: true }, 200, env, origin);
+        if (!obligation.expires_at || new Date(obligation.expires_at) <= new Date()) return errorResponse('Payment obligation is invalid or expired', 409, env, undefined, origin);
+        if (obligation.status === 'completed') return jsonResponse({ approved: true, paymentId: obligation.pi_payment_id, idempotent: true }, 200, env, origin);
         if (obligation.pi_payment_id && obligation.pi_payment_id !== body.paymentId) return errorResponse('Payment ID does not match obligation', 409, env, undefined, origin);
-        if (obligation.status === 'approved' && obligation.pi_payment_id === body.paymentId) return jsonResponse({ approved: true, paymentId: body.paymentId, idempotent: true }, 200, env, origin);
 
         const paymentResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}`);
         const payment = await paymentResponse.json().catch(() => ({}));
         if (!paymentResponse.ok) return errorResponse('Unable to verify Pi payment', 502, env, undefined, origin);
-
         const status = validatePiPayment(payment, obligation, user);
         if (!['created','pending','approved'].includes(status)) return errorResponse(`Pi payment cannot be approved from status ${status || 'unknown'}`, 409, env, undefined, origin);
 
@@ -1618,105 +1588,91 @@ export default {
         }
 
         const claim = await env.RENTORA_DB.prepare(
-          `UPDATE payment_obligations SET pi_payment_id=?1,status='approved',updated_at=?2
-           WHERE id=?3 AND status='created' AND pi_payment_id IS NULL`
-        ).bind(body.paymentId, now(), obligation.id).run();
-
+          `UPDATE payment_obligations SET pi_payment_id=?1,status='approved',updated_at=?2 WHERE id=?3 AND user_id=?4 AND status='created' AND pi_payment_id IS NULL`
+        ).bind(body.paymentId, now(), obligation.id, user.id).run();
         if (!Number(claim?.meta?.changes || 0)) {
-          obligation = await env.RENTORA_DB.prepare(
-            `SELECT po.*, r.renter_user_id, r.owner_user_id, r.status rental_status
-             FROM payment_obligations po JOIN rentals r ON r.id=po.rental_id
-             WHERE po.id=?1 AND po.user_id=?2 LIMIT 1`
-          ).bind(obligation.id, user.id).first();
-          if (!obligation || obligation.pi_payment_id !== body.paymentId || !['approved','completed'].includes(obligation.status)) {
-            return errorResponse('Payment obligation was concurrently claimed by another payment', 409, env, undefined, origin);
-          }
+          obligation = await env.RENTORA_DB.prepare('SELECT * FROM payment_obligations WHERE id=?1 AND user_id=?2 LIMIT 1').bind(obligation.id, user.id).first();
+          if (!obligation || obligation.pi_payment_id !== body.paymentId || !['approved','completed'].includes(obligation.status)) return errorResponse('Payment obligation was concurrently claimed by another payment', 409, env, undefined, origin);
         }
-
+        if (obligation.rental_id) {
+          await env.RENTORA_DB.prepare(`UPDATE rentals SET ${obligation.role === 'renter' ? "renter_fee_payment_status='approved'" : "owner_fee_payment_status='approved'}, updated_at=?1 WHERE id=?2`).bind(now(), obligation.rental_id).run();
+        } else {
+          await env.RENTORA_DB.prepare("UPDATE listings SET owner_fee_payment_status='approved', owner_fee_obligation_id=?1, updated_at=?2 WHERE id=?3").bind(obligation.id, now(), obligation.listing_id).run();
+        }
         return jsonResponse({ approved: true, paymentId: body.paymentId, data: approved, idempotent: Number(claim?.meta?.changes || 0) === 0 }, 200, env, origin);
       }
 
       if (method === 'POST' && path === '/api/payments/complete') {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
-        if (!body.paymentId || !body.txid || !body.paymentIntentId) {
-          return errorResponse('paymentId, txid and paymentIntentId are required', 400, env, undefined, origin);
-        }
+        if (!body.paymentId || !body.paymentIntentId) return errorResponse('paymentId and paymentIntentId are required', 400, env, undefined, origin);
 
-        const obligation = await env.RENTORA_DB.prepare(
-          `SELECT po.*, r.renter_user_id, r.owner_user_id, r.status rental_status
-           FROM payment_obligations po
-           JOIN rentals r ON r.id=po.rental_id
-           WHERE po.id=?1 AND po.user_id=?2 LIMIT 1`
-        ).bind(body.paymentIntentId, user.id).first();
+        let obligation = await env.RENTORA_DB.prepare('SELECT * FROM payment_obligations WHERE id=?1 AND user_id=?2 LIMIT 1').bind(body.paymentIntentId, user.id).first();
         if (!obligation) return errorResponse('Payment obligation not found', 404, env, undefined, origin);
-        if (obligation.status === 'completed') {
-          return jsonResponse({ completed: true, paymentId: obligation.pi_payment_id, txid: obligation.pi_txid, idempotent: true }, 200, env, origin);
-        }
-        if (obligation.pi_payment_id && obligation.pi_payment_id !== body.paymentId) {
-          return errorResponse('Payment ID does not match obligation', 409, env, undefined, origin);
-        }
-        if (!['approved','completed'].includes(String(obligation.status || '').toLowerCase())) {
-          return errorResponse('Payment obligation is not approved for completion', 409, env, undefined, origin);
-        }
+        if (obligation.status === 'completed') return jsonResponse({ completed: true, paymentId: obligation.pi_payment_id, txid: obligation.pi_txid, role: obligation.role, idempotent: true }, 200, env, origin);
+        if (obligation.pi_payment_id && obligation.pi_payment_id !== body.paymentId) return errorResponse('Payment ID does not match obligation', 409, env, undefined, origin);
+        if (!['approved','completed'].includes(String(obligation.status || '').toLowerCase())) return errorResponse('Payment obligation is not approved for completion', 409, env, undefined, origin);
 
         const paymentResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}`);
         const payment = await paymentResponse.json().catch(() => ({}));
         if (!paymentResponse.ok) return errorResponse('Unable to verify Pi payment before completion', 502, env, undefined, origin);
-
         const status = validatePiPayment(payment, { ...obligation, pi_payment_id: body.paymentId }, user);
-        if (!['approved','completed','complete'].includes(status)) {
-          return errorResponse(`Pi payment cannot be completed from status ${status || 'unknown'}`, 409, env, undefined, origin);
-        }
+        if (!['approved','completed','complete'].includes(status)) return errorResponse(`Pi payment cannot be completed from status ${status || 'unknown'}`, 409, env, undefined, origin);
 
+        const suppliedTxid = String(body.txid || '').trim();
         const completionResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}/complete`, {
           method: 'POST',
-          body: JSON.stringify({ txid: body.txid })
+          body: JSON.stringify({ txid: suppliedTxid })
         });
         const completion = await completionResponse.json().catch(() => ({}));
-        if (!completionResponse.ok && !['completed','complete'].includes(status)) {
-          return errorResponse('Pi payment completion failed', 502, env, { details: completion }, origin);
-        }
+        if (!completionResponse.ok && !['completed','complete'].includes(status)) return errorResponse('Pi payment completion failed', 502, env, { details: completion }, origin);
+
+        const verifiedResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}`);
+        const verifiedPayment = await verifiedResponse.json().catch(() => ({}));
+        if (!verifiedResponse.ok) return errorResponse('Unable to reconcile completed Pi payment', 502, env, undefined, origin);
+        const actualTxid = String(verifiedPayment?.transaction?.txid || completion?.transaction?.txid || '').trim();
+        if (!actualTxid) return errorResponse('Pi payment completed without a verified transaction hash', 502, env, undefined, origin);
+        if (suppliedTxid && suppliedTxid !== actualTxid) return errorResponse('Pi transaction hash mismatch', 409, env, undefined, origin);
 
         const ts = now();
         const feeRole = String(obligation.role).toLowerCase();
-        const rental = await env.RENTORA_DB.prepare('SELECT * FROM rentals WHERE id=?1 LIMIT 1').bind(obligation.rental_id).first();
-        if (!rental) return errorResponse('Rental not found for payment obligation', 409, env, undefined, origin);
+        let rental = obligation.rental_id ? await env.RENTORA_DB.prepare('SELECT * FROM rentals WHERE id=?1 LIMIT 1').bind(obligation.rental_id).first() : null;
+        if (feeRole === 'renter' && !rental) return errorResponse('Rental not found for renter payment obligation', 409, env, undefined, origin);
+        if (feeRole === 'owner' && (!obligation.listing_id || obligation.rental_id)) return errorResponse('Invalid owner activation obligation', 409, env, undefined, origin);
 
-        const otherRoleStatus = feeRole === 'owner' ? rental.renter_fee_payment_status : rental.owner_fee_payment_status;
-        const bothCompleted = otherRoleStatus === 'completed';
+        let rentalConfirmed = false;
+        const statements = [
+          env.RENTORA_DB.prepare(`UPDATE payment_obligations SET pi_payment_id=?1, pi_txid=?2, status='completed', updated_at=?3 WHERE id=?4 AND user_id=?5 AND status IN ('approved','completed')`).bind(body.paymentId, actualTxid, ts, obligation.id, user.id)
+        ];
 
-        const rentalUpdate = feeRole === 'owner'
-          ? `owner_fee_payment_status='completed', owner_fee_payment_id=?1`
-          : `renter_fee_payment_status='completed', renter_fee_payment_id=?1, payment_status='completed'`;
-        const confirmedPart = bothCompleted
-          ? `, status='confirmed'`
-          : '';
+        if (feeRole === 'owner') {
+          statements.push(
+            env.RENTORA_DB.prepare("UPDATE listings SET owner_fee_payment_status='completed', owner_fee_obligation_id=?1, status='active', activated_at=?2, updated_at=?2 WHERE id=?3 AND owner_user_id=?4 AND activation_cycle=?5")
+              .bind(obligation.id, ts, obligation.listing_id, user.id, obligation.activation_cycle)
+          );
+        } else {
+          const listing = await env.RENTORA_DB.prepare('SELECT owner_fee_payment_status FROM listings WHERE id=?1 LIMIT 1').bind(obligation.listing_id).first();
+          if (!listing || listing.owner_fee_payment_status !== 'completed') return errorResponse('Owner activation fee is not completed', 409, env, undefined, origin);
+          rental = await env.RENTORA_DB.prepare('SELECT * FROM rentals WHERE id=?1 LIMIT 1').bind(obligation.rental_id).first();
+          const bothCompleted = rental && rental.owner_fee_payment_status === 'completed' && rental.renter_fee_payment_status === 'completed';
+          rentalConfirmed = Boolean(bothCompleted);
+          statements.push(
+            env.RENTORA_DB.prepare(`UPDATE rentals SET renter_fee_payment_status='completed', renter_fee_payment_id=?1, payment_status='completed', status=${bothCompleted ? "'confirmed'" : "status"}, updated_at=?2 WHERE id=?3 AND renter_user_id=?4`)
+              .bind(body.paymentId, ts, obligation.rental_id, user.id)
+          );
+        }
 
-        await env.RENTORA_DB.batch([
-          env.RENTORA_DB.prepare(`UPDATE payment_obligations SET pi_payment_id=?1, pi_txid=?2, status='completed', updated_at=?3 WHERE id=?4 AND status IN ('approved','completed')`).bind(body.paymentId, body.txid, ts, obligation.id),
-          env.RENTORA_DB.prepare(`UPDATE rentals SET ${rentalUpdate}${confirmedPart}, updated_at=?3 WHERE id=?2`).bind(body.paymentId, obligation.rental_id, ts),
+        statements.push(
           env.RENTORA_DB.prepare(
-            `INSERT OR IGNORE INTO transactions(
-              id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at,
-              rental_id,listing_id,payment_obligation_id,fee_role,purpose
-            ) VALUES(?1,NULL,?2,?3,?4,?5,'platform_fee','completed',?6,?7,?8,?9,?10,'platform_fee')`
-          ).bind(`tx_${crypto.randomUUID()}`, body.paymentId, body.txid, user.id, obligation.amount, ts, obligation.rental_id, obligation.listing_id, obligation.id, feeRole)
-        ]);
-
-        await env.RENTORA_KV.put(
-          `payment-complete:${obligation.id}`,
-          JSON.stringify({ paymentId: body.paymentId, txid: body.txid, rentalId: obligation.rental_id, role: feeRole, at: ts }),
-          { expirationTtl: 60 * 60 * 24 * 30 }
+            `INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at,rental_id,listing_id,payment_obligation_id,fee_role,purpose)
+             VALUES(?1,NULL,?2,?3,?4,?5,'platform_fee','completed',?6,?7,?8,?9,?10,'platform_fee')`
+          ).bind(`tx_${crypto.randomUUID()}`, body.paymentId, actualTxid, user.id, obligation.amount, ts, obligation.rental_id || null, obligation.listing_id || null, obligation.id, feeRole)
         );
-        return jsonResponse({
-          completed: true,
-          paymentId: body.paymentId,
-          txid: body.txid,
-          role: feeRole,
-          rentalConfirmed: bothCompleted,
-          data: completion
-        }, 200, env, origin);
+
+        await env.RENTORA_DB.batch(statements);
+        await env.RENTORA_KV.put(`payment-complete:${obligation.id}`, JSON.stringify({ paymentId: body.paymentId, txid: actualTxid, rentalId: obligation.rental_id || null, listingId: obligation.listing_id || null, role: feeRole, activationCycle: obligation.activation_cycle || null, at: ts }), { expirationTtl: 60 * 60 * 24 * 30 });
+
+        return jsonResponse({ completed: true, paymentId: body.paymentId, txid: actualTxid, role: feeRole, rentalConfirmed, listingActivated: feeRole === 'owner', data: completion }, 200, env, origin);
       }
 
       if (method === 'POST' && path === '/api/payments/incomplete') {
@@ -1757,6 +1713,39 @@ export default {
         return jsonResponse({ handled: true }, 200, env, origin);
       }
 
+      if (method === 'POST' && path.startsWith('/api/listings/') && path.endsWith('/activate')) {
+        const { user } = await requireUser(request, env);
+        const listingId = path.slice('/api/listings/'.length, -'/activate'.length).trim();
+        if (!listingId) return errorResponse('listingId is required', 400, env, undefined, origin);
+        const listing = await env.RENTORA_DB.prepare('SELECT * FROM listings WHERE id=?1 LIMIT 1').bind(listingId).first();
+        if (!listing) return errorResponse('Listing not found', 404, env, undefined, origin);
+        if (listing.owner_user_id !== user.id) return errorResponse('Listing ownership denied', 403, env, undefined, origin);
+        if (listing.status === 'active' && listing.owner_fee_payment_status === 'completed') {
+          const existing = await env.RENTORA_DB.prepare('SELECT * FROM payment_obligations WHERE id=?1 LIMIT 1').bind(listing.owner_fee_obligation_id).first().catch(() => null);
+          return jsonResponse({ success: true, active: true, activationCycle: listing.activation_cycle, obligation: existing || null, idempotent: true }, 200, env, origin);
+        }
+
+        const pending = await env.RENTORA_DB.prepare(
+          "SELECT * FROM payment_obligations WHERE listing_id=?1 AND rental_id IS NULL AND user_id=?2 AND role='owner' AND purpose='platform_fee' AND activation_cycle=?3 AND status IN ('created','approved') LIMIT 1"
+        ).bind(listing.id, user.id, listing.activation_cycle).first();
+        if (pending) {
+          return jsonResponse({ success: true, active: false, activationCycle: listing.activation_cycle, paymentIntentId: pending.id, obligation: pending }, 200, env, origin);
+        }
+
+        const cycle = 'act_' + crypto.randomUUID();
+        const feeRate = Number(listing.platform_fee_rate || env.PLATFORM_FEE_RATE || 0.05);
+        const ownerFee = Math.max(0.0001, Number((Number(listing.price_per_day || 0) * feeRate / 2).toFixed(4)));
+        const obligationId = 'obl_' + crypto.randomUUID();
+        const expires = new Date(Date.now() + PAYMENT_INTENT_TTL * 1000).toISOString();
+        const memo = `Rentora Owner Activation Fee #${String(listing.id).slice(-12)}`;
+        const metadata = { paymentIntentId: obligationId, obligationId, rentalId: null, listingId: listing.id, role: 'owner', purpose: 'platform_fee', activationCycle: cycle, expectedAmount: ownerFee, currency: 'PI', memo };
+        await env.RENTORA_DB.batch([
+          env.RENTORA_DB.prepare("UPDATE listings SET status='paused', activation_cycle=?1, owner_fee_payment_status='unpaid', owner_fee_obligation_id=?2, activated_at=NULL, updated_at=?3 WHERE id=?4 AND owner_user_id=?5").bind(cycle, obligationId, now(), listing.id, user.id),
+          env.RENTORA_DB.prepare("INSERT INTO payment_obligations(id,rental_id,listing_id,user_id,role,purpose,amount,currency,status,memo,metadata,activation_cycle,expires_at,created_at,updated_at) VALUES(?1,NULL,?2,?3,'owner','platform_fee',?4,'PI','created',?5,?6,?7,?8,?9,?9)").bind(obligationId, listing.id, user.id, ownerFee, memo, JSON.stringify(metadata), cycle, expires, now())
+        ]);
+        return jsonResponse({ success: true, active: false, activationCycle: cycle, paymentIntentId: obligationId, obligation: { id: obligationId, amount: ownerFee, role: 'owner', purpose: 'platform_fee', status: 'created', activation_cycle: cycle, metadata } }, 201, env, origin);
+      }
+
       if (method === 'POST' && path === '/api/sync/item') { const { user } = await requireUser(request, env); const item = await readJson(request);
         if (!item?.id || !String(item.title || '').trim()) return errorResponse('Invalid listing', 400, env, undefined, origin);
         const cInfo = item.contactInfo || (item.phoneContact ? { contactPhone: item.phoneContact } : null);
@@ -1764,6 +1753,7 @@ export default {
         const existing = await env.RENTORA_DB.prepare('SELECT * FROM listings WHERE id=?1 LIMIT 1').bind(item.id).first();
         if (existing) {
           if (existing.owner_user_id !== user.id && !isAdmin(user.pi_uid, env)) return errorResponse('Listing ownership denied', 403, env, undefined, origin);
+          if (item.status === 'active' && existing.owner_fee_payment_status !== 'completed') return errorResponse('Owner activation fee must be completed before listing can be active', 409, env, undefined, origin);
           const isDeleting = item.status === 'deleted' && existing.status !== 'deleted';
           const existingMeta = parseMetadata(existing.metadata);
           const price = Number(existing.price_per_day); const deposit = Number(existing.deposit_amount);
@@ -1794,7 +1784,7 @@ export default {
         }
         const price = Number(item.pricePerDay); const deposit = Number(item.deposit || 0);
         if (!Number.isFinite(price) || price < 0 || !Number.isFinite(deposit) || deposit < 0) return errorResponse('Invalid listing price', 400, env, undefined, origin);
-        await env.RENTORA_DB.prepare(`INSERT INTO listings(id,owner_user_id,title,description,category,location,price_per_day,deposit_amount,platform_fee_rate,status,metadata,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,'active',?10,?11,?11)`).bind(item.id, user.id, String(item.title).trim(), item.description || '', item.category || null, item.location || null, price, deposit, Number(env.PLATFORM_FEE_RATE || 0.05), JSON.stringify(sanitizedItem), now()).run();
+        await env.RENTORA_DB.prepare(`INSERT INTO listings(id,owner_user_id,title,description,category,location,price_per_day,deposit_amount,platform_fee_rate,status,metadata,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,'draft',?10,?11,?11)`).bind(item.id, user.id, String(item.title).trim(), item.description || '', item.category || null, item.location || null, price, deposit, Number(env.PLATFORM_FEE_RATE || 0.05), JSON.stringify(sanitizedItem), now()).run();
         if (cInfo && typeof cInfo === 'object') {
           const cName = String(cInfo.contactName || cInfo.name || '').trim() || null;
           const cPhone = String(cInfo.contactPhone || cInfo.phone || cInfo.phoneContact || '').trim() || null;
@@ -2778,6 +2768,7 @@ export default {
         ).bind(listingId).first();
 
         if (!listing) return errorResponse('Listing not found', 404, env, undefined, origin);
+        if (listing.owner_fee_payment_status !== 'completed') return errorResponse('Listing owner activation fee is not completed', 409, env, undefined, origin);
         if (listing.status !== 'active') return errorResponse('Listing is no longer active for rental', 409, env, undefined, origin);
 
         if (listing.owner_user_id === user.id || String(listing.owner_pi_uid).toLowerCase() === String(user.pi_uid).toLowerCase()) {
