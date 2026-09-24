@@ -163,3 +163,14 @@ test('A2U incomplete-payment recovery acquires an exclusive lease before advanci
   assert.match(recovery, /clearLease: true/);
   assert.match(recovery, /leaseOwner: operation\.lease_owner/);
 });
+
+test('A2U Pi mutations renew the durable lease before external side effects', () => {
+  assert.match(gateway, /const PAYOUT_LEASE_MS = 5 \* 60 \* 1000/);
+  assert.match(gateway, /async function renewPayoutLease\(env, operation\)/);
+  const create = gateway.slice(gateway.indexOf('async function createPayoutPayment'), gateway.indexOf('async function adminRoute'));
+  assert.match(create, /operation = await renewPayoutLease\(env, operation\);/);
+  const resume = gateway.slice(gateway.indexOf('async function resumePayoutOperation'), gateway.indexOf('async function reconcileStalePayoutOperations'));
+  assert.match(resume, /operation = await renewPayoutLease\(env, operation\);/);
+  const complete = gateway.slice(gateway.indexOf('async function completePayoutOperation'), gateway.indexOf('async function resumePayoutOperation'));
+  assert.match(complete, /operation = await renewPayoutLease\(env, operation\);/);
+});
