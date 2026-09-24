@@ -161,5 +161,5 @@ test('A2U incomplete-payment recovery acquires an exclusive lease before advanci
   const recovery = gateway.slice(gateway.indexOf('async function autoResolveIncompleteServerPayments'), gateway.indexOf('async function createPayoutPayment'));
   assert.match(recovery, /acquirePayoutLease\(env, operation, \['approving'\]\)/);
   assert.match(recovery, /clearLease: true/);
-  assert.match(recovery, /leaseOwner: operation\\.lease_owner/);
+  assert.match(recovery, /leaseOwner: operation\.lease_owner/);
 });
