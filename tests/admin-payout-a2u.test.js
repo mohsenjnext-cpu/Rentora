@@ -28,6 +28,7 @@ function createMockDb() {
       const query = {
         async first() {
           if (sql.includes("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)")) return { total: sumTransactions() };
+          if (sql.includes("SELECT COALESCE(SUM(amount),0) AS total FROM payout_operations WHERE status IN ('reserved','creating','pi_created','approving','approved','completing')")) return { total: payoutOperations.filter(p => ['reserved','creating','pi_created','approving','approved','completing'].includes(p.status)).reduce((sum, p) => sum + Number(p.amount || 0), 0) };
           if (sql.includes("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'")) return { total: sumTransactions('admin_payout') };
           if (sql.includes('SELECT COUNT(*) AS c FROM users')) return { c: users.length };
           if (sql.includes('SELECT COUNT(*) AS c FROM listings')) return { c: 0 };
@@ -42,7 +43,8 @@ function createMockDb() {
               if (sql.includes('FROM users WHERE pi_uid = ?1')) return users.find(u => u.pi_uid === params[0]) || null;
               if (sql.includes('FROM payout_operations WHERE operation_key = ?1')) return payoutOperations.find(p => p.operation_key === params[0]) || null;
               if (sql.includes("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND (type='platform_fee' OR type IS NULL)")) return { total: sumTransactions() };
-              if (sql.includes("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'")) return { total: sumTransactions('admin_payout') };
+              if (sql.includes("SELECT COALESCE(SUM(amount),0) AS total FROM payout_operations WHERE status IN ('reserved','creating','pi_created','approving','approved','completing')")) return { total: payoutOperations.filter(p => ['reserved','creating','pi_created','approving','approved','completing'].includes(p.status)).reduce((sum, p) => sum + Number(p.amount || 0), 0) };
+          if (sql.includes("SELECT SUM(amount) AS total FROM transactions WHERE status='completed' AND type='admin_payout'")) return { total: sumTransactions('admin_payout') };
               if (sql.includes('SELECT COUNT(*) AS c FROM users')) return { c: users.length };
               if (sql.includes('SELECT COUNT(*) AS c FROM listings')) return { c: 0 };
               if (sql.includes('SELECT COUNT(*) AS c FROM rentals')) return { c: 0 };
