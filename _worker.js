@@ -418,7 +418,16 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
 
   // 4. If already completed on Pi Platform, record in D1, cleanup and return
   if (paymentInfo?.status?.developer_completed) {
-    const txid = paymentInfo?.transaction?.txid || `txid_completed_${paymentId}`;
+    const txid = paymentInfo?.transaction?.txid;
+    // Never synthesize a blockchain transaction id. A completed Pi payment must
+    // carry the actual transaction hash before it can become a D1 settlement.
+    if (!txid || paymentInfo?.status?.transaction_verified !== true) {
+      await updatePayoutOperationStatus(env, idempotencyKey, 'reconciliation_required', {
+        piPaymentId: paymentId,
+        error: 'Pi reports developer_completed without a verified blockchain transaction'
+      });
+      return errorResponse('پرداخت در پای تکمیل گزارش شده، اما تراکنش بلاکچین قابل تأیید نیست؛ تسویه در صف تطبیق قرار گرفت.', 502, env, undefined, origin);
+    }
     const payoutAmount = Number(paymentInfo.amount || amount);
     await recordCompletedPayout(env, user, paymentId, txid, payoutAmount, metadataType, targetWallet, idempotencyKey);
     if (env.RENTORA_KV) {
