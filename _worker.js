@@ -722,7 +722,42 @@ function listingView(row) {
     updatedAt: row.updated_at
   };
 }
-function rentalView(row) { const meta = parseMetadata(row.metadata); return { ...meta, id: row.id, itemId: row.listing_id, renterUid: row.renter_pi_uid, renterUsername: row.renter_username, ownerUid: row.owner_pi_uid, ownerUsername: row.owner_username, startDate: row.start_date, endDate: row.end_date, pricePerDay: row.price_per_day, rentalTotal: row.rental_amount, baseAmount: row.rental_amount, deposit: row.deposit_amount, securityDeposit: row.deposit_amount, rentoraFee: row.platform_fee, totalPlatformFee: row.platform_fee, totalAmount: row.total_amount, status: row.status, paymentStatus: row.payment_status, createdAt: row.created_at, updatedAt: row.updated_at }; }
+function rentalView(row) {
+  const meta = parseMetadata(row.metadata);
+  const platformFeeTotal = row.platform_fee_total ?? row.platform_fee;
+  const ownerPlatformFee = row.owner_platform_fee ?? 0;
+  const renterPlatformFee = row.renter_platform_fee ?? row.platform_fee;
+  return {
+    ...meta,
+    id: row.id,
+    itemId: row.listing_id,
+    renterUid: row.renter_pi_uid,
+    renterUsername: row.renter_username,
+    ownerUid: row.owner_pi_uid,
+    ownerUsername: row.owner_username,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    pricePerDay: row.price_per_day,
+    rentalTotal: row.rental_amount,
+    baseAmount: row.rental_amount,
+    deposit: row.deposit_amount,
+    securityDeposit: row.deposit_amount,
+    rentoraFee: platformFeeTotal,
+    totalPlatformFee: platformFeeTotal,
+    platformFeeTotal,
+    ownerPlatformFee,
+    renterPlatformFee,
+    ownerFeePaymentStatus: row.owner_fee_payment_status || 'not_required',
+    renterFeePaymentStatus: row.renter_fee_payment_status || row.payment_status || 'unpaid',
+    ownerFeePaymentId: row.owner_fee_payment_id || null,
+    renterFeePaymentId: row.renter_fee_payment_id || null,
+    totalAmount: row.total_amount,
+    status: row.status,
+    paymentStatus: row.payment_status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
 function transactionView(row) {
   return {
     id: row.id,
@@ -2653,6 +2688,9 @@ export default {
           baseRentalAmount: financials.baseRentalAmount,
           depositAmount: financials.depositAmount,
           platformFee: financials.platformFee,
+          platformFeeTotal: financials.platformFeeTotal,
+          ownerPlatformFee: financials.ownerPlatformFee,
+          renterPlatformFee: financials.renterPlatformFee,
           totalAmount: financials.totalAmount,
           currency: 'PI',
           createdAt,
