@@ -186,3 +186,5 @@ test('A2U Pi mutations renew the durable lease before external side effects', ()
   const complete = gateway.slice(gateway.indexOf('async function completePayoutOperation'), gateway.indexOf('async function resumePayoutOperation'));
   assert.match(complete, /operation = await renewPayoutLease\(env, operation\);/);
 });
+
+// Keep the mirrored gateway contract covered by CI.
