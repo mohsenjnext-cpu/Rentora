@@ -988,6 +988,48 @@ export default {
         }
         return jsonResponse({ success: true, item: listingView(row) }, 200, env, origin);
       }
+      if (method === 'POST' && /^\/api\/admin\/reconciliation\/[^/]+\/retry$/.test(path)) {
+        const { user: adminUser } = await requireAdmin(request, env);
+        const queueId = decodeURIComponent(path.split('/')[4] || '');
+        const queue = await env.RENTORA_DB.prepare(
+          "SELECT * FROM payout_reconciliation_queue WHERE id = ?1 AND status='reconciliation_required' LIMIT 1"
+        ).bind(queueId).first();
+        if (!queue) return errorResponse('مورد تطبیق پیدا نشد یا قبلاً حل شده است.', 404, env, undefined, origin);
+
+        const op = queue.operation_key
+          ? await env.RENTORA_DB.prepare("SELECT * FROM payout_operations WHERE operation_key = ?1 LIMIT 1").bind(queue.operation_key).first()
+          : null;
+        if (!op?.user_id || !queue.pi_payment_id) return errorResponse('اطلاعات کافی برای تطبیق پرداخت وجود ندارد.', 409, env, undefined, origin);
+
+        const payoutUser = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id = ?1 LIMIT 1").bind(op.user_id).first();
+        if (!payoutUser) return errorResponse('کاربر پرداخت پیدا نشد.', 404, env, undefined, origin);
+
+        const paymentRes = await piFetch(env, `/payments/${encodeURIComponent(queue.pi_payment_id)}`);
+        const payment = paymentRes.ok ? await paymentRes.json().catch(() => null) : null;
+        const txid = payment?.transaction?.txid;
+        const verified = payment?.status?.developer_completed === true &&
+          payment?.status?.transaction_verified === true && Boolean(txid);
+
+        if (!verified) {
+          await env.RENTORA_DB.prepare(
+            "UPDATE payout_reconciliation_queue SET updated_at=?1 WHERE id=?2"
+          ).bind(now(), queueId).run().catch(() => {});
+          await writeAuditLog(env, adminUser, 'payout_reconciliation_retry', queueId, { verified: false, paymentStatus: payment?.status || null }).catch(() => {});
+          return errorResponse('هنوز تراکنش معتبر روی پای قابل تأیید نیست؛ مورد در صف تطبیق باقی ماند.', 409, env, undefined, origin);
+        }
+
+        const payoutAmount = Number(payment.amount || op.amount);
+        if (!Number.isFinite(payoutAmount) || payoutAmount <= 0 || Math.abs(payoutAmount - Number(op.amount)) > 0.0000001) {
+          return errorResponse('مبلغ پرداخت با عملیات ثبت‌شده مطابقت ندارد.', 409, env, undefined, origin);
+        }
+
+        await recordCompletedPayout(env, payoutUser, queue.pi_payment_id, txid, payoutAmount, 'admin_treasury_payout', op.recipient, queue.operation_key);
+        await env.RENTORA_DB.prepare(
+          "UPDATE payout_reconciliation_queue SET status='resolved', updated_at=?1, payload=?2 WHERE id=?3"
+        ).bind(now(), JSON.stringify({ resolvedBy: adminUser.pi_uid, txid, paymentId: queue.pi_payment_id }), queueId).run();
+        await writeAuditLog(env, adminUser, 'payout_reconciliation_resolved', queueId, { txid, paymentId: queue.pi_payment_id, amount: payoutAmount }).catch(() => {});
+        return jsonResponse({ success: true, resolved: true, txid, paymentId: queue.pi_payment_id, amount: payoutAmount }, 200, env, origin);
+      }
       if (method === 'GET' && path === '/api/admin/console') {
         const { user } = await requireAdmin(request, env);
         const [
