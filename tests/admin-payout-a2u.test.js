@@ -144,3 +144,5 @@ test('Admin A2U uses the D1 operation_key state and is idempotent', async () => 
     globalThis.fetch = originalFetch;
   }
 });
+
+// CI schema-alignment follow-up.
