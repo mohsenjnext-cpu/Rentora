@@ -50,7 +50,7 @@
     
     <!-- Official Pi Network SDK -->
     <!-- Load Pi SDK without blocking React bootstrap. piService initializes it when needed. -->
-    <script defer src="https://sdk.minepi.com/pi-sdk.js"></script>
+    <script async src="https://sdk.minepi.com/pi-sdk.js"></script>
     <script>
       window.global = window;
       window.process = window.process || { env: { NODE_ENV: 'production' } };
