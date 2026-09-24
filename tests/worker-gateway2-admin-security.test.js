@@ -42,3 +42,11 @@ test('legacy worker does not derive admin privilege from username', () => {
   assert.doesNotMatch(legacyWorker, /isAdmin\(user\.username, env\)/);
   assert.doesNotMatch(legacyWorker, /isAdmin\(username, env\)/);
 });
+
+
+test('legacy worker never trusts client-supplied KYC status during Pi login', () => {
+  assert.match(legacyWorker, /KYC is server-authoritative/);
+  assert.doesNotMatch(legacyWorker, /body\\?\.user\\?\.kyc_status/);
+  assert.doesNotMatch(legacyWorker, /body\\?\.kycStatus/);
+  assert.doesNotMatch(legacyWorker, /body\\?\.user\\?\.roles/);
+});
