@@ -54,6 +54,8 @@
     <script>
       window.global = window;
       window.process = window.process || { env: { NODE_ENV: 'production' } };
+      // Pi Testnet configuration. Initialization itself is handled by piService after React bootstrap.
+      window.__PI_CONFIG__ = { version: '2.0', sandbox: false };
     </script>
 
     <!-- Vazirmatn font for Persian & Arabic, Inter for English -->
