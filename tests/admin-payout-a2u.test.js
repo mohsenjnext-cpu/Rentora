@@ -226,7 +226,7 @@ test('Admin A2U preserves failure without creating a settlement transaction', as
   }
 });
 
-test('Admin A2U sends the destination wallet in Pi metadata', async () => {
+test('Admin A2U ignores client walletAddress and binds Pi payment to verified uid', async () => {
   const db = createMockDb(), kv = createMockKv(), token = await setupSession(kv, db.users[0]), env = envFor(db, kv);
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, opts) => {
@@ -234,7 +234,8 @@ test('Admin A2U sends the destination wallet in Pi metadata', async () => {
     if (u.includes('/payments/incomplete_server_payments')) return new Response(JSON.stringify({ incomplete_server_payments: [] }), { status: 200 });
     if (u.endsWith('/payments') && opts?.method === 'POST') {
       const payload = JSON.parse(opts.body);
-      assert.equal(payload.payment.metadata.targetWallet, 'GD5XYZ9876543210ABCDEF');
+      assert.equal(payload.payment.uid, db.users[0].pi_uid);
+      assert.equal(payload.payment.metadata.targetWallet, undefined);
       return new Response(JSON.stringify({ identifier: 'wallet_pay_1', amount: 5, status: { developer_approved: false, developer_completed: false } }), { status: 200 });
     }
     if (u.includes('/payments/wallet_pay_1/approve')) return new Response(JSON.stringify({ identifier: 'wallet_pay_1', amount: 5, status: { developer_approved: true, transaction_verified: true }, transaction: { txid: 'wallet_tx_1' } }), { status: 200 });
