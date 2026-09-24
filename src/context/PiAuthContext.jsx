@@ -4,59 +4,37 @@ import { cloudSyncService } from '../services/cloudSyncService';
 import { getApiBaseUrl } from '../services/apiConfig';
 
 const PiAuthContext = createContext();
-const STORAGE_KEY_USER = 'rentora_live_v1_session';
-
 function installSessionFetchBridge(onSessionInvalid) {
   if (typeof window === 'undefined' || typeof window.fetch !== 'function') return () => {};
   if (window.__rentoraSessionFetchBridge) return () => {};
-
   const originalFetch = window.fetch.bind(window);
   const apiBase = getApiBaseUrl();
-
   window.fetch = async (input, init = {}) => {
     try {
       const url = typeof input === 'string' ? input : input?.url || '';
       const isApiRequest = (apiBase && url.startsWith(apiBase)) || url.startsWith('/api/');
       const isPiLogin = url.includes('/api/auth/pi-login');
-      if (isApiRequest && !isPiLogin) {
-        const raw = localStorage.getItem(STORAGE_KEY_USER);
-        const session = raw ? JSON.parse(raw) : null;
-        if (session?.sessionToken) {
-          const headers = new Headers(input instanceof Request ? input.headers : undefined);
-          new Headers(init.headers || {}).forEach((value, key) => headers.set(key, value));
-          headers.delete('x-pi-uid');
-          headers.delete('x-pi-username');
-          if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${session.sessionToken}`);
-          const res = await originalFetch(input, { ...init, headers });
-          if (res.status === 401 && !url.includes('/api/auth/logout')) {
-            if (typeof onSessionInvalid === 'function') {
-              onSessionInvalid();
-            }
-          }
-          return res;
-        }
+      if (isApiRequest) {
+        const headers = new Headers(input instanceof Request ? input.headers : undefined);
+        new Headers(init.headers || {}).forEach((value, key) => headers.set(key, value));
+        headers.delete('Authorization');
+        headers.delete('x-pi-uid');
+        headers.delete('x-pi-username');
+        headers.set('X-Rentora-Client', 'web');
+        const res = await originalFetch(input, { ...init, headers, credentials: init.credentials || 'include' });
+        if (res.status === 401 && !isPiLogin && typeof onSessionInvalid === 'function') onSessionInvalid();
+        return res;
       }
     } catch (_) {}
     return originalFetch(input, init);
   };
-
   window.__rentoraSessionFetchBridge = true;
-  return () => {
-    if (window.fetch === originalFetch) return;
-    window.fetch = originalFetch;
-    delete window.__rentoraSessionFetchBridge;
-  };
+  return () => {};
 }
 
 export function PiAuthProvider({ children }) {
   const [users, setUsers] = useState(() => cloudSyncService.getCachedUsers());
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY_USER);
-      const parsed = raw ? JSON.parse(raw) : null;
-      return parsed?.sessionToken && parsed?.uid ? parsed : null;
-    } catch (_) { return null; }
-  });
+  const [currentUser, setCurrentUser] = useState(null);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState(null);
@@ -64,84 +42,36 @@ export function PiAuthProvider({ children }) {
   const [isServerVerifiedAdmin, setIsServerVerifiedAdmin] = useState(false);
 
   const handleSessionInvalid = useCallback(() => {
-    try {
-      localStorage.removeItem(STORAGE_KEY_USER);
-      cloudSyncService.clearUserSessionCache();
-    } catch (_) {}
+    try { cloudSyncService.clearUserSessionCache(); } catch (_) {}
     setCurrentUser(null);
     setIsServerVerifiedAdmin(false);
   }, []);
 
   useEffect(() => {
+    try { localStorage.removeItem('rentora_live_v1_session'); } catch (_) {}
     const restoreFetch = installSessionFetchBridge(handleSessionInvalid);
     return restoreFetch;
   }, [handleSessionInvalid]);
 
   // Authoritatively verify session with server on initial mount & whenever currentUser changes
   useEffect(() => {
-    if (!currentUser?.sessionToken) {
-      setIsServerVerifiedAdmin(false);
-      return;
-    }
-
     let isMounted = true;
     const apiBase = getApiBaseUrl();
-    if (!apiBase) return;
-
-    fetch(`${apiBase}/api/auth/me`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${currentUser.sessionToken}`,
-        'Cache-Control': 'no-cache'
-      }
-    })
+    if (!apiBase) return () => {};
+    fetch(`${apiBase}/api/auth/me`, { method: 'GET', headers: { 'Cache-Control': 'no-cache' }, credentials: 'include' })
       .then(res => {
-        if (res.status === 401) {
-          handleSessionInvalid();
-          return null;
-        }
+        if (res.status === 401) return null;
         return res.json().catch(() => null);
       })
       .then(data => {
-        if (!isMounted || !data) return;
-        if (data.authenticated && data.user) {
-          const verifiedAdmin = Boolean(data.isAdmin || data.user.isAdmin || data.user.role === 'admin');
-          setIsServerVerifiedAdmin(verifiedAdmin);
-          setCurrentUser(prev => {
-            if (!prev) return null;
-            const newRole = data.user.role || (verifiedAdmin ? 'admin' : 'user');
-            const newKyc = data.user.kycStatus === 'verified' ? 'verified' : (data.user.kycStatus === 'unverified' ? 'unverified' : 'unknown');
-            if (
-              prev.uid === data.user.uid &&
-              prev.username === data.user.username &&
-              prev.role === newRole &&
-              prev.kycStatus === newKyc &&
-              prev.avatar === data.user.avatar &&
-              prev.displayName === data.user.displayName
-            ) {
-              return prev; // Maintain stable reference to prevent app-wide re-render cascade
-            }
-            return {
-              ...prev,
-              ...data.user,
-              role: newRole,
-              kycStatus: newKyc,
-              sessionToken: prev.sessionToken
-            };
-          });
-        }
+        if (!isMounted || !data?.authenticated || !data.user) return;
+        const verifiedAdmin = Boolean(data.isAdmin || data.user.isAdmin || data.user.role === 'admin');
+        setIsServerVerifiedAdmin(verifiedAdmin);
+        setCurrentUser({ ...data.user, uid: data.user.uid, role: data.user.role || 'user', kycStatus: data.user.kycStatus || 'unknown', isOfficialSdk: true, piWalletConnected: true });
       })
       .catch(() => {});
-
     return () => { isMounted = false; };
-  }, [currentUser?.sessionToken, handleSessionInvalid]);
-
-  useEffect(() => {
-    try {
-      if (currentUser) localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(currentUser));
-      else localStorage.removeItem(STORAGE_KEY_USER);
-    } catch (_) {}
-  }, [currentUser]);
+  }, [handleSessionInvalid]);
 
   useEffect(() => {
     const unsubscribe = cloudSyncService.subscribe((event, data) => {
@@ -155,7 +85,7 @@ export function PiAuthProvider({ children }) {
     setAuthError(null);
     try {
       const authData = await piService.authenticate();
-      if (!authData?.sessionToken || !authData?.uid) throw new Error('سرور رنتورا یک نشست معتبر صادر نکرد.');
+      if (!authData?.uid) throw new Error('سرور رنتورا یک نشست معتبر صادر نکرد.');
       const isAdminRole = authData.user?.role === 'admin';
       setIsServerVerifiedAdmin(isAdminRole);
       const userObj = {
@@ -163,9 +93,8 @@ export function PiAuthProvider({ children }) {
         uid: authData.uid,
         username: authData.username,
         displayName: authData.user?.displayName || authData.username,
-        sessionToken: authData.sessionToken,
         role: authData.user?.role || 'user',
-        kycStatus: authData.user?.kycStatus === 'verified' ? 'verified' : 'unverified',
+        kycStatus: authData.user?.kycStatus || 'unknown',
         isOfficialSdk: true,
         piWalletConnected: true,
         status: authData.user?.status || 'active'
@@ -186,15 +115,9 @@ export function PiAuthProvider({ children }) {
   };
 
   const logout = async () => {
-    const sessionToken = currentUser?.sessionToken;
     try {
       const apiBase = getApiBaseUrl();
-      if (apiBase && sessionToken) {
-        await fetch(`${apiBase}/api/auth/logout`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${sessionToken}` }
-        });
-      }
+      if (apiBase) await fetch(`${apiBase}/api/auth/logout`, { method: 'POST', credentials: 'include' });
     } catch (_) {
       // Local logout still happens even if the network is unavailable.
     } finally {
@@ -212,15 +135,13 @@ export function PiAuthProvider({ children }) {
     if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
     const response = await fetch(`${apiBase}/api/sync/user`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${currentUser.sessionToken}`
-      },
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(allowed)
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data?.user) throw new Error(data?.error || 'ذخیره پروفایل ناموفق بود.');
-    const updated = { ...currentUser, ...data.user, sessionToken: currentUser.sessionToken, isOfficialSdk: true, piWalletConnected: true };
+    const updated = { ...currentUser, ...data.user, isOfficialSdk: true, piWalletConnected: true };
     setCurrentUser(updated);
     setUsers(prev => [updated, ...prev.filter(u => u.uid !== updated.uid)]);
     cloudSyncService.saveCachedUsers([updated, ...users.filter(u => u.uid !== updated.uid)]);
@@ -240,15 +161,14 @@ export function PiAuthProvider({ children }) {
   };
 
   const isActuallyAdmin = Boolean(
-    currentUser?.sessionToken &&
-    (isServerVerifiedAdmin || currentUser?.role === 'admin')
+    (currentUser?.uid && (isServerVerifiedAdmin || currentUser?.role === 'admin'))
   );
 
   return (
     <PiAuthContext.Provider value={{
       users,
       currentUser,
-      isAuthenticated: !!currentUser?.sessionToken,
+      isAuthenticated: !!currentUser?.uid,
       isAdmin: isActuallyAdmin,
       isLoading,
       authError,

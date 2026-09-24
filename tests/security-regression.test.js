@@ -72,10 +72,11 @@ test('worker has no marketplace memory fallback', () => {
   assert.match(worker, /requireBindings\(env\)/);
 });
 
-test('frontend sync bridge upgrades legacy identity headers to a signed Bearer session', () => {
-  assert.match(piAuthContext, /localStorage\.getItem\(STORAGE_KEY_USER\)/);
-  assert.match(piAuthContext, /headers\.delete\('x-pi-uid'\)/);
-  assert.match(piAuthContext, /headers\.delete\('x-pi-username'\)/);
-  assert.match(piAuthContext, /headers\.set\('Authorization', `Bearer \$\{session\.sessionToken\}`\)/);
-  assert.match(piAuthContext, /const isPiLogin = url\.includes\('\/api\/auth\/pi-login'\)/);
+test('frontend auth bridge uses HttpOnly cookie sessions instead of browser-stored bearer tokens', () => {
+  assert.doesNotMatch(piAuthContext, /localStorage\.getItem\(STORAGE_KEY_USER\)/);
+  assert.doesNotMatch(piAuthContext, /session\.sessionToken/);
+  assert.doesNotMatch(piAuthContext, /headers\.set\('Authorization'/);
+  assert.match(piAuthContext, /credentials: init\.credentials \|\| 'include'/);
+  assert.match(piAuthContext, /headers\.set\('X-Rentora-Client', 'web'\)/);
+  assert.match(piAuthContext, /localStorage\.removeItem\('rentora_live_v1_session'\)/);
 });

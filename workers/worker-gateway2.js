@@ -11,9 +11,13 @@ async function sha256(value) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+function parseCookies(request) { const raw = request.headers.get('Cookie') || ''; const out = {}; for (const part of raw.split(';')) { const i = part.indexOf('='); if (i < 0) continue; out[part.slice(0,i).trim()] = part.slice(i+1).trim(); } return out; }
 async function requireUser(request, env) {
   if (!env?.RENTORA_DB || !env?.RENTORA_KV) throw Object.assign(new Error('Storage bindings (RENTORA_DB, RENTORA_KV) are required'), { status: 503 });
+  const cookies = parseCookies(request);
+  const cookieToken = cookies.rentora_session ? decodeURIComponent(cookies.rentora_session) : '';
   const auth = request.headers.get('Authorization') || '';
+  if (cookieToken) { const headers = new Headers(request.headers); headers.set('Authorization', `Bearer ${cookieToken}`); request = new Request(request, { headers }); }
   if (!auth.startsWith('Bearer ')) throw Object.assign(new Error('Authentication required'), { status: 401 });
   const token = auth.slice(7).trim();
   const raw = await env.RENTORA_KV.get(`session:${await sha256(token)}`);
@@ -373,7 +377,7 @@ async function reconcileStalePayoutOperations(env) {
 function userView(row, env, options = {}) {
   let meta = {};
   try { meta = row.metadata ? JSON.parse(row.metadata) : {}; } catch (_) {}
-  const isAdmin = adminAllowed(row.pi_uid, env) || adminAllowed(row.username, env);
+  const isAdmin = adminAllowed(row.pi_uid, env) && row.role === 'admin';
   const piKycStatus = meta.kycStatus || row.kyc_status;
   const resolvedKycStatus = piKycStatus === 'verified' ? 'verified' : (piKycStatus === 'unverified' ? 'unverified' : 'unknown');
   const { adminKycStatus, ...publicMeta } = meta;
@@ -416,7 +420,7 @@ function isOriginAllowed(origin, env) {
 function json(data, status = 200, request = null, env = null) {
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
   const origin = request?.headers?.get('Origin');  if (origin && isOriginAllowed(origin, env)) {
-    headers['Access-Control-Allow-Origin'] = origin;
+    headers['Access-Control-Allow-Origin'] = origin; headers['Access-Control-Allow-Credentials'] = 'true';
     headers['Vary'] = 'Origin';
   }
   return new Response(status === 204 ? null : JSON.stringify(data), { status, headers });
@@ -1004,7 +1008,7 @@ async function createPayoutPayment(env, operation, leaseOwner, paymentPayload) {
 
 async function adminRoute(request, env, path) {
   const user = await requireUser(request, env);
-  if (!(adminAllowed(user.pi_uid, env) || adminAllowed(user.username, env))) return json({ error: 'Admin access required' }, 403, request, env);
+  if (!(user.role === 'admin' && adminAllowed(user.pi_uid, env))) return json({ error: 'Admin access required' }, 403, request, env);
   if (path === '/api/admin/users') {
     const rows = await env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
     return json({ success: true, users: (rows.results || []).map((row) => userView(row, env)) }, 200, request, env);
@@ -1140,11 +1144,17 @@ async function adminRoute(request, env, path) {
 }
 export default {
   async fetch(request, env, ctx) {
+    const cookieToken = parseCookies(request).rentora_session ? decodeURIComponent(parseCookies(request).rentora_session) : '';
+    if (cookieToken && !request.headers.get('Authorization')) {
+      const headers = new Headers(request.headers);
+      headers.set('Authorization', `Bearer ${cookieToken}`);
+      request = new Request(request, { headers });
+    }
     const path = new URL(request.url).pathname;
     try {
       if (request.method === 'OPTIONS') {
         const origin = request.headers.get('Origin');
-        const headers = { 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers') || 'Content-Type, Authorization', 'Access-Control-Max-Age': '86400' };
+        const headers = { 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers') || 'Content-Type, Authorization, X-Rentora-Client', 'Access-Control-Allow-Credentials': 'true', 'Access-Control-Max-Age': '86400' };
         if (origin && isOriginAllowed(origin, env)) {
           headers['Access-Control-Allow-Origin'] = origin;
         }
@@ -1194,12 +1204,24 @@ export default {
         const healthy = Boolean(checks.piApiKeyConfigured && checks.databaseBound && checks.sessionStoreBound);
         return json({ ok: healthy, checks }, healthy ? 200 : 503, request, env);
       }
+      if (request.method === 'POST' && path === '/api/auth/pi-login') {
+        const loginResponse = await legacyWorker.fetch(request, env, ctx);
+        if (!loginResponse.ok) return loginResponse;
+        const data = await loginResponse.clone().json().catch(() => null);
+        if (!data?.sessionToken) return loginResponse;
+        const headers = new Headers(loginResponse.headers);
+        headers.set('Set-Cookie', `rentora_session=${encodeURIComponent(data.sessionToken)}; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=None`);
+        const cleanData = { ...data };
+        delete cleanData.sessionToken;
+        headers.set('Content-Type', 'application/json; charset=utf-8');
+        return new Response(JSON.stringify(cleanData), { status: loginResponse.status, headers });
+      }
       if (request.method === 'POST' && path === '/api/payments/incomplete') return await handleIncompletePayment(request, env);
       if (request.method === 'POST' && path === '/api/payments/approve') return await approvePayment(request, env);
       if (request.method === 'POST' && path === '/api/payments/complete') return await completePayment(request, env);
       if (request.method === 'GET' && path === '/api/auth/me') {
         const user = await requireUser(request, env);
-        const isAdmin = adminAllowed(user.pi_uid, env) || adminAllowed(user.username, env);
+        const isAdmin = user.role === 'admin' && adminAllowed(user.pi_uid, env);
         return json({ authenticated: true, user: { ...userView(user, env), isAdmin }, isAdmin }, 200, request, env);
       }
       if ((request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users')) || (request.method === 'POST' && (path === '/api/admin/payout' || path === '/api/admin/cleanup'))) return await adminRoute(request, env, path);

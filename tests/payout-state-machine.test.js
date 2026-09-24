@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+// Keep CI anchored to the current branch head after security regression changes.
 import fs from 'node:fs';
 
 const migration = fs.readFileSync(new URL('../db/migrations/0010_payout_operations.sql', import.meta.url), 'utf8');
@@ -186,3 +187,5 @@ test('A2U Pi mutations renew the durable lease before external side effects', ()
   const complete = gateway.slice(gateway.indexOf('async function completePayoutOperation'), gateway.indexOf('async function resumePayoutOperation'));
   assert.match(complete, /operation = await renewPayoutLease\(env, operation\);/);
 });
+
+// Keep the mirrored gateway contract covered by CI.

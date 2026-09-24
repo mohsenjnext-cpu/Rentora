@@ -40,7 +40,7 @@ function adminUids(env) { return String(env?.ADMIN_PI_UIDS || '').split(',').map
 function isAdmin(uid, env) {
   const allowed = adminUids(env);
   const id = String(uid || '').trim().toLowerCase();
-  return Boolean(id && (allowed.includes(id) || id === 'avina60' || id === 'mohsenjnext' || id === 'admin_user'));
+  return Boolean(id && allowed.includes(id));
 }
 function detectImageFormat(bytes) {
   if (bytes.length >= 3 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'image/jpeg';
@@ -279,24 +279,55 @@ function payoutIdempotencyKey(request, body) {
 async function claimPayoutOperation(env, { idempotencyKey, userId, amount, type, memo, targetWallet }) {
   if (!env?.RENTORA_DB || !idempotencyKey) return null;
   const opId = `pop_${crypto.randomUUID()}`;
-  const metadata = JSON.stringify({ memo, targetWallet, claimedAt: now() });
+  const timestamp = now();
+  const recipient = String(targetWallet || '').trim() || String(userId || '').trim();
   try {
     const existing = await env.RENTORA_DB.prepare(
-      "SELECT * FROM payout_operations WHERE idempotency_key = ?1 LIMIT 1"
+      "SELECT * FROM payout_operations WHERE operation_key = ?1 LIMIT 1"
     ).bind(idempotencyKey).first().catch(() => null);
 
-    if (existing) {
-      return existing;
-    }
+    if (existing) return existing;
 
     await env.RENTORA_DB.prepare(
-      "INSERT INTO payout_operations(id, idempotency_key, user_id, amount, type, status, metadata, created_at, updated_at) VALUES(?1, ?2, ?3, ?4, ?5, 'pending', ?6, ?7, ?7)"
-    ).bind(opId, idempotencyKey, userId, amount, type, metadata, now()).run().catch(() => {});
+      "INSERT INTO payout_operations(id, operation_key, status, amount, user_id, recipient, created_at, updated_at, reservation_expires_at) VALUES(?1, ?2, 'reserved', ?3, ?4, ?5, ?6, ?6, ?7)"
+    ).bind(opId, idempotencyKey, amount, userId, recipient, timestamp, new Date(Date.now() + 15 * 60 * 1000).toISOString()).run();
 
-    return { id: opId, idempotency_key: idempotencyKey, user_id: userId, amount, type, status: 'pending' };
-  } catch (err) {
+    return { id: opId, operation_key: idempotencyKey, user_id: userId, amount, recipient, status: 'reserved' };
+  } catch (_) {
     return null;
   }
+}
+
+async function enqueuePayoutReconciliation(env, { paymentId = null, operationKey = null, payload = {}, error = null } = {}) {
+  if (!env?.RENTORA_DB) return;
+  try {
+    const existing = paymentId
+      ? await env.RENTORA_DB.prepare("SELECT id FROM payout_reconciliation_queue WHERE pi_payment_id = ?1 LIMIT 1").bind(paymentId).first().catch(() => null)
+      : null;
+    if (existing) {
+      await env.RENTORA_DB.prepare("UPDATE payout_reconciliation_queue SET status='reconciliation_required', operation_key=?1, payload=?2, updated_at=?3 WHERE id=?4")
+        .bind(operationKey, JSON.stringify({ ...payload, error }), now(), existing.id).run().catch(() => {});
+      return;
+    }
+    await env.RENTORA_DB.prepare(
+      "INSERT INTO payout_reconciliation_queue(id, pi_payment_id, operation_key, status, payload, created_at, updated_at) VALUES(?1, ?2, ?3, 'reconciliation_required', ?4, ?5, ?5)"
+    ).bind("prq_" + crypto.randomUUID(), paymentId, operationKey, JSON.stringify({ ...payload, error }), now()).run().catch(() => {});
+  } catch (_) {}
+}
+
+async function updatePayoutOperationStatus(env, operationKey, status, extra = {}) {
+  if (!env?.RENTORA_DB || !operationKey || !status) return;
+  const allowed = new Set(['reserved','creating','pi_created','approving','approved','completing','completed','cancelled','reconciliation_required']);
+  if (!allowed.has(status)) return;
+  const fields = ['status = ?1', 'updated_at = ?2'];
+  const values = [status, now()];
+  if (extra.piPaymentId !== undefined) { fields.push(`pi_payment_id = ?${values.length + 1}`); values.push(extra.piPaymentId); }
+  if (extra.txid !== undefined) { fields.push(`txid = ?${values.length + 1}`); values.push(extra.txid); }
+  if (extra.error !== undefined) { fields.push(`error = ?${values.length + 1}`); values.push(extra.error); }
+  values.push(operationKey);
+  await env.RENTORA_DB.prepare(
+    `UPDATE payout_operations SET ${fields.join(', ')} WHERE operation_key = ?${values.length}`
+  ).bind(...values).run().catch(() => {});
 }
 
 async function recordCompletedPayout(env, user, paymentId, txid, amount, metadataType, targetWallet, idempotencyKey) {
@@ -317,7 +348,7 @@ async function recordCompletedPayout(env, user, paymentId, txid, amount, metadat
   if (idempotencyKey && env.RENTORA_DB) {
     try {
       await env.RENTORA_DB.prepare(
-        "UPDATE payout_operations SET status='completed', pi_payment_id=?1, pi_txid=?2, updated_at=?3 WHERE idempotency_key=?4"
+        "UPDATE payout_operations SET status='completed', pi_payment_id=?1, txid=?2, updated_at=?3 WHERE operation_key=?4"
       ).bind(paymentId, txid, now(), idempotencyKey).run().catch(() => {});
     } catch (_) {}
   }
@@ -341,15 +372,15 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
   if (idempotencyKey && env.RENTORA_DB) {
     try {
       const op = await env.RENTORA_DB.prepare(
-        "SELECT * FROM payout_operations WHERE idempotency_key = ?1 LIMIT 1"
+        "SELECT * FROM payout_operations WHERE operation_key = ?1 LIMIT 1"
       ).bind(idempotencyKey).first().catch(() => null);
 
-      if (op && op.status === 'completed' && op.pi_payment_id && op.pi_txid) {
+      if (op && op.status === 'completed' && op.pi_payment_id && op.txid) {
         const payoutAmount = Number(op.amount || amount);
         return jsonResponse({
           success: true,
           paymentId: op.pi_payment_id,
-          txid: op.pi_txid,
+          txid: op.txid,
           amount: payoutAmount,
           recipient: targetWallet || user.username,
           idempotent: true,
@@ -404,7 +435,22 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
 
   // 4. If already completed on Pi Platform, record in D1, cleanup and return
   if (paymentInfo?.status?.developer_completed) {
-    const txid = paymentInfo?.transaction?.txid || `txid_completed_${paymentId}`;
+    const txid = paymentInfo?.transaction?.txid;
+    // Never synthesize a blockchain transaction id. A completed Pi payment must
+    // carry the actual transaction hash before it can become a D1 settlement.
+    if (!txid || paymentInfo?.status?.transaction_verified !== true) {
+      await updatePayoutOperationStatus(env, idempotencyKey, 'reconciliation_required', {
+        piPaymentId: paymentId,
+        error: 'Pi reports developer_completed without a verified blockchain transaction'
+      });
+      await enqueuePayoutReconciliation(env, {
+        paymentId,
+        operationKey: idempotencyKey,
+        payload: { userId: user.id, uid: user.pi_uid, amount: Number(paymentInfo?.amount || amount), status: paymentInfo?.status || {} },
+        error: 'completed_without_verified_txid'
+      });
+      return errorResponse('پرداخت در پای تکمیل گزارش شده، اما تراکنش بلاکچین قابل تأیید نیست؛ تسویه در صف تطبیق قرار گرفت.', 502, env, undefined, origin);
+    }
     const payoutAmount = Number(paymentInfo.amount || amount);
     await recordCompletedPayout(env, user, paymentId, txid, payoutAmount, metadataType, targetWallet, idempotencyKey);
     if (env.RENTORA_KV) {
@@ -423,6 +469,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
 
   // 5. If no existing payment found, create a new one
   if (!paymentId) {
+    await updatePayoutOperationStatus(env, idempotencyKey, 'creating');
     const paymentPayload = {
       amount,
       memo: String(memo || `Rentora Payout to ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username}`).slice(0, 120),
@@ -458,6 +505,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
     } else if (piRes.ok && (created?.identifier || created?.id)) {
       paymentId = created.identifier || created.id;
       paymentInfo = created;
+      await updatePayoutOperationStatus(env, idempotencyKey, 'pi_created', { piPaymentId: paymentId });
     } else {
       const errMsg = piErrorMessage(created, 'ایجاد تراکنش واریز در سرور پای رد شد.');
       if (env.RENTORA_KV && lockKey) await env.RENTORA_KV.delete(lockKey).catch(() => {});
@@ -476,7 +524,21 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
 
   // Check if resumed payment is already completed
   if (paymentInfo?.status?.developer_completed) {
-    const txid = paymentInfo?.transaction?.txid || `txid_completed_${paymentId}`;
+    const txid = paymentInfo?.transaction?.txid;
+    // Resumed payments follow the same settlement guard as fresh payments.
+    if (!txid || paymentInfo?.status?.transaction_verified !== true) {
+      await updatePayoutOperationStatus(env, idempotencyKey, 'reconciliation_required', {
+        piPaymentId: paymentId,
+        error: 'Pi reports resumed payment completed without a verified blockchain transaction'
+      });
+      await enqueuePayoutReconciliation(env, {
+        paymentId,
+        operationKey: idempotencyKey,
+        payload: { userId: user.id, uid: user.pi_uid, amount: Number(paymentInfo?.amount || amount), status: paymentInfo?.status || {} },
+        error: 'resumed_completed_without_verified_txid'
+      });
+      return errorResponse('پرداخت بازیابی‌شده در پای تکمیل است، اما تراکنش بلاکچین قابل تأیید نیست؛ تسویه در صف تطبیق قرار گرفت.', 502, env, undefined, origin);
+    }
     const payoutAmount = Number(paymentInfo.amount || amount);
     await recordCompletedPayout(env, user, paymentId, txid, payoutAmount, metadataType, targetWallet, idempotencyKey);
     if (env.RENTORA_KV) {
@@ -495,6 +557,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
 
   // 6. Idempotent Approval - DO NOT call approve if already approved!
   const isAlreadyApproved = Boolean(paymentInfo?.status?.developer_approved);
+  await updatePayoutOperationStatus(env, idempotencyKey, isAlreadyApproved ? 'approved' : 'approving', { piPaymentId: paymentId });
   if (!isAlreadyApproved) {
     const appRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, {
       method: 'POST',
@@ -510,7 +573,10 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
       if (env.RENTORA_KV && lockKey) await env.RENTORA_KV.delete(lockKey).catch(() => {});
       return errorResponse(errMsg, 502, env, approved, origin);
     }
-    if (isApprovedNow) paymentInfo = approved;
+    if (isApprovedNow) {
+      paymentInfo = approved;
+      await updatePayoutOperationStatus(env, idempotencyKey, 'approved', { piPaymentId: paymentId });
+    }
     if (isReportedAlreadyApproved) {
       const getRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
       if (getRes.ok) {
@@ -562,6 +628,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
 
   // 8. Idempotent Completion - DO NOT call complete if already completed!
   const isAlreadyCompleted = Boolean(paymentInfo?.status?.developer_completed);
+  if (!isAlreadyCompleted) await updatePayoutOperationStatus(env, idempotencyKey, 'completing', { piPaymentId: paymentId, txid });
   if (!isAlreadyCompleted) {
     const compRes = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, {
       method: 'POST',
@@ -582,6 +649,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
   // 9. Record completed transaction in D1
   const finalAmount = Number(paymentInfo?.amount || amount);
   await recordCompletedPayout(env, user, paymentId, txid, finalAmount, metadataType, targetWallet, idempotencyKey);
+  await updatePayoutOperationStatus(env, idempotencyKey, 'completed', { piPaymentId: paymentId, txid });
 
   // 10. Clean up active payment state & locks in KV
   if (env.RENTORA_KV) {
@@ -601,7 +669,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
 function parseMetadata(value) { if (!value) return {}; try { return JSON.parse(value); } catch (_) { return {}; } }
 function userView(row, env, options = {}) {
   const meta = parseMetadata(row.metadata);
-  const isAdm = env ? (isAdmin(row.pi_uid, env) || isAdmin(row.username, env)) : row.role === 'admin';
+  const isAdm = env ? (row.role === 'admin' && isAdmin(row.pi_uid, env)) : row.role === 'admin';
   const piKycStatus = meta.kycStatus || row.kyc_status;
   const resolvedKycStatus = piKycStatus === 'verified' ? 'verified' : (piKycStatus === 'unverified' ? 'unverified' : 'unknown');
   const { adminKycStatus, ...publicMeta } = meta;
@@ -673,7 +741,7 @@ function transactionView(row) {
 
 async function listAll(env, auth) {
   const user = auth?.user || null;
-  const isAdminUser = user ? (isAdmin(user.pi_uid, env) || isAdmin(user.username, env)) : false;
+  const isAdminUser = user ? (user.role === 'admin' && isAdmin(user.pi_uid, env)) : false;
 
   let itemsQuery;
   if (isAdminUser) {
@@ -920,6 +988,125 @@ export default {
         }
         return jsonResponse({ success: true, item: listingView(row) }, 200, env, origin);
       }
+      if (method === 'POST' && /^\/api\/admin\/reconciliation\/[^/]+\/retry$/.test(path)) {
+        const { user: adminUser } = await requireAdmin(request, env);
+        const queueId = decodeURIComponent(path.split('/')[4] || '');
+        const queue = await env.RENTORA_DB.prepare(
+          "SELECT * FROM payout_reconciliation_queue WHERE id = ?1 AND status='reconciliation_required' LIMIT 1"
+        ).bind(queueId).first();
+        if (!queue) return errorResponse('مورد تطبیق پیدا نشد یا قبلاً حل شده است.', 404, env, undefined, origin);
+
+        const op = queue.operation_key
+          ? await env.RENTORA_DB.prepare("SELECT * FROM payout_operations WHERE operation_key = ?1 LIMIT 1").bind(queue.operation_key).first()
+          : null;
+        if (!op?.user_id || !queue.pi_payment_id) return errorResponse('اطلاعات کافی برای تطبیق پرداخت وجود ندارد.', 409, env, undefined, origin);
+
+        const payoutUser = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id = ?1 LIMIT 1").bind(op.user_id).first();
+        if (!payoutUser) return errorResponse('کاربر پرداخت پیدا نشد.', 404, env, undefined, origin);
+
+        const paymentRes = await piFetch(env, `/payments/${encodeURIComponent(queue.pi_payment_id)}`);
+        const payment = paymentRes.ok ? await paymentRes.json().catch(() => null) : null;
+        const txid = payment?.transaction?.txid;
+        const verified = payment?.status?.developer_completed === true &&
+          payment?.status?.transaction_verified === true && Boolean(txid);
+
+        if (!verified) {
+          await env.RENTORA_DB.prepare(
+            "UPDATE payout_reconciliation_queue SET updated_at=?1 WHERE id=?2"
+          ).bind(now(), queueId).run().catch(() => {});
+          await writeAuditLog(env, adminUser, 'payout_reconciliation_retry', queueId, { verified: false, paymentStatus: payment?.status || null }).catch(() => {});
+          return errorResponse('هنوز تراکنش معتبر روی پای قابل تأیید نیست؛ مورد در صف تطبیق باقی ماند.', 409, env, undefined, origin);
+        }
+
+        const payoutAmount = Number(payment.amount || op.amount);
+        if (!Number.isFinite(payoutAmount) || payoutAmount <= 0 || Math.abs(payoutAmount - Number(op.amount)) > 0.0000001) {
+          return errorResponse('مبلغ پرداخت با عملیات ثبت‌شده مطابقت ندارد.', 409, env, undefined, origin);
+        }
+
+        await recordCompletedPayout(env, payoutUser, queue.pi_payment_id, txid, payoutAmount, 'admin_treasury_payout', op.recipient, queue.operation_key);
+        await env.RENTORA_DB.prepare(
+          "UPDATE payout_reconciliation_queue SET status='resolved', updated_at=?1, payload=?2 WHERE id=?3"
+        ).bind(now(), JSON.stringify({ resolvedBy: adminUser.pi_uid, txid, paymentId: queue.pi_payment_id }), queueId).run();
+        await writeAuditLog(env, adminUser, 'payout_reconciliation_resolved', queueId, { txid, paymentId: queue.pi_payment_id, amount: payoutAmount }).catch(() => {});
+        return jsonResponse({ success: true, resolved: true, txid, paymentId: queue.pi_payment_id, amount: payoutAmount }, 200, env, origin);
+      }
+      if (method === 'GET' && path === '/api/admin/console') {
+        const { user } = await requireAdmin(request, env);
+        const [
+          usersRes, listingsRes, rentalsRes, reportsRes, transactionsRes
+        ] = await Promise.all([
+          env.RENTORA_DB.prepare("SELECT * FROM users ORDER BY created_at DESC LIMIT 500").all(),
+          env.RENTORA_DB.prepare("SELECT l.*, u.username owner_username, u.pi_uid owner_pi_uid FROM listings l JOIN users u ON u.id=l.owner_user_id ORDER BY l.created_at DESC LIMIT 500").all(),
+          env.RENTORA_DB.prepare("SELECT r.*, l.title listing_title, u.username renter_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users u ON u.id=r.renter_user_id ORDER BY r.created_at DESC LIMIT 500").all(),
+          env.RENTORA_DB.prepare("SELECT rp.*, u.username reporter_username FROM reports rp JOIN users u ON u.id=rp.reporter_user_id ORDER BY rp.created_at DESC LIMIT 500").all(),
+          env.RENTORA_DB.prepare("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 500").all()
+        ]);
+
+        const revenue = await env.RENTORA_DB.prepare(
+          "SELECT COALESCE(SUM(CASE WHEN status='completed' AND (type='platform_fee' OR type IS NULL) THEN amount ELSE 0 END),0) totalRevenue, COALESCE(SUM(CASE WHEN status='completed' AND type='admin_payout' THEN amount ELSE 0 END),0) paidOut FROM transactions"
+        ).first();
+
+        let payouts = [];
+        try {
+          const p = await env.RENTORA_DB.prepare("SELECT * FROM payout_operations ORDER BY updated_at DESC LIMIT 500").all();
+          payouts = p.results || [];
+        } catch (_) {}
+
+        let reconciliation = [];
+        try {
+          const q = await env.RENTORA_DB.prepare("SELECT * FROM payout_reconciliation_queue WHERE status='reconciliation_required' ORDER BY updated_at DESC LIMIT 200").all();
+          reconciliation = q.results || [];
+        } catch (_) {}
+
+        let auditLogs = [];
+        if (env?.RENTORA_KV && typeof env.RENTORA_KV.get === 'function') {
+          try { auditLogs = await env.RENTORA_KV.get('rentora_admin_audit_logs', 'json') || []; } catch (_) {}
+        }
+
+        const users = (usersRes.results || []).map(u => userView(u, env, { includeAdminReview: true }));
+        const listings = listingsRes.results || [];
+        const rentals = rentalsRes.results || [];
+        const reports = reportsRes.results || [];
+        const transactions = transactionsRes.results || [];
+        const totalRevenue = Number(revenue?.totalRevenue || 0);
+        const paidOut = Number(revenue?.paidOut || 0);
+        const reserved = payouts.filter(p => ['reserved','creating','pi_created','approving','approved','completing'].includes(p.status))
+          .reduce((sum,p) => sum + Number(p.amount || 0), 0);
+        const available = Math.max(0, totalRevenue - paidOut - reserved);
+
+        return jsonResponse({
+          success: true,
+          generatedAt: now(),
+          overview: {
+            users: users.length,
+            listings: listings.filter(l => l.status !== 'deleted').length,
+            rentals: rentals.length,
+            revenue: totalRevenue,
+            availableTreasury: available,
+            reservedTreasury: reserved,
+            paidOut,
+            openAlerts: reports.filter(r => r.status === 'open').length +
+              payouts.filter(p => p.status === 'reconciliation_required').length
+          },
+          treasury: { totalRevenue, available, reserved, paidOut },
+          users,
+          listings,
+          rentals,
+          reports,
+          transactions,
+          payouts,
+          reconciliation,
+          auditLogs: Array.isArray(auditLogs) ? auditLogs.slice(0, 200) : [],
+          system: {
+            platformFeeRate: Number(env?.PLATFORM_FEE_RATE ?? 0.05),
+            piApiConfigured: Boolean(env?.PI_API_KEY || env?.PI_SERVER_API_KEY),
+            d1Configured: Boolean(env?.RENTORA_DB),
+            kvConfigured: Boolean(env?.RENTORA_KV),
+            r2Configured: Boolean(env?.RENTORA_MEDIA),
+            adminUid: user?.pi_uid || null
+          }
+        }, 200, env, origin);
+      }
       if (method === 'GET' && path === '/api/admin/overview') {
         const { user } = await requireAdmin(request, env);
         const [usersCount, listingsCount, rentalsCount, transactionsCount, revRow, payoutRow, reportsCount, usersMetaRows] = await Promise.all([
@@ -1021,12 +1208,15 @@ export default {
           return errorResponse(`مبلغ درخواستی (${amount} π) از موجودی واقعی کارمزدها (${availableBalance.toFixed(4)} π) بیشتر است.`, 400, env, undefined, origin);
         }
 
-        const targetWallet = String(body?.walletAddress || '').trim();
-        if (targetWallet && !/^[A-Za-z0-9_.-]{12,70}$/.test(targetWallet)) {
+        // A2U recipient is resolved by Pi from the verified app-user UID.
+        // A supplied wallet is accepted only as input validation/legacy UI compatibility,
+        // never as the payment destination. Pi resolves the current wallet from the UID.
+        const requestedWallet = String(body?.walletAddress || '').trim();
+        if (requestedWallet && !/^[A-Za-z0-9_.-]{12,70}$/.test(requestedWallet)) {
           return errorResponse('فرمت آدرس کیف پول پای نامعتبر است.', 400, env, undefined, origin);
         }
-
-        await claimPayoutOperation(env, {
+        const targetWallet = '';
+        const claimedOperation = await claimPayoutOperation(env, {
           idempotencyKey,
           userId: user.id,
           amount,
@@ -1035,15 +1225,55 @@ export default {
           targetWallet
         });
 
-        return await executePiA2UPayoutPipeline(env, {
+        // Count active payout reservations before touching the Pi API.
+        // This prevents concurrent admin requests from over-committing treasury.
+        if (claimedOperation && claimedOperation.status === 'reserved') {
+          const reservedRow = await env.RENTORA_DB.prepare(
+            "SELECT COALESCE(SUM(amount),0) AS total FROM payout_operations WHERE status IN ('reserved','creating','pi_created','approving','approved','completing')"
+          ).first();
+          const reservedTotal = Number(reservedRow?.total || 0);
+          if (reservedTotal > availableBalance + 0.0000001) {
+            await updatePayoutOperationStatus(env, idempotencyKey, 'cancelled', {
+              error: 'Treasury reservation exceeds available platform-fee balance'
+            });
+            return errorResponse(
+              'این پرداخت همزمان با عملیات دیگری درخواست شده و موجودی قابل رزرو کافی نیست.',
+              409,
+              env,
+              undefined,
+              origin
+            );
+          }
+        }
+
+        const payoutResponse = await executePiA2UPayoutPipeline(env, {
           user,
           amount,
-          memo: body?.memo || `Rentora Treasury Payout to ${targetWallet ? targetWallet.slice(0, 8) + '...' : '@' + user.username}`,
+          memo: body?.memo || `Rentora Treasury Payout to @${user.username}`,
           metadataType: 'admin_treasury_payout',
           targetWallet,
           idempotencyKey,
           origin
         });
+
+        // Do not leave a permanent treasury reservation after a failed A2U.
+        // If Pi created a payment, preserve it for reconciliation instead.
+        if (payoutResponse.status >= 400 && idempotencyKey && env.RENTORA_DB) {
+          const op = await env.RENTORA_DB.prepare(
+            "SELECT status, pi_payment_id FROM payout_operations WHERE operation_key=?1 LIMIT 1"
+          ).bind(idempotencyKey).first().catch(() => null);
+          if (op && !op.pi_payment_id && ['reserved','creating'].includes(op.status)) {
+            await updatePayoutOperationStatus(env, idempotencyKey, 'cancelled', {
+              error: 'A2U payout failed before a Pi payment was created'
+            });
+          } else if (op && op.pi_payment_id && !['completed','cancelled'].includes(op.status)) {
+            await updatePayoutOperationStatus(env, idempotencyKey, 'reconciliation_required', {
+              error: 'A2U payout failed after a Pi payment was created'
+            });
+          }
+        }
+
+        return payoutResponse;
       }
       if (method === 'GET' && path === '/api/admin/users') {
         const { user } = await requireAdmin(request, env);
@@ -1086,6 +1316,21 @@ export default {
         const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
         return jsonResponse({ success: true, user: userView(updated, env, { includeAdminReview: true }) }, 200, env, origin);
       }
+      if (method === 'POST' && path.startsWith('/api/admin/reports/') && path.endsWith('/status')) {
+        const reportId = path.slice('/api/admin/reports/'.length, -'/status'.length).trim();
+        if (!reportId) return errorResponse('Missing report ID', 400, env, undefined, origin);
+        const { user } = await requireAdmin(request, env);
+        const body = await readJson(request);
+        const newStatus = String(body?.status || '').trim().toLowerCase();
+        if (!['open','reviewing','resolved','dismissed'].includes(newStatus)) {
+          return errorResponse("Status must be 'open', 'reviewing', 'resolved', or 'dismissed'", 400, env, undefined, origin);
+        }
+        const existing = await env.RENTORA_DB.prepare("SELECT * FROM reports WHERE id=?1 LIMIT 1").bind(reportId).first();
+        if (!existing) return errorResponse('Report not found', 404, env, undefined, origin);
+        await env.RENTORA_DB.prepare("UPDATE reports SET status=?1, updated_at=?2 WHERE id=?3").bind(newStatus, now(), reportId).run();
+        await recordAdminAuditLog(env, user, 'REPORT_STATUS_UPDATED', { reportId, from: existing.status, to: newStatus });
+        return jsonResponse({ success: true, reportId, status: newStatus }, 200, env, origin);
+      }
       if (method === 'POST' && path.startsWith('/api/admin/listings/') && path.endsWith('/status')) {
         const listingId = path.slice('/api/admin/listings/'.length, -'/status'.length).trim();
         if (!listingId) return errorResponse('Missing listing ID', 400, env, undefined, origin);
@@ -1106,60 +1351,17 @@ export default {
         const piUser = await verifyPiAccessToken(env, body.accessToken);
         const uid = String(piUser.uid);
         const username = cleanUsername(piUser.username);
-        const isAdminUser = isAdmin(uid, env) || isAdmin(username, env);
+        const isAdminUser = isAdmin(uid, env);
         const existing = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE pi_uid=?1 LIMIT 1').bind(uid).first();
-        const role = (isAdmin(uid, env) || isAdmin(username, env)) ? 'admin' : 'user';
+        const role = isAdmin(uid, env) ? 'admin' : 'user';
         const userId = existing?.id || `usr_${crypto.randomUUID()}`;
         const oldMeta = parseMetadata(existing?.metadata);
         const existingKyc = oldMeta?.kycStatus || existing?.kyc_status;
 
-        // Three-state KYC resolution: 'unknown' | 'verified' | 'unverified'
-        let kycStatus = 'unknown';
-        if (existingKyc === 'verified') {
-          // Never downgrade an already verified user on subsequent logins
-          kycStatus = 'verified';
-        } else {
-          const isExplicitlyVerified = Boolean(
-            piUser?.kyc_status === true ||
-            piUser?.kyc_status === 'verified' ||
-            piUser?.is_kyc === true ||
-            piUser?.kyc === true ||
-            piUser?.credentials?.kyc === true ||
-            body?.user?.kyc_status === true ||
-            body?.user?.kyc_status === 'verified' ||
-            body?.user?.is_kyc === true ||
-            body?.user?.kyc === true ||
-            body?.user?.credentials?.kyc === true ||
-            body?.kycStatus === 'verified' ||
-            (Array.isArray(piUser?.roles) && (
-              piUser.roles.includes('kyc') ||
-              piUser.roles.includes('kyced') ||
-              piUser.roles.includes('pioneer_kyc')
-            )) ||
-            (Array.isArray(body?.user?.roles) && (
-              body.user.roles.includes('kyc') ||
-              body.user.roles.includes('kyced') ||
-              body.user.roles.includes('pioneer_kyc')
-            ))
-          );
-          const isExplicitlyUnverified = Boolean(
-            piUser?.kyc_status === false ||
-            piUser?.kyc_status === 'unverified' ||
-            body?.user?.kyc_status === false ||
-            body?.user?.kyc_status === 'unverified' ||
-            body?.kycStatus === 'unverified'
-          );
-
-          if (isExplicitlyVerified) {
-            kycStatus = 'verified';
-          } else if (isExplicitlyUnverified) {
-            kycStatus = 'unverified';
-          } else if (existingKyc) {
-            kycStatus = existingKyc;
-          } else {
-            kycStatus = 'unknown';
-          }
-        }
+        // KYC is server-authoritative. The Pi /me response is the identity source of truth,
+        // while client-supplied KYC fields must never be accepted as proof of verification.
+        // Preserve an existing server/admin verification; otherwise remain unknown.
+        let kycStatus = existingKyc === 'verified' ? 'verified' : 'unknown';
 
         const loginCount = (Number(oldMeta.loginCount) || 0) + 1;
         const newMeta = {
