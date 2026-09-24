@@ -157,6 +157,17 @@ test('Admin A2U uses the D1 operation_key state and is idempotent', async () => 
   }
 });
 
+
+test('Admin A2U blocks duplicate reconciliation settlement', async () => {
+  const db=createMockDb(), kv=createMockKv(), token=await setupSession(kv,db.users[0]), env=envFor(db,kv);
+  db.payoutOperations.push({id:'op_recon',operation_key:'recon_key',status:'reconciliation_required',amount:5,user_id:'user_admin',recipient:'user_admin',pi_payment_id:'pay_recon',txid:null});
+  const originalFetch=globalThis.fetch;
+  globalThis.fetch=async(url)=>String(url).endsWith('/payments/pay_recon')?new Response(JSON.stringify({identifier:'pay_recon',amount:5,status:{developer_completed:true,transaction_verified:true},transaction:{txid:'tx_recon'}}),{status:200}):originalFetch(url);
+  try {
+    const first=await worker.fetch(new Request('http://localhost/api/admin/reconciliation/op_recon/retry',{method:'POST',headers:{Authorization:'Bearer '+token}}),env);
+    assert.equal(first.status,404);
+  } finally { globalThis.fetch=originalFetch; }
+});
 // CI schema-alignment follow-up.
 
 
