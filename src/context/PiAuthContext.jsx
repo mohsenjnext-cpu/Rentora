@@ -135,10 +135,8 @@ export function PiAuthProvider({ children }) {
     if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
     const response = await fetch(`${apiBase}/api/sync/user`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        credentials: 'include'
-      },
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(allowed)
     });
     const data = await response.json().catch(() => ({}));
