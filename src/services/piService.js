@@ -162,7 +162,12 @@ class PiNetworkService {
       throw new Error(errDetail);
     }
     if (paymentIntentId && intentId !== paymentIntentId) throw new Error('Payment Intent با رزرو جاری منطبق نیست.');
-    return { id: intentId, amount: Number(data.amount), memo: String(data.memo) };
+    return {
+      id: intentId,
+      amount: Number(data.amount),
+      memo: String(data.memo),
+      metadata: data?.metadata && typeof data.metadata === 'object' ? data.metadata : { paymentIntentId: intentId, rentalId }
+    };
   }
 
   async approvePaymentOnServer(paymentId, paymentIntentId) {
@@ -211,7 +216,7 @@ class PiNetworkService {
           const paymentMetadata = {
             ...(serverIntent.metadata || {}),
             paymentIntentId: serverIntent.id,
-            rentalId: serverIntent.metadata?.rentalId || paymentData?.metadata?.rentalId
+            rentalId: serverIntent.metadata?.rentalId || paymentData?.metadata?.rentalId || undefined
           };
 
           window.Pi.createPayment(

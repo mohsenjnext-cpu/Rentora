@@ -25,7 +25,12 @@ function installSessionFetchBridge(onSessionInvalid) {
         if (res.status === 401 && !isPiLogin && typeof onSessionInvalid === 'function') onSessionInvalid();
         return res;
       }
-    } catch (_) {}
+    } catch (error) {
+      // Never retry an API Request object after fetch may have consumed its body.
+      // Fetch bodies are one-shot streams; retrying the same Request can throw
+      // "Body has already been used" in Cloudflare/Pi Browser runtimes.
+      if (isApiRequest) throw error;
+    }
     return originalFetch(input, init);
   };
   window.__rentoraSessionFetchBridge = true;
