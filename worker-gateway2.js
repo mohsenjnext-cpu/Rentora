@@ -1144,6 +1144,12 @@ async function adminRoute(request, env, path) {
 }
 export default {
   async fetch(request, env, ctx) {
+    const cookieToken = parseCookies(request).rentora_session ? decodeURIComponent(parseCookies(request).rentora_session) : '';
+    if (cookieToken && !request.headers.get('Authorization')) {
+      const headers = new Headers(request.headers);
+      headers.set('Authorization', `Bearer ${cookieToken}`);
+      request = new Request(request, { headers });
+    }
     const path = new URL(request.url).pathname;
     try {
       if (request.method === 'OPTIONS') {
