@@ -52,15 +52,9 @@ export default function AdminDashboardPage({ onNavigate }) {
   const payoutKey = useRef(null);
 
   const api = getApiBaseUrl();
-  const headers = useCallback(() => {
-    const h = { 'Content-Type': 'application/json' };
-    try {
-      const raw = localStorage.getItem('rentora_live_v1_session');
-      const u = raw ? JSON.parse(raw) : null;
-      if (u?.sessionToken) h.Authorization = `Bearer ${u.sessionToken}`;
-    } catch {}
-    return h;
-  }, []);
+  // PiAuthContext installs the authenticated-session fetch bridge for API requests.
+  // Keep the admin console free of direct session-token storage access.
+  const headers = useCallback(() => ({ 'Content-Type': 'application/json' }), []);
 
   const load = useCallback(async () => {
     if (!isAdmin || !api) return;
@@ -124,7 +118,7 @@ export default function AdminDashboardPage({ onNavigate }) {
     e.preventDefault(); setPayoutMessage('');
     const amount = Number(payoutAmount);
     if (!amount || amount <= 0) { setPayoutMessage('مبلغ معتبر وارد کنید.'); return; }
-    payoutKey.current ||= (crypto?.randomUUID ? crypto.randomUUID() : `payout_${Date.now()}`);
+    payoutKey.current ||= (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `payout_${Date.now()}`);
     try {
       const result = await cloudSyncService.requestAdminPayout(amount, payoutMemo, walletAddress, payoutKey.current);
       setPayoutMessage(result.message || `پرداخت ${money(amount)} ثبت شد.`);
