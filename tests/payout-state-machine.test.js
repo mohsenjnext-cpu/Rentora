@@ -156,3 +156,10 @@ test('A2U create and incomplete recovery validate before persisting payment bind
   assert.match(gateway, /validateA2UPayment\(env, \{ \.\.\.operation, pi_payment_id: pid \}, paymentCandidate\.payment\)/);
   assert.match(gateway, /Incomplete payout payment failed validation before binding/);
 });
+
+test('A2U incomplete-payment recovery acquires an exclusive lease before advancing approved state', () => {
+  const recovery = gateway.slice(gateway.indexOf('async function autoResolveIncompleteServerPayments'), gateway.indexOf('async function createPayoutPayment'));
+  assert.match(recovery, /acquirePayoutLease\\(env, operation, \['approving'\]\\)/);
+  assert.match(recovery, /clearLease: true/);
+  assert.match(recovery, /leaseOwner: operation\\.lease_owner/);
+});
