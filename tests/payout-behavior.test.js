@@ -50,6 +50,15 @@ class FakeD1 {
       this.operations.push({ id, operation_key: key, status: 'reserved', amount, user_id: userId, recipient, created_at: createdAt, updated_at: createdAt, reservation_expires_at: reservationExpires, lease_owner: leaseOwner, lease_expires_at: leaseExpires, pi_payment_id: null, txid: null, error: null });
       return { meta: { changes: 1 } };
     }
+    if (sql.includes('UPDATE payout_operations SET lease_expires_at=?1') && sql.includes('lease_owner=?5')) {
+      const [expires, updated, key, status, owner] = values;
+      const op = this.operations.find((row) => row.operation_key === key);
+      if (op && op.status === status && op.lease_owner === owner && op.lease_expires_at && op.lease_expires_at > updated) {
+        Object.assign(op, { lease_expires_at: expires, updated_at: updated });
+        return { meta: { changes: 1 } };
+      }
+      return { meta: { changes: 0 } };
+    }
     if (sql.includes("UPDATE payout_operations SET lease_owner=?1") && sql.includes("status='reserved'")) {
       const [owner, expires, updated, key] = values;
       const op = this.operations.find((row) => row.operation_key === key);

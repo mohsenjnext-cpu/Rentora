@@ -45,7 +45,7 @@ async function recordAdminAuditLog(env, adminUser, action, details = {}) {
 const PAYOUT_ACTIVE_STATES = ['reserved', 'creating', 'pi_created', 'approving', 'approved', 'completing', 'reconciliation_required'];
 const PAYOUT_FINAL_STATES = ['completed', 'cancelled'];
 const PAYOUT_STALE_MS = 15 * 60 * 1000;
-const PAYOUT_LEASE_MS = 60 * 1000;
+const PAYOUT_LEASE_MS = 5 * 60 * 1000;
 const PAYOUT_TRANSITIONS = Object.freeze({
   reserved: ['creating', 'cancelled', 'reconciliation_required'],
   creating: ['pi_created', 'cancelled', 'reconciliation_required'],
@@ -126,6 +126,17 @@ async function acquirePayoutLease(env, operation, states = PAYOUT_ACTIVE_STATES)
   const result = await env.RENTORA_DB.prepare(`UPDATE payout_operations SET lease_owner=?1, lease_expires_at=?2, updated_at=?3 WHERE operation_key=?4 AND status IN (${placeholders}) AND (lease_expires_at IS NULL OR lease_expires_at < ?3)`).bind(leaseOwner, leaseExpires, now(), operation.operation_key, ...states).run();
   if (Number(result?.meta?.changes || 0) !== 1) return null;
   return { ...(await getPayoutOperation(env, operation.operation_key)), lease_owner: leaseOwner };
+}
+
+async function renewPayoutLease(env, operation) {
+  if (!operation?.operation_key || !operation?.lease_owner) return null;
+  const leaseExpires = new Date(Date.now() + PAYOUT_LEASE_MS).toISOString();
+  const renewedAt = now();
+  const result = await env.RENTORA_DB.prepare(
+    "UPDATE payout_operations SET lease_expires_at=?1, updated_at=?2 WHERE operation_key=?3 AND status=?4 AND lease_owner=?5 AND lease_expires_at IS NOT NULL AND lease_expires_at > ?2"
+  ).bind(leaseExpires, renewedAt, operation.operation_key, operation.status, operation.lease_owner).run();
+  if (Number(result?.meta?.changes || 0) !== 1) return null;
+  return { ...operation, lease_expires_at: leaseExpires, updated_at: renewedAt };
 }
 
 async function transitionPayoutOperation(env, key, fromStates, toState, fields = {}) {
@@ -239,6 +250,8 @@ async function completePayoutOperation(env, operation) {
     return markPayoutReconciliationRequired(env, operation, error.message || 'Pi A2U payment validation failed');
   }
   if (beforeComplete.status.developer_completed) return persistCompletedPayout(env, operation, operation.pi_payment_id, beforeComplete.payment?.transaction?.txid || currentTxid, beforeComplete.payment);
+  operation = await renewPayoutLease(env, operation);
+  if (!operation) return getPayoutOperation(env, operation?.operation_key);
   let completionResponse;
   let completion;
   try {
@@ -286,6 +299,8 @@ async function resumePayoutOperation(env, operation) {
     }
     if (current.status.developer_completed) return persistCompletedPayout(env, operation, operation.pi_payment_id, current.payment?.transaction?.txid, current.payment);
     if (!current.status.developer_approved) {
+      operation = await renewPayoutLease(env, operation);
+      if (!operation) return getPayoutOperation(env, operation?.operation_key);
       let approvedResponse;
       let approved;
       try {
@@ -829,6 +844,8 @@ async function createPayoutPayment(env, operation, leaseOwner, paymentPayload) {
   if (!operation || operation.status !== 'creating' || operation.lease_owner !== requestedLeaseOwner) {
     return operation;
   }
+  operation = await renewPayoutLease(env, operation);
+  if (!operation) return getPayoutOperation(env, operation?.operation_key);
   let piRes;
   let created;
   try {
@@ -844,7 +861,7 @@ async function createPayoutPayment(env, operation, leaseOwner, paymentPayload) {
   } catch (error) {
     return markPayoutReconciliationRequired(env, operation, error.message || 'Created Pi A2U payment failed validation');
   }
-  return transitionPayoutOperation(env, operation.operation_key, ['creating'], 'pi_created', { piPaymentId: createdPaymentId, leaseOwner: leaseOwner || operation.lease_owner, clearLease: true });
+  return transitionPayoutOperation(env, operation.operation_key, ['creating'], 'pi_created', { piPaymentId: createdPaymentId, leaseOwner: operation.lease_owner, clearLease: true });
 }
 
 async function adminRoute(request, env, path) {
