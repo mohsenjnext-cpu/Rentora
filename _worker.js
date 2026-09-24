@@ -363,7 +363,7 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
         return jsonResponse({
           success: true,
           paymentId: op.pi_payment_id,
-          txid: op.pi_txid,
+          txid: op.txid,
           amount: payoutAmount,
           recipient: targetWallet || user.username,
           idempotent: true,
