@@ -337,3 +337,32 @@ At the end of each meaningful work session:
 - Keep this file factual and concise.
 
 A future session should be able to read this file and continue the project without requiring the previous chat transcript.
+
+
+### 2026-09-24 UI/UX audit pass: Route + component + state matrix
+- App navigation is currently an in-memory state switch in `src/App.jsx`, not URL routes. This is workable for the legacy shell but makes deep-linking, browser history, shareable item/profile URLs and isolated screen testing harder.
+- Primary screen inventory:
+  - Home -> `HomePage` -> `RentoraContext` + `PiAuthContext` -> marketplace cached/server data -> states: populated, empty, refresh/loading, auth-dependent actions.
+  - Discover -> `DiscoverPage` -> `RentoraContext` -> local search/filter/sort over marketplace data -> states: results, no results, filters active, mobile filter sheet.
+  - Item Detail -> `ItemDetailPage` -> `RentoraContext` + reviews service + `BookingModal` -> reviews API + booking/payment APIs -> states: loading reviews, no reviews, owner/non-owner, authenticated/unauthenticated booking.
+  - List/Edit Item -> `ListItemPage` (~763 lines) -> `RentoraContext` + `cloudSyncService` -> listing create/update + private contact/media APIs -> states: create/edit, validation error, upload, submitting, success, auth required.
+  - Owner Hub -> `OwnerHubPage` -> `RentoraContext` -> listing/rental data + rental status API -> states: listing management, rental lifecycle, empty data, action pending/error.
+  - Activity -> `ActivityPage` (~700+ lines) -> `RentoraContext` + service calls -> rental/review/report/contact/status APIs -> states: lifecycle-dependent actions, review/report, contact unlock, empty/loading/error.
+  - Profile -> `ProfilePage` -> `PiAuthContext` + `RentoraContext` + reputation/review services -> profile update/media/reputation APIs -> states: signed-out gate, view, edit, upload, save/error.
+  - Public Profile -> `PublicProfilePage` -> public profile service + marketplace/reputation data -> states: remote loading, missing user, listings/reputation.
+  - Settings -> `SettingsPage` -> primarily client preferences/help/security/support -> no authoritative platform configuration contract.
+  - Admin -> `AdminDashboardPage` -> `cloudSyncService` + admin APIs -> console/payout/reconciliation/status APIs -> states: unauthorized, loading, error/retry, overview, tables, payout create, reconciliation.
+- Shared components identified as cross-cutting migration targets: Header, Sidebar, BottomNav, Footer, ItemCard, CategoryBar, EmptyState, PiAuthModal, WalletModal, BookingModal, ChatModal, HelpCenterModal, SecurityModal, SupportModal, ReportModal.
+- Core integration matrix:
+  - Auth: Pi SDK -> `PiAuthContext` -> `/api/auth/me`, `/api/auth/pi-login` -> HttpOnly session. Preserve exactly.
+  - Booking/payment: BookingModal -> `/api/rentals/quote` -> `/api/rentals` -> Pi SDK -> `/api/payments/approve` -> `/api/payments/complete`. Preserve server quote/payment amount authority.
+  - Rental status: Activity/Owner Hub -> `/api/sync/rental/status`. UI must render authoritative state machine.
+  - Messaging: ChatModal/context -> `/api/conversations` and message/archive endpoints. Preserve unread/read behavior while removing unnecessary local session dependence.
+  - Admin finance: console -> `/api/admin/console`, payout -> `/api/admin/payout`, wallet balance -> `/api/wallet/balance`; legacy wallet withdraw is retired (410).
+- State-pattern requirement for redesign: every screen should define at least loading, empty, error, success, disabled/pending, unauthorized where applicable. These should be shared primitives rather than bespoke markup.
+- Navigation finding: mobile BottomNav exposes Home/Discover/Activity/Profile only. Owner Hub, List Item, Wallet, Messages and Admin are secondary/drawer/modal destinations. New IA should elevate high-frequency actions without overcrowding the primary bar.
+- Component debt: HomePage contains a second mobile-specific listing-card implementation while `ItemCard` already exists. Redesign should establish one responsive ListingCard with variants rather than maintaining two visual systems.
+- Data-authority debt: `RentoraContext` initializes `platformConfig` from localStorage and uses it in client-side pricing calculations. This must not become the source of truth for actual money. Server quote/D1 remains authoritative.
+- Service-layer debt: `cloudSyncService` still defines the historical `rentora_live_v1_session` storage key even though session authority is now the HttpOnly cookie. Any new UI must not depend on that key.
+- Visual debt: App/Header/BottomNav/Sidebar/Admin use repeated literal colors, radii and shadows. New tokenized primitives should replace these incrementally.
+- IA implication: user experience should be organized around three jobs: Discover & Rent, List & Manage, Account & Communication. Admin remains a separate operational workspace sharing the same visual system.
