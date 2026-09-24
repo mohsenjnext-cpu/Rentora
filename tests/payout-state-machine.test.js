@@ -164,6 +164,18 @@ test('A2U incomplete-payment recovery acquires an exclusive lease before advanci
   assert.match(recovery, /leaseOwner: operation\.lease_owner/);
 });
 
+test('A2U reconciliation queue has a durable resolver and only resolves final operations', () => {
+  assert.match(gateway, /async function processPayoutReconciliationQueue\(env\)/);
+  const queue = gateway.slice(gateway.indexOf('async function processPayoutReconciliationQueue'), gateway.indexOf('async function autoResolveIncompleteServerPayments'));
+  assert.match(queue, /FROM payout_reconciliation_queue WHERE status='reconciliation_required'/);
+  assert.match(queue, /fetchPiPayment\(env, paymentId\)/);
+  assert.match(queue, /validateA2UPayment\(env, operation, current\.payment\)/);
+  assert.match(queue, /persistCompletedPayout\(/);
+  assert.match(queue, /status='resolved'/);
+  assert.match(queue, /operation\?\.status === 'completed' \|\| operation\?\.status === 'cancelled'/);
+  const reconcile = gateway.slice(gateway.indexOf('async function reconcileStalePayoutOperations'), gateway.indexOf('function userView'));
+  assert.match(reconcile, /await processPayoutReconciliationQueue\(env\)/);
+});
 test('A2U Pi mutations renew the durable lease before external side effects', () => {
   assert.match(gateway, /const PAYOUT_LEASE_MS = 5 \* 60 \* 1000/);
   assert.match(gateway, /async function renewPayoutLease\(env, operation\)/);
