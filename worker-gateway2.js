@@ -1188,6 +1188,8 @@ export default {
           piApiUrlConfigured: Boolean(env?.PI_API_URL),
           databaseBound: Boolean(env?.RENTORA_DB),
           sessionStoreBound: Boolean(env?.RENTORA_KV),
+          piA2UWalletConfigured: Boolean(env?.PI_WALLET_PRIVATE_SEED),
+          piA2UHorizonConfigured: Boolean(env?.PI_HORIZON_URL || 'https://api.testnet.minepi.com'),
         };
         const healthy = Boolean(checks.piApiKeyConfigured && checks.databaseBound && checks.sessionStoreBound);
         return json({ ok: healthy, checks }, healthy ? 200 : 503, request, env);
