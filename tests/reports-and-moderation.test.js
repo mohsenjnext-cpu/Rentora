@@ -94,6 +94,7 @@ function createMockEnv(initialData = {}) {
   return {
     RENTORA_DB: mockDb,
     RENTORA_KV: mockKv,
+    ADMIN_PI_UIDS: initialData.adminPiUids || '',
     dbData,
     kvStore
   };
@@ -187,7 +188,7 @@ test('Report 4: Non-admin user cannot resolve report (403)', async () => {
 test('Report 5: Admin user successfully resolves report (200)', async () => {
   const admin = { id: 'usr_admin', pi_uid: 'avina60', username: 'avina60', display_name: 'Admin', role: 'admin', status: 'active' };
   const report = { id: 'rep_1', reporter_user_id: 'usr_other', target_type: 'listing', target_id: 'item_1', reason: 'fake', status: 'open' };
-  const env = createMockEnv({ users: [admin], reports: [report] });
+  const env = createMockEnv({ users: [admin], reports: [report], adminPiUids: admin.pi_uid });
   const token = await setupSession(env, admin);
 
   const req = new Request(`https://rentora.app/api/reports/${report.id}/resolve`, {
