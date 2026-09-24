@@ -260,7 +260,17 @@ Never casually break:
 
 ## 14. Current Work State
 
-Current phase: **Prepare and execute product-wide UI/UX audit.**
+Current phase: **Product-wide UI/UX audit in progress.**
+
+Initial code inspection completed:
+- `src/App.jsx` currently acts as a large route/state switcher with 10 primary page targets plus global modals and shared navigation.
+- Current user surfaces include Home, Discover, Item Detail, Public Profile, List Item, Owner Hub, Activity, Profile and Settings; Admin is a gated surface inside the same shell.
+- Shared shell currently includes Header, Sidebar, BottomNav and Footer, with global auth/wallet/booking/help/security/support/chat modals.
+- `PiAuthContext` owns authoritative session restoration/admin state while `RentoraContext` still contains some local cached UI state; these boundaries must be respected during redesign.
+- `AdminDashboardPage` currently combines navigation, treasury, payouts, users, listings, reports, transactions, audit and system concerns in one large page component. This is a major UX/maintainability redesign target.
+- Current visual shell mixes Tailwind utility classes, hard-coded colors and some inline styling (including the ErrorBoundary), indicating a need for centralized design tokens/components.
+
+Next audit action: continue route/component inventory and trace major user/admin flows to their existing services/APIs before defining the new design system.
 
 Immediate next actions:
 1. Inventory all routes/pages.
