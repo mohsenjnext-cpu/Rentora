@@ -1132,6 +1132,20 @@ export default {
         return json({ authenticated: true, user: { ...userView(user, env), isAdmin }, isAdmin }, 200, request, env);
       }
       if ((request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users')) || (request.method === 'POST' && (path === '/api/admin/payout' || path === '/api/admin/cleanup'))) return await adminRoute(request, env, path);
+
+      // Static frontend assets must be served directly by the gateway worker. This keeps
+      // React's production bundles independent from the API fallback and prevents an SPA
+      // fallback from returning HTML for a missing JavaScript module.
+      if (!path.startsWith('/api/') && env?.ASSETS && typeof env.ASSETS.fetch === 'function') {
+        const assetResponse = await env.ASSETS.fetch(request);
+        if (path === '/' || path === '/index.html') {
+          const headers = new Headers(assetResponse.headers);
+          headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+          headers.set('Pragma', 'no-cache');
+          return new Response(assetResponse.body, { status: assetResponse.status, statusText: assetResponse.statusText, headers });
+        }
+        return assetResponse;
+      }
       return legacyWorker.fetch(request, env, ctx);
     } catch (err) {
       console.error('Gateway error', err);
