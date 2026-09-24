@@ -524,7 +524,21 @@ async function executePiA2UPayoutPipeline(env, { user, amount, memo, metadataTyp
 
   // Check if resumed payment is already completed
   if (paymentInfo?.status?.developer_completed) {
-    const txid = paymentInfo?.transaction?.txid || `txid_completed_${paymentId}`;
+    const txid = paymentInfo?.transaction?.txid;
+    // Resumed payments follow the same settlement guard as fresh payments.
+    if (!txid || paymentInfo?.status?.transaction_verified !== true) {
+      await updatePayoutOperationStatus(env, idempotencyKey, 'reconciliation_required', {
+        piPaymentId: paymentId,
+        error: 'Pi reports resumed payment completed without a verified blockchain transaction'
+      });
+      await enqueuePayoutReconciliation(env, {
+        paymentId,
+        operationKey: idempotencyKey,
+        payload: { userId: user.id, uid: user.pi_uid, amount: Number(paymentInfo?.amount || amount), status: paymentInfo?.status || {} },
+        error: 'resumed_completed_without_verified_txid'
+      });
+      return errorResponse('پرداخت بازیابی‌شده در پای تکمیل است، اما تراکنش بلاکچین قابل تأیید نیست؛ تسویه در صف تطبیق قرار گرفت.', 502, env, undefined, origin);
+    }
     const payoutAmount = Number(paymentInfo.amount || amount);
     await recordCompletedPayout(env, user, paymentId, txid, payoutAmount, metadataType, targetWallet, idempotencyKey);
     if (env.RENTORA_KV) {
