@@ -28,7 +28,7 @@ test('payment approval route requires an authenticated, obligation-bound payment
   assert.match(approve, /validatePiPayment\(payment, obligation, user\)/);
   assert.match(worker, /const payerUid = payment\?\.user\?\.uid \|\| payment\?\.from_address\?\.uid/);
   assert.match(worker, /Pi payer mismatch/);
-  assert.match(worker, /metadataIntent/);
+  assert.match(worker, /paymentMeta\.paymentIntentId/);
   assert.match(worker, /Pi payment metadata obligation binding is invalid/);
 });
 
