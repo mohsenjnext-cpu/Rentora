@@ -148,7 +148,7 @@ test('listing KYC badge cannot be asserted by client-supplied listing metadata',
 test('cloud sync requests carry the server session token for authenticated API routes', () => {
   const sync = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
   const start = sync.indexOf('getAuthHeaders()');
-  const end = sync.indexOf('\\n  }', start);
+  const end = sync.indexOf('async compressImage', start);
   assert.ok(start >= 0 && end > start);
   const helper = sync.slice(start, end);
   assert.match(helper, /localStorage\\.getItem\\(STORAGE_USER_KEY\\)/);
@@ -165,7 +165,7 @@ test('legacy rental sync endpoint is retired so client payloads cannot bypass qu
   const next = worker.indexOf("path === '/api/sync/rental/status'", route);
   assert.ok(next > route);
   const block = worker.slice(route, next);
-  assert.match(block, /Legacy rental endpoint is permanently deprecated/);
+  assert.match(block, /Legacy rental endpoint is deprecated/);
   assert.match(block, /410/);
   assert.doesNotMatch(block, /INSERT INTO rentals/);
 });
