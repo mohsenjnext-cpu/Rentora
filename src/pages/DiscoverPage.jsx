@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useRentora } from '../context/RentoraContext';
 import ItemCard from '../components/ItemCard';
-import EmptyState from '../components/EmptyState';
+import RentoraEmptyState from '../components/ui/RentoraEmptyState';
 import RentoraInput from '../components/ui/RentoraInput';
 import RentoraButton from '../components/ui/RentoraButton';
 import RentoraModal from '../components/ui/RentoraModal';
@@ -94,26 +94,22 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
 
         <div className="flex items-center gap-2 w-full">
           {/* Live Search Bar with inline filter icon */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute top-2.5 left-3 rtl:left-auto rtl:right-3 stroke-[2]" />
+          <div className="flex-1">
             <RentoraInput
               id="discover-search"
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t('discoverSearchPlaceholder')}
-              className="w-full"
+              leadingAdornment={<Search className="h-4 w-4" strokeWidth={2} />}
+              trailingAdornment={query ? (
+                <button type="button" onClick={() => setQuery('')} aria-label={t('discoverClearSearch')}
+                  className="rounded p-1 text-slate-400 transition hover:text-slate-600 focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus)] dark:hover:text-slate-200">
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              ) : null}
               aria-label={t('discoverSearchPlaceholder')}
             />
-            {query && (
-              <button
-                type="button"
-                onClick={() => setQuery('')}
-                className="absolute top-2 right-2.5 rtl:right-auto rtl:left-2.5 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
 
           {/* Inline Filter Button (Opens filter sheet) */}
@@ -156,12 +152,16 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
 
       {/* 3. Items Grid / Consistent Empty State */}
       {filteredItems.length === 0 ? (
-        <EmptyState
-          type="search"
+        <RentoraEmptyState
+          icon={<Search className="h-6 w-6" />}
           title={t('discoverEmptyTitle')}
-          message={t('discoverEmptyDesc')}
-          actionLabel={isFiltered ? t('discoverClearFilters') : undefined}
-          onAction={isFiltered ? clearFilters : undefined}
+          description={t('discoverEmptyDesc')}
+          action={isFiltered ? (
+            <RentoraButton variant="secondary" size="sm" onClick={clearFilters}>
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('discoverClearFilters')}
+            </RentoraButton>
+          ) : null}
         />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
