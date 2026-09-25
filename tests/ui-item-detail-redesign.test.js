@@ -47,3 +47,20 @@ test('redesigned item detail converges reviews and primary booking CTA on shared
   assert.match(file, /loadingReviews/);
   assert.match(file, /totalReviews === 0/);
 });
+
+test('booking and report modals converge on shared interaction primitives', () => {
+  const booking = fs.readFileSync(new URL('../src/components/BookingModal.jsx', import.meta.url), 'utf8');
+  const report = fs.readFileSync(new URL('../src/components/ReportModal.jsx', import.meta.url), 'utf8');
+  assert.match(booking, /RentoraModal/);
+  assert.match(booking, /RentoraButton/);
+  assert.match(booking, /RentoraInput/);
+  assert.match(booking, /RentoraAlert/);
+  assert.doesNotMatch(booking, /offline\\/compatibility mode/);
+  assert.doesNotMatch(booking, /broadcastNewRental/);
+  assert.match(booking, /serverQuote/);
+  assert.match(booking, /hasAuthoritativeQuote/);
+  assert.match(report, /RentoraModal/);
+  assert.match(report, /RentoraButton/);
+  assert.match(report, /RentoraAlert/);
+  assert.match(report, /RentoraEmptyState/);
+});
