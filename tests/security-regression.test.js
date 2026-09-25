@@ -35,7 +35,7 @@ test('payment approval route requires an authenticated, user-bound intent', () =
 
 test('payment approval uses an atomic D1 claim for the Pi payment ID', () => {
   const approve = section("path === '/api/payments/approve'", "path === '/api/payments/complete'");
-  assert.match(approve, /status='created' AND \\(pi_payment_id IS NULL OR pi_payment_id=\\?1\\)/);
+  assert.match(approve, /status='created' AND \(pi_payment_id IS NULL OR pi_payment_id=\?1\)/);
   assert.match(approve, /claim\?\.meta\?\.changes/);
   assert.match(approve, /concurrently claimed by another payment/);
 });
