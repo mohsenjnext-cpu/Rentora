@@ -43,12 +43,12 @@
 - [x] Shadow/elevation tokens
 - [x] Breakpoints
 - [ ] Icon rules
-- [ ] Button system
-- [ ] Input/select/search system
-- [ ] Card system
+- [x] Button system
+- [x] Input/select/search system
+- [x] Card system
 - [ ] Avatar system
-- [ ] Badge/status system
-- [ ] Tabs
+- [x] Badge/status system
+- [x] Tabs
 - [ ] Modal/drawer
 - [ ] Toast/notification
 - [ ] Skeleton/loading
@@ -491,5 +491,16 @@ Added additive shared primitives under `src/components/ui/`:
 
 These primitives are intentionally additive. Existing pages are not mass-migrated yet, so the legacy UI remains operational while the component system is validated incrementally.
 
-**Status:** Initial Button/Card/Badge primitives implemented. Broader component migration remains pending regression and accessibility validation.
+**Status:** Initial Button/Card/Badge/Input/Tabs primitives implemented. Button/Card/Badge/Input/Tabs migration and dedicated regression coverage remain pending; no page-wide migration has been performed.
 
+
+
+## Design System Implementation 02 — Form & Navigation Primitives — 2026-09-25
+
+Added additive shared primitives under `src/components/ui/`:
+- `RentoraInput`: label, required, hint, error, disabled and accessible description wiring.
+- `RentoraTabs`: horizontal, keyboard-focusable tab controls with selected/disabled semantics and mobile overflow handling.
+
+The primitives remain presentation-only and do not introduce new business state or API contracts.
+
+**Status:** Implemented. Dedicated component tests and broad page migration remain pending.
