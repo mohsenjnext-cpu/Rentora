@@ -34,3 +34,12 @@ test('RentoraInput provides safe ids and reusable adornments', async () => {
   assert.match(source, /leadingAdornment/);
   assert.match(source, /trailingAdornment/);
 });
+
+
+test('Discover exposes accessible semantics for sorting and category filters', async () => {
+  const source = await read('src/pages/DiscoverPage.jsx');
+  assert.match(source, /htmlFor="discover-sort"/);
+  assert.match(source, /id="discover-sort"/);
+  assert.match(source, /aria-pressed=\{isSel\}/);
+  assert.match(source, /aria-labelledby="discover-category-label"/);
+});
