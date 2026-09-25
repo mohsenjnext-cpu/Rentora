@@ -1541,6 +1541,19 @@ export default {
           return errorResponse(`Pi payment cannot be completed from status ${status || 'unknown'}`, 409, env, undefined, origin);
         }
 
+        // The txid is a Pi-authoritative value once the payment has a transaction.
+        // Never let a client-supplied txid overwrite that identity.
+        const piTxid = String(payment?.transaction?.txid || '').trim();
+        if (piTxid && piTxid !== String(body.txid).trim()) {
+          return errorResponse('Transaction ID does not match the verified Pi payment', 409, env, undefined, origin);
+        }
+        const existingTransaction = await env.RENTORA_DB.prepare(
+          'SELECT payment_intent_id, pi_payment_id, pi_txid FROM transactions WHERE pi_payment_id=?1 OR pi_txid=?2 LIMIT 1'
+        ).bind(body.paymentId, body.txid).first().catch(() => null);
+        if (existingTransaction && String(existingTransaction.payment_intent_id) !== String(intent.id)) {
+          return errorResponse('Transaction is already bound to another payment intent', 409, env, undefined, origin);
+        }
+
         const completionResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}/complete`, {
           method: 'POST',
           body: JSON.stringify({ txid: body.txid })
