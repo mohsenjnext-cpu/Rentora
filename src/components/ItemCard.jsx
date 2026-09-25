@@ -13,7 +13,7 @@ import {
   Settings
 } from 'lucide-react';
 
-export default function ItemCard({ item, onSelect, onRentClick }) {
+export default function ItemCard({ item, onSelect, onRentClick, variant = 'default' }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser } = usePiAuth();
   const { favorites = [], toggleFavorite } = useRentora();
@@ -32,6 +32,45 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
   const imageUrl = (item.images && item.images.length > 0)
     ? item.images[0]
     : 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80';
+
+  if (variant === 'compact') {
+    return (
+      <article
+        onClick={() => onSelect && onSelect(item)}
+        className="group bg-white dark:bg-[#151426] border border-[#E4E4EC] dark:border-slate-800 rounded-[var(--radius-card)] p-1.5 overflow-hidden cursor-pointer shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)] transition duration-200 ease-[var(--ease-rentora)]"
+      >
+        <div className="relative h-28 rounded-xl overflow-hidden bg-[#D8D7F5] dark:bg-[#27254A]">
+          <img src={imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
+          {item.ownerKYC && (
+            <span className="absolute top-2 left-2 rounded px-1.5 py-0.5 text-[9px] font-bold badge-trust flex items-center gap-0.5 shadow-xs">
+              <ShieldCheck className="w-2.5 h-2.5 stroke-[2.2]" />
+              <span>KYC</span>
+            </span>
+          )}
+          {isOwner && (
+            <span className="absolute top-2 left-2 mt-6 rounded px-1.5 py-0.5 text-[9px] font-bold bg-rentora-primary-soft dark:bg-[#26215C] text-rentora-primary dark:text-rentora-primary-soft shadow-xs">
+              {l('آگهی من', 'Mine', 'إعلاني', '我的发布')}
+            </span>
+          )}
+          <button type="button" aria-label={t('btnFavorite')} onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }} className="absolute top-2 right-2 w-8 h-8 rounded-full bg-[#26215C]/60 text-white flex items-center justify-center z-10">
+            <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
+          </button>
+        </div>
+        <div className="px-1.5 pt-2 pb-1">
+          <div className="text-[9px] text-[#8A8A9B] flex items-center justify-end gap-0.5 truncate"><span>{item.location || l('ایران', 'Iran', 'إيران', '伊朗')}</span><MapPin className="w-2.5 h-2.5 shrink-0" /></div>
+          <h3 className="mt-1 text-[12px] font-bold text-[#1E1E2F] dark:text-white text-right truncate">{item.title}</h3>
+          <div className="mt-2 flex items-center justify-between gap-1">
+            {isOwner ? (
+              <button type="button" onClick={(e) => { e.stopPropagation(); onSelect?.(item); }} className="bg-[#26215C] text-white rounded-lg px-3 py-1.5 text-[10px] font-bold">{l('مدیریت', 'Manage', 'إدارة', '管理')}</button>
+            ) : (
+              <button type="button" onClick={(e) => { e.stopPropagation(); onRentClick?.(item); }} className="bg-[#26215C] text-white rounded-lg px-3 py-1.5 text-[10px] font-bold flex items-center gap-1"><Coins className="w-3 h-3 text-amber-300" />{t('itemBookBtn')}</button>
+            )}
+            <span className="text-[12px] font-black text-rentora-success dark:text-[#48D2A8] whitespace-nowrap">{item.pricePerDay} π <span className="font-normal text-[10px] text-slate-400">/{l('روز', 'd', 'يوم', '天')}</span></span>
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <div
