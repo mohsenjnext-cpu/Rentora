@@ -219,3 +219,12 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - Release checklist implication: the shared 50/50 fee model must not be treated as release-verified until PR #39's current head passes the full test/build validation and receives the independent merge decision.
 - UI audit continuation: `ItemDetailPage` still uses the legacy in-memory navigation model, so `navigator.clipboard` shares the current shell URL rather than a stable listing deep-link. Deep-link/routing strategy remains an open product/architecture item.
 - UI redesign remains alongside-build only. PR #40 is still a draft and must not replace the legacy shell until feature-by-feature real-backend, state, RTL/mobile/accessibility and regression validation is complete.
+
+
+### 2026-09-26 continuation audit — security fixes applied
+- PR #40 security regression audit found two concrete issues on the redesign branch: the new UI auth regression test referenced an undefined `workerContext`, and `POST /api/payments/incomplete` accepted unauthenticated reconciliation requests and selected the payment intent by Pi payment ID without an explicit D1 user binding.
+- Fixed test: commit `f7fd12d4fe1564d9801f5d8226efde07d3e4c092` now reads `src/context/RentoraContext.jsx` and verifies that the frontend does not read `rentora_live_v1_session` as an auth token.
+- Fixed incomplete-payment authority: commit `61b60a93e44a0c585f6ad069932f79768b52ed34` requires the authenticated HttpOnly session and binds the D1 lookup to `payment_intents.user_id = user.id`.
+- Added explicit regression coverage for authentication and user-bound lookup in commit `328a6cca6ab09f72d630f26c5c0c0d8f305f83eb`.
+- Current PR #40 branch comparison is 183 commits ahead of `main`, with no reported workflow runs/statuses for the latest security-test commit. Therefore CI remains **NOT VERIFIED**.
+- No merge or approval was performed. The branch remains a draft/alongside-build candidate until runtime, CI, routing, mobile/RTL/accessibility and end-to-end Pi Testnet validation are complete.
