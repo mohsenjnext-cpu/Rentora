@@ -354,7 +354,12 @@ export function RentoraProvider({ children }) {
           feeAmount: draftRental.rentoraFee
         }
       },
-      paymentIntentId: draftRental.paymentIntentId
+      paymentIntentId: draftRental.paymentIntentId,
+      callbacks: {
+        onCancel: async (paymentId) => {
+          await piService.cancelPaymentOnServer(paymentId, draftRental.paymentIntentId);
+        }
+      }
     });
   };
 
