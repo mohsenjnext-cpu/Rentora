@@ -7,6 +7,7 @@ const piAuthContext = fs.readFileSync(new URL('../src/context/PiAuthContext.jsx'
 const rentoraContext = fs.readFileSync(new URL('../src/context/RentoraContext.jsx', import.meta.url), 'utf8');
 const cloudSyncService = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
 const piService = fs.readFileSync(new URL('../src/services/piService.js', import.meta.url), 'utf8');
+const ownerHub = fs.readFileSync(new URL('../src/pages/OwnerHubPage.jsx', import.meta.url), 'utf8');
 const activationMigration = fs.readFileSync(new URL('../db/migrations/0013_owner_fee_activation_cycle.sql', import.meta.url), 'utf8');
 
 function section(start, end) {
@@ -106,6 +107,11 @@ test('Pi payment intent requests include an explicit role and owner listing cont
   assert.match(piService, /listingId/);
   assert.match(piService, /paymentData\?\.metadata\?\.role/);
   assert.match(piService, /paymentData\?\.metadata\?\.listingId/);
+});
+
+test('owner hub activation goes through the server owner-fee payment flow', () => {
+  assert.match(ownerHub, /activateListingWithOwnerFee/);
+  assert.match(ownerHub, /pay owner fee|pay owner fee|owner fee|کارمزد مالک/i);
 });
 
 test('frontend contact and rental transitions use HttpOnly cookie credentials', () => {
