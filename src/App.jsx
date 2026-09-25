@@ -5,7 +5,6 @@ import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { PiAuthProvider, usePiAuth } from './context/PiAuthContext';
 import { RentoraProvider, useRentora } from './context/RentoraContext';
 
-// Components
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import BottomNav from './components/BottomNav';
@@ -19,7 +18,6 @@ import SupportModal from './components/SupportModal';
 import ChatModal from './components/ChatModal';
 import { requestNotificationPermission } from './services/notificationService';
 
-// Pages
 import HomePage from './pages/HomePage';
 import DiscoverPage from './pages/DiscoverPage';
 import ItemDetailPage from './pages/ItemDetailPage';
@@ -32,12 +30,24 @@ import PublicProfilePage from './pages/PublicProfilePage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import SettingsPage from './pages/SettingsPage';
 
+const getListingIdFromPath = () => {
+  const match = window.location.pathname.match(/^\/item\/([^/]+)$/);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch (_) {
+    return match[1];
+  }
+};
+
 function MainApp() {
   const { dir } = useLanguage();
   const { isAdmin, currentUser } = usePiAuth();
   const { items } = useRentora();
-  const [currentTab, setCurrentTab] = useState('home');
+  const initialListingId = getListingIdFromPath();
+  const [currentTab, setCurrentTab] = useState(initialListingId ? 'item-detail' : 'home');
   const [previousTab, setPreviousTab] = useState('discover');
+  const [previousPath, setPreviousPath] = useState('/');
   const [selectedItem, setSelectedItem] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [publicProfileUsername, setPublicProfileUsername] = useState(null);
@@ -48,18 +58,15 @@ function MainApp() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const useItemDetailRedesign = new URLSearchParams(window.location.search).get('ui') === 'redesign';
 
-  // Modals States
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [helpInitialTab, setHelpInitialTab] = useState('guide');
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
 
-  // In-App Chat Modal State
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const [chatTargetItem, setChatTargetItem] = useState(null);
   const [chatTargetRental, setChatTargetRental] = useState(null);
 
-  // Smooth scroll to top only on tab transition
   useEffect(() => {
     try {
       window.scrollTo({ top: 0, behavior: 'instant' });
@@ -67,6 +74,34 @@ function MainApp() {
       window.scrollTo(0, 0);
     }
   }, [currentTab]);
+
+  useEffect(() => {
+    const listingId = getListingIdFromPath();
+    if (!listingId || !Array.isArray(items) || items.length === 0) return;
+    const match = items.find((candidate) => String(candidate.id) === String(listingId));
+    if (match) {
+      setSelectedItem(match);
+      setCurrentTab('item-detail');
+    }
+  }, [items]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const listingId = getListingIdFromPath();
+      if (listingId) {
+        const match = (items || []).find((candidate) => String(candidate.id) === String(listingId));
+        if (match) {
+          setSelectedItem(match);
+          setCurrentTab('item-detail');
+          return;
+        }
+      }
+      setSelectedItem(null);
+      setCurrentTab('home');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [items]);
 
   const handleNavigate = (tab, params = {}) => {
     if (tab === 'admin' && !isAdmin) {
@@ -86,9 +121,21 @@ function MainApp() {
   }, [currentTab, isAdmin]);
 
   const handleSelectItem = (item) => {
+    if (!item?.id) return;
     setSelectedItem(item);
     setPreviousTab(currentTab);
+    setPreviousPath(window.location.pathname + window.location.search);
+    const url = new URL(window.location.href);
+    url.pathname = `/item/${encodeURIComponent(item.id)}`;
+    window.history.pushState({ listingId: item.id }, '', url);
     setCurrentTab('item-detail');
+  };
+
+  const handleBackFromItem = () => {
+    const target = previousPath || '/';
+    window.history.replaceState({}, '', target);
+    setSelectedItem(null);
+    setCurrentTab(previousTab || 'discover');
   };
 
   const handleEditItem = (item) => {
@@ -126,13 +173,8 @@ function MainApp() {
     setIsHelpModalOpen(true);
   };
 
-  const handleOpenSecurity = () => {
-    setIsSecurityModalOpen(true);
-  };
-
-  const handleOpenSupport = () => {
-    setIsSupportModalOpen(true);
-  };
+  const handleOpenSecurity = () => setIsSecurityModalOpen(true);
+  const handleOpenSupport = () => setIsSupportModalOpen(true);
 
   const handleOpenChat = (target = null, type = 'item') => {
     if (type === 'rental' || (target && target.bookingNumber)) {
@@ -151,7 +193,7 @@ function MainApp() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 pb-28 md:pb-12">
         {currentTab === 'home' && <HomePage onNavigate={handleNavigate} onSelectItem={handleSelectItem} onRentItem={handleRentItem} />}
         {currentTab === 'discover' && <DiscoverPage initialCategory={discoverInitialCategory} initialQuery={discoverInitialQuery} onSelectItem={handleSelectItem} onRentItem={handleRentItem} />}
-        {currentTab === 'item-detail' && selectedItem && (useItemDetailRedesign ? <ItemDetailRedesign item={selectedItem} onBack={() => setCurrentTab(previousTab || 'discover')} onBookingSuccess={() => setCurrentTab('activity')} onNavigateToOwnerHub={() => setCurrentTab('owner-hub')} onEditItem={handleEditItem} onOpenChat={(item) => handleOpenChat(item)} onOpenPublicProfile={handleOpenPublicProfile} /> : <ItemDetailPage item={selectedItem} onBack={() => setCurrentTab(previousTab || 'discover')} onNavigateToActivity={() => setCurrentTab('activity')} onNavigateToOwnerHub={() => setCurrentTab('owner-hub')} onEditItem={handleEditItem} onOpenChat={(item) => handleOpenChat(item)} onOpenPublicProfile={handleOpenPublicProfile} />)}
+        {currentTab === 'item-detail' && selectedItem && (useItemDetailRedesign ? <ItemDetailRedesign item={selectedItem} onBack={handleBackFromItem} onBookingSuccess={() => setCurrentTab('activity')} onNavigateToOwnerHub={() => setCurrentTab('owner-hub')} onEditItem={handleEditItem} onOpenChat={(item) => handleOpenChat(item)} onOpenPublicProfile={handleOpenPublicProfile} /> : <ItemDetailPage item={selectedItem} onBack={handleBackFromItem} onNavigateToActivity={() => setCurrentTab('activity')} onNavigateToOwnerHub={() => setCurrentTab('owner-hub')} onEditItem={handleEditItem} onOpenChat={(item) => handleOpenChat(item)} onOpenPublicProfile={handleOpenPublicProfile} />)}
         {currentTab === 'public-profile' && publicProfileUsername && <PublicProfilePage username={publicProfileUsername} onBack={() => setCurrentTab(previousTab || 'discover')} onSelectItem={handleSelectItem} onRentItem={handleRentItem} onOpenChat={(item) => handleOpenChat(item)} />}
         {currentTab === 'list-item' && <ListItemPage itemToEdit={editingItem} onCancelEdit={() => { setEditingItem(null); setCurrentTab(previousTab || 'owner-hub'); }} onItemCreated={(newItem) => { setSelectedItem(newItem); setEditingItem(null); setCurrentTab('item-detail'); }} onItemUpdated={(updatedItem) => { setSelectedItem(updatedItem); setEditingItem(null); setCurrentTab('item-detail'); }} onNavigate={(page) => { setEditingItem(null); setCurrentTab(page); }} />}
         {currentTab === 'owner-hub' && <OwnerHubPage onNavigate={handleNavigate} onSelectItem={handleSelectItem} onEditItem={handleEditItem} />}
@@ -165,7 +207,7 @@ function MainApp() {
       <PiAuthModal />
       <WalletModal />
       <HelpCenterModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} initialTab={helpInitialTab} />
-      <SecurityModal isOpen={isSecurityModalOpen} onClose={() => setIsSecurityModalOpen(false)} />
+      <SecurityModal isOpen={isSecurityModalOpen} onClose={() => setIsSecurityModalOpen(false)} initialTab={helpInitialTab} />
       <SupportModal isOpen={isSupportModalOpen} onClose={() => setIsSupportModalOpen(false)} onOpenDispute={() => handleOpenHelp('rules')} />
       <ChatModal isOpen={isChatModalOpen} onClose={() => { setIsChatModalOpen(false); setChatTargetItem(null); setChatTargetRental(null); }} initialItem={chatTargetItem} initialRental={chatTargetRental} onDirectRent={(item) => { setIsChatModalOpen(false); handleRentItem(item); }} onOpenPublicProfile={handleOpenPublicProfile} />
       {directBookingItem && <BookingModal item={directBookingItem} isOpen={isDirectBookingOpen} onClose={() => { setIsDirectBookingOpen(false); setDirectBookingItem(null); }} onBookingSuccess={() => { setIsDirectBookingOpen(false); setDirectBookingItem(null); setCurrentTab('activity'); }} />}
