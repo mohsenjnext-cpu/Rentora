@@ -29,7 +29,7 @@ test('payment approval route requires an authenticated, obligation-bound payment
   assert.match(worker, /const payerUid = payment\?\.user\?\.uid \|\| payment\?\.from_address\?\.uid/);
   assert.match(worker, /Pi payer mismatch/);
   assert.match(worker, /metadataIntent/);
-  assert.match(worker, /Pi payment metadata binding is missing or invalid/);
+  assert.match(worker, /Pi payment metadata obligation binding is invalid/);
 });
 
 test('payment approval uses an atomic D1 claim for the Pi payment ID', () => {
