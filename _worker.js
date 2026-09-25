@@ -698,7 +698,7 @@ function userView(row, env, options = {}) {
 function listingView(row) {
   const meta = sanitizeListingPublicMetadata(parseMetadata(row.metadata));
   const ownerMeta = parseMetadata(row.owner_metadata);
-  const isOwnerKyc = Boolean(meta.ownerKYC || ownerMeta.kycStatus === 'verified' || row.owner_kyc_status === 'verified');
+  const isOwnerKyc = Boolean(ownerMeta.kycStatus === 'verified' || row.owner_kyc_status === 'verified');
   return {
     ...meta,
     id: row.id,
