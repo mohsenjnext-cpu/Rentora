@@ -445,4 +445,5 @@ Verified on `main` before implementation work:
 - Added a focused Node regression test covering the absence of the old `MobileItemCard` and preservation of shared behavior.
 - CI verification is pending for the new PR because GitHub has not yet reported a workflow run/status for the new head commit.
 
-- Hook-safety review completed for the skeleton variant by isolating its render path from the stateful card hooks.
+- Hook-safety review found a conditional-hook hazard and it was corrected by keeping all ItemCard hooks unconditional before the skeleton branch.
+- Compact-card accessibility review found that an interactive card wrapper containing nested buttons is not a sound semantic pattern. The wrapper's interactive role and keyboard handler were removed; the full keyboard/focus pattern remains pending before final review.
