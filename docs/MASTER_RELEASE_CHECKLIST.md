@@ -73,7 +73,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [x] R2/media handling
 - [ ] Cache invalidation
 - [x] No sensitive business state in localStorage
-- [ ] Server data remains source of truth
+- [x] Server data remains source of truth
 
 ## 7. UI system and UX
 - [ ] Shared design tokens
@@ -198,3 +198,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - Input-validation audit checkpoint: high-risk payment/admin mutations enforce required identifiers, enum/status validation, amount bounds against D1 authority, body-size limits, payment identity/amount/metadata/network checks, and wallet-address rejection for direct payout targeting. A broader mutation-by-mutation validation pass remains open.
 - Error-leakage hardening: active gateway and legacy worker now suppress internal exception text for 5xx responses, and raw Pi approval/completion payloads are no longer returned to clients. Server logs retain diagnostic details.
 - Latest security-error hardening commit: `2627efe042c7ba9bedd2a62404c86a08f5cb6b90`. CI for this HEAD is NOT RUN / NOT REPORTED.
+
+- Local rental-cache removal: `cloudSyncService` no longer reads or writes `rentora_live_v1_rentals`; rental/payment state is rehydrated from the server and remains authoritative in D1. A legacy removal key is still cleared on logout for cleanup.
+- Cache-invalidation status remains open because broader public-media/browser-cache invalidation semantics still need a final endpoint-by-endpoint audit.
+- CI after rental-cache removal commit `08edfec0606a885739fa69b7ac77b23edca76dd2`: NOT RUN / NOT REPORTED.
