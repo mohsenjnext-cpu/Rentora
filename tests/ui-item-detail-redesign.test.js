@@ -151,7 +151,7 @@ test('cloud sync requests carry the server session token for authenticated API r
   const end = sync.indexOf('async compressImage', start);
   assert.ok(start >= 0 && end > start);
   const helper = sync.slice(start, end);
-  assert.match(helper, /localStorage\\.getItem\\(STORAGE_USER_KEY\\)/);
+  assert.match(helper, /localStorage\.getItem\(STORAGE_USER_KEY\)/);
   assert.match(helper, /session\\?\\.sessionToken/);
   assert.match(helper, /headers\\.Authorization =/);
   assert.match(helper, /Bearer/);
@@ -188,7 +188,7 @@ test('Pi approval binds the intent before the external approve call and preserve
   assert.ok(start >= 0 && end > start);
   const route = worker.slice(start, end);
   const claim = route.indexOf("UPDATE payment_intents SET pi_payment_id=?1");
-  const approve = route.indexOf("'/approve'");
+  const approve = route.indexOf('const approveResponse = await piFetch');
   const finalize = route.indexOf("UPDATE payment_intents SET status='approved'");
   assert.ok(claim >= 0 && approve > claim && finalize > approve);
   assert.match(route, /status='created' AND \(pi_payment_id IS NULL OR pi_payment_id=\?1\)/);
