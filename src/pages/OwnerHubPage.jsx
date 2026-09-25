@@ -284,8 +284,8 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
                     className="flex items-center gap-3 min-w-0 cursor-pointer flex-1"
                   >
                     <img
-                      src={item.images?.[0] || 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80'}
-                      alt=""
+                      src={item.images?.[0] || undefined}
+                      alt={item.title || ''}
                       className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
                     />
                     <div className="min-w-0">
