@@ -169,3 +169,11 @@ test('sensitive mutation endpoints have KV-backed abuse throttles', () => {
   assert.match(worker, /return errorResponse\('Too many .*', 429/);
   assert.match(worker, /expirationTtl: windowSeconds \+ 5/);
 });
+
+
+test('optional-auth public data routes resolve the HttpOnly session cookie', () => {
+  assert.match(worker, /async function getOptionalUser\(request, env\)/);
+  assert.match(section("path === '/api/sync/all'", "path === '/api/listings'"), /getOptionalUser\(request, env\)/);
+  assert.match(section("path === '/api/listings'", "path.startsWith\('/api/listings/'\)"), /getOptionalUser\(request, env\)/);
+  assert.match(section("path.startsWith('/api/listings/')", "path.startsWith('/api/admin/reconciliation/')"), /getOptionalUser\(request, env\)/);
+});
