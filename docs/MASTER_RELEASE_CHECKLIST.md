@@ -134,9 +134,10 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Post-merge smoke test
 
 ## Current verified checkpoint
-- Latest branch HEAD: 50f66bf1e3ee2ef9879117ecdd72963673e7460c
-- Listing mutation path is server-authorized by authenticated user and existing listing ownership; financial fields are read from D1 on update and server-derived on create.
-- Cloud sync auth hardening: `getAuthHeaders()` now attaches the stored server session token as Bearer authorization for authenticated API calls.
-- Regression coverage added for cloud-sync session authorization.
-- GitHub Actions for current HEAD: NOT RUN / no PR-triggered run returned yet; previous CI results are not treated as current.
+- Latest verified work commit: c256532b6321ecf7fdb6c6e0c4b414f20e4051c7
+- Listing authority audit: ownership and financial authority remain server/D1 controlled.
+- Rental authority hardening: legacy POST /api/sync/rental can no longer create/update rentals; it now returns 410 and directs clients to the authoritative quote -> /api/rentals flow.
+- Regression coverage added for legacy rental sync retirement.
+- Rental status endpoint currently enforces authenticated renter/owner access plus confirmed -> active and active -> completed transitions with atomic status guards.
+- CI on the latest commit: NOT RUN yet; no current workflow run returned.
 - ADMIN_PI_UIDS authoritative-value blocker: BLOCKED until real Pi UIDs are supplied/verified.
