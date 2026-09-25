@@ -23,13 +23,13 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Wallet / payout surfaces
 
 ## 2. Identity and authorization
-- [ ] Pi SDK authentication
+- [x] Pi SDK authentication
 - [x] Server session creation and validation
 - [x] Logout and session revocation
 - [ ] Session-expiry handling
 - [ ] User profile authority
 - [ ] KYC authority and presentation
-- [ ] Admin authorization
+- [x] Admin authorization
 - [ ] ADMIN_PI_UIDS verified against authoritative Pi UIDs
 
 ## 3. Marketplace authority
@@ -43,10 +43,10 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [x] Contact-data authorization
 
 ## 4. Pi payments
-- [ ] Server payment intent
-- [ ] Locked payment metadata
-- [ ] Authoritative Pi amount
-- [ ] Pi createPayment
+- [x] Server payment intent
+- [x] Locked payment metadata
+- [x] Authoritative Pi amount
+- [x] Pi createPayment
 - [x] approve
 - [x] complete
 - [x] cancellation
@@ -54,7 +54,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [x] incomplete-payment recovery
 - [x] idempotency / duplicate protection
 - [x] transaction persistence
-- [ ] payout / A2U flow
+- [x] payout / A2U flow
 - [x] no client-side synthetic payment/rental confirmation
 
 ## 5. Messaging and trust
@@ -187,3 +187,13 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 
 - Cookie-session compatibility: optional-auth `/api/sync/all` and listing read routes now resolve the same HttpOnly session cookie instead of depending only on a bearer Authorization header.
 - CI after cookie/session hardening commit 272947465c719103b77ed8341f0e4f0dfbf64824: NOT RUN / no workflow run reported yet.
+
+
+### 2026-09-25 payout and validation audit checkpoint
+- A2U payout implementation audit: the active Cloudflare entrypoint is `worker-gateway2.js` (wrangler main). Its payout flow uses a durable `payout_operations` state machine, unique idempotency key, lease ownership, treasury reservation, Pi A2U creation/approval/completion, Testnet/direction/UID/amount/metadata validation, transaction identity collision checks, reconciliation queue, and stale-operation recovery. This is IMPLEMENTED at code/audit level, but remains unverified against a live Pi Testnet payout.
+- Pi official A2U contract cross-check: current Pi documentation confirms A2U is a server-side flow and currently Testnet-only; the active gateway creates the server payment with the authenticated app-user UID, validates the returned payment, builds/signs the blockchain payment from the developer wallet, and completes the Pi payment after blockchain submission. Live Testnet execution is still required for RUNTIME VERIFIED status.
+- Wallet/payout surface remains NOT STARTED at product-surface level for the end-user withdrawal UI. The legacy `POST /api/wallet/withdraw` path is intentionally retired with 410 rather than providing synthetic payout behavior.
+- Legacy/fallback note: `_worker.js` still contains an older A2U implementation, but `wrangler.toml` points production Worker entry to `worker-gateway2.js`. The duplicate legacy implementation should not be treated as the release authority and remains a cleanup/convergence item.
+- A2U configuration blocker remains: `ADMIN_PI_UIDS` in `wrangler.toml` contains `avina60,mohsenjnext`; these values must be verified as authoritative Pi UIDs before admin payout is considered runtime-ready. No UID was invented or substituted during this audit.
+- Input-validation audit checkpoint: high-risk payment/admin mutations enforce required identifiers, enum/status validation, amount bounds against D1 authority, body-size limits, payment identity/amount/metadata/network checks, and wallet-address rejection for direct payout targeting. A broader mutation-by-mutation validation pass remains open.
+- Latest branch HEAD: `2ccbb0685f0eca71f56aa80aea4fa96603c4a1ee`. CI for this HEAD is NOT RUN / NOT REPORTED, so earlier green runs are not treated as verification for current HEAD.
