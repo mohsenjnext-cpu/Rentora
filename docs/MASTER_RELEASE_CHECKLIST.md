@@ -110,7 +110,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [x] Unit/regression tests
 - [x] Worker syntax validation
 - [x] Frontend production build
-- [x] Full CI green on current HEAD
+- [ ] Full CI green on current HEAD
 - [ ] Runtime API verification
 - [ ] Pi Browser verification
 - [ ] Mobile verification
@@ -168,7 +168,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 
 - Security/storage audit checkpoint: API responses now include CSP, HSTS, X-Frame-Options, nosniff, and restrictive Permissions/Referrer policies; schema audit confirms D1 foreign keys, uniqueness constraints, payment/rental state checks, payout operation guards, and KV-backed payment-intent TTL usage.
 
-- CI verification: runs #860 and #861 completed successfully on the checklist-updated HEAD, confirming the current test/build workflow is green after the stale transaction assertions were removed.
+- CI verification note: historical runs #860 and #861 were green on earlier checklist checkpoints, but they do not verify the current HEAD. Current HEAD remains NOT RUN / NOT REPORTED.
 
 
 - Failed/cancelled Pi payment convergence: payment intent creation now reconciles the bound Pi payment before reuse; a Pi payment reported as cancelled/failed retires the dead intent binding, returns the rental to pending_payment, clears its KV intent snapshot, and allows a fresh authoritative intent. Incomplete-payment reconciliation applies the same convergence without confirming the rental.
