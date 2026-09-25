@@ -3,6 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useRentora } from '../context/RentoraContext';
 import ItemCard from '../components/ItemCard';
 import RentoraEmptyState from '../components/ui/RentoraEmptyState';
+import RentoraSkeleton from '../components/ui/RentoraSkeleton';
 import RentoraInput from '../components/ui/RentoraInput';
 import RentoraButton from '../components/ui/RentoraButton';
 import RentoraModal from '../components/ui/RentoraModal';
@@ -23,7 +24,7 @@ import {
 
 export default function DiscoverPage({ initialCategory = 'all', initialQuery = '', onSelectItem, onRentItem }) {
   const { lang, dir, t, l } = useLanguage();
-  const { items = [] } = useRentora();
+  const { items = [], isInitialLoadDone } = useRentora();
 
   const [query, setQuery] = useState(initialQuery);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
@@ -151,7 +152,17 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
       </div>
 
       {/* 3. Items Grid / Consistent Empty State */}
-      {filteredItems.length === 0 ? (
+      {!isInitialLoadDone && filteredItems.length === 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5" role="status" aria-label={l('در حال بارگذاری کالاها...', 'Loading items...', 'جار تحميل العناصر...', '正在加载物品...')}>
+          {Array.from({ length: 8 }).map((_, index) => (
+            <div key={index} className="space-y-2 rounded-[var(--radius-card)] border border-slate-200 bg-white p-2.5 dark:border-white/10 dark:bg-[#16152B]">
+              <RentoraSkeleton className="aspect-square w-full" rounded="rounded-[var(--radius-control)]" />
+              <RentoraSkeleton className="h-3 w-3/4" />
+              <RentoraSkeleton className="h-3 w-1/2" />
+            </div>
+          ))}
+        </div>
+      ) : filteredItems.length === 0 ? (
         <RentoraEmptyState
           icon={<Search className="h-6 w-6" />}
           title={t('discoverEmptyTitle')}
