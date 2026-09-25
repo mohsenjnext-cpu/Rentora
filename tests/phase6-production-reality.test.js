@@ -415,6 +415,7 @@ test('TASK 3: Platform Fee A2U Payout with Horizon Polling for txid', async () =
   });
 
   const adminToken = 'admin_payout_token';
+  const adminCookie = `rentora_session=${encodeURIComponent(adminToken)}`;
   const adminHash = await sha256(adminToken);
   await kv.put(`session:${adminHash}`, JSON.stringify({
     id: 'usr_admin',
@@ -620,7 +621,7 @@ test('FINAL REAL USER FLOW TEST: Complete end-to-end lifecycle', async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
+        'Cookie': adminCookie
       }
     }), env);
     assert.equal(purgeRes.status, 200);
