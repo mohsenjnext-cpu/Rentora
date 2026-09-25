@@ -2624,6 +2624,37 @@ export default {
       }
 
       // =========================================================================
+      // AUTHORITATIVE SUPPORT TICKETS
+      // =========================================================================
+      if (method === 'POST' && path === '/api/support/tickets') {
+        const { user } = await requireUser(request, env);
+        const limit = await enforceRateLimit(request, env, 'support_tickets', 5, 300, user.id);
+        if (!limit.allowed) return errorResponse('Too many support requests. Please retry later.', 429, env, { retryAfter: limit.retryAfter }, origin);
+        const body = await readJson(request);
+        const subject = String(body?.subject || '').trim();
+        const message = String(body?.message || '').trim();
+        if (subject.length > 160) return errorResponse('Subject too long (max 160 characters)', 400, env, undefined, origin);
+        if (!message) return errorResponse('Message is required', 400, env, undefined, origin);
+        if (message.length > 4000) return errorResponse('Message too long (max 4000 characters)', 400, env, undefined, origin);
+        const ticketId = `sup_${crypto.randomUUID()}`;
+        const createdAt = now();
+        await env.RENTORA_DB.prepare(`
+          INSERT INTO support_tickets(id, user_id, subject, message, status, created_at, updated_at)
+          VALUES(?1, ?2, ?3, ?4, 'open', ?5, ?5)
+        `).bind(ticketId, user.id, subject, message, createdAt).run();
+        return jsonResponse({
+          success: true,
+          ticket: {
+            id: ticketId,
+            subject,
+            message,
+            status: 'open',
+            createdAt
+          }
+        }, 201, env, origin);
+      }
+
+      // =========================================================================
       // AUTHORITATIVE DISPUTES & VIOLATION REPORTS
       // =========================================================================
       if (method === 'POST' && path === '/api/reports') {
