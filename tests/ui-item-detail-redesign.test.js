@@ -207,6 +207,28 @@ test('payment intent creation never resets a live Pi payment binding', () => {
   assert.match(route, /Never reset the binding and orphan that payment/);
 });
 
+test('expired payment intent bindings are reconciled before any replacement intent is created', () => {
+  const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+  const start = worker.indexOf("path === '/api/payments/intent'");
+  const end = worker.indexOf("path === '/api/payments/approve'", start);
+  assert.ok(start >= 0 && end > start);
+  const route = worker.slice(start, end);
+  assert.match(route, /existingLiveBinding/);
+  assert.match(route, /Bound Pi payment could not be reconciled/);
+  assert.match(route, /paymentStatus/);
+  assert.match(route, /status != 'cancelled'/);
+});
+
+test('native Pi SDK errors trigger server reconciliation when a payment identifier exists', () => {
+  const service = fs.readFileSync(new URL('../src/services/piService.js', import.meta.url), 'utf8');
+  const start = service.indexOf('onError: async');
+  const end = service.indexOf('fail(new Error', start);
+  assert.ok(start >= 0 && end > start);
+  const handler = service.slice(start, end);
+  assert.match(handler, /handleIncompletePayment/);
+  assert.match(handler, /paymentId/);
+});
+
 
 test('Pi completion cannot accept a client txid that conflicts with the verified payment or another transaction', () => {
   const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
