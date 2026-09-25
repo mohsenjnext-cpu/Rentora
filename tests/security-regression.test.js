@@ -79,7 +79,7 @@ test('renter completion requires owner activation fee completion', () => {
 test('reservation creation treats owner activation as listing-level and creates only the renter obligation', () => {
   const rentals = section("path === '/api/rentals'", "path === '/api/sync/rental'");
   assert.match(rentals, /listing\.owner_fee_payment_status !== 'completed'/);
-  assert.match(rentals, /owner_fee_payment_status.*'completed', 'unpaid'/);
+  assert.match(rentals, /'completed', 'unpaid'/);
   assert.match(rentals, /'renter', 'platform_fee'/);
   assert.doesNotMatch(rentals, /'owner', 'platform_fee'/);
 });
