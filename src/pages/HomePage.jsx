@@ -9,7 +9,7 @@ import { Search, ShieldCheck, Package, Users, Plus, CheckCircle2 } from 'lucide-
 
 export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
   const { t, l } = useLanguage();
-  const { items = [] } = useRentora();
+  const { items = [], isInitialLoadDone = false } = useRentora();
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleSearchSubmit = (e) => {
@@ -19,6 +19,7 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
 
   const activeItems = (items || []).filter(i => !i.status || i.status === 'active');
   const latestItems = activeItems.slice(0, 10);
+  const isInitialItemsLoading = !isInitialLoadDone && latestItems.length === 0;
   const { users = [], currentUser } = usePiAuth();
   const totalPioneersCount = Math.max(users.length, currentUser ? 1 : 0);
 
@@ -59,7 +60,15 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
 
         <section>
           <div className="flex items-center justify-between mb-2"><button type="button" onClick={() => onNavigate('discover')} className="text-[11px] font-semibold text-[#534AB7] dark:text-[#AFA9EC]">{t('homeViewAll')} ›</button><h2 className="text-[16px] font-bold text-[#1E1E2F] dark:text-white">{t('homeFeaturedTitle')}</h2></div>
-          {latestItems.length === 0 ? <EmptyState type="package" title={t('homeNoItemsTitle')} message={t('homeNoItemsDesc')} actionLabel={t('homePostFirstItem')} onAction={() => onNavigate('list-item')} /> : <div className="grid grid-cols-2 gap-2.5">{latestItems.slice(0, 4).map((item) => <ItemCard key={item.id} item={item} variant="compact" onSelect={onSelectItem} onRentClick={onRentItem} />)}</div>}
+          {isInitialItemsLoading ? (
+            <div className="grid grid-cols-2 gap-2.5" aria-label={l('در حال بارگذاری آگهی‌ها', 'Loading listings', 'جارٍ تحميل الإعلانات', '正在加载物品')}>
+              {Array.from({ length: 4 }, (_, index) => <ItemCard key={`skeleton-${index}`} variant="skeleton" />)}
+            </div>
+          ) : latestItems.length === 0 ? (
+            <EmptyState type="package" title={t('homeNoItemsTitle')} message={t('homeNoItemsDesc')} actionLabel={t('homePostFirstItem')} onAction={() => onNavigate('list-item')} />
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5">{latestItems.slice(0, 4).map((item) => <ItemCard key={item.id} item={item} variant="compact" onSelect={onSelectItem} onRentClick={onRentItem} />)}</div>
+          )}
         </section>
       </div>
 
@@ -68,7 +77,15 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
         <section className="space-y-2"><CategoryBar selectedCategory="all" onSelectCategory={(catId) => onNavigate('discover', { category: catId })} /></section>
         <section className="p-3 sm:p-3.5 rounded-xl badge-trust flex items-center justify-between gap-3"><div className="flex items-center gap-2.5"><div className="p-1.5 rounded-lg bg-white/90 dark:bg-[#0B382C] text-[#0F6E56] dark:text-[#48D2A8] shrink-0"><ShieldCheck className="w-4 h-4 stroke-[2.2]" /></div><div><h4 className="font-bold text-xs text-[#0F6E56] dark:text-[#48D2A8]">{t('homeTrustBadgeTitle')}</h4><p className="text-[11px] text-[#0F6E56]/80 dark:text-slate-300">{t('homeTrustBadgeDesc')}</p></div></div></section>
         <section className="grid grid-cols-3 gap-2.5 sm:gap-3"><div className="p-3 rounded-xl rentora-card text-center space-y-0.5"><Package className="w-4 h-4 mx-auto text-[#534AB7] stroke-[1.8]" /><div className="text-sm sm:text-base font-bold text-slate-900 dark:text-white font-mono">{activeItems.length}</div><div className="text-[10px] text-slate-400 font-medium">{t('homeStatItems')}</div></div><div className="p-3 rounded-xl rentora-card text-center space-y-0.5"><Users className="w-4 h-4 mx-auto text-[#0F6E56] stroke-[1.8]" /><div className="text-sm sm:text-base font-bold text-slate-900 dark:text-white font-mono">{totalPioneersCount}</div><div className="text-[10px] text-slate-400 font-medium">{t('homeStatPioneers')}</div></div><div className="p-3 rounded-xl rentora-card text-center space-y-0.5"><CheckCircle2 className="w-4 h-4 mx-auto text-[#0F6E56] stroke-[1.8]" /><div className="text-sm sm:text-base font-bold text-slate-900 dark:text-white font-mono">۱۰۰٪</div><div className="text-[10px] text-slate-400 font-medium">{t('homeStatHandover')}</div></div></section>
-        <section className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">{t('homeFeaturedTitle')}</h2><button type="button" onClick={() => onNavigate('discover')} className="text-xs font-semibold text-[#534AB7] dark:text-[#AFA9EC] hover:underline cursor-pointer">{t('homeViewAll')}</button></div>{latestItems.length === 0 ? <EmptyState type="package" title={t('homeNoItemsTitle')} message={t('homeNoItemsDesc')} actionLabel={t('homePostFirstItem')} onAction={() => onNavigate('list-item')} /> : <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5">{latestItems.map((item) => <ItemCard key={item.id} item={item} onSelect={onSelectItem} onRentClick={onRentItem} />)}</div>}</section>
+        <section className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">{t('homeFeaturedTitle')}</h2><button type="button" onClick={() => onNavigate('discover')} className="text-xs font-semibold text-[#534AB7] dark:text-[#AFA9EC] hover:underline cursor-pointer">{t('homeViewAll')}</button></div>{isInitialItemsLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5" aria-label={l('در حال بارگذاری آگهی‌ها', 'Loading listings', 'جارٍ تحميل الإعلانات', '正在加载物品')}>
+            {Array.from({ length: 8 }, (_, index) => <ItemCard key={`skeleton-${index}`} variant="skeleton" />)}
+          </div>
+        ) : latestItems.length === 0 ? (
+          <EmptyState type="package" title={t('homeNoItemsTitle')} message={t('homeNoItemsDesc')} actionLabel={t('homePostFirstItem')} onAction={() => onNavigate('list-item')} />
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5">{latestItems.map((item) => <ItemCard key={item.id} item={item} onSelect={onSelectItem} onRentClick={onRentItem} />)}</div>
+        )}</section>
       </div>
     </div>
   );
