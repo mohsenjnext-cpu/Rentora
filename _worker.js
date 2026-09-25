@@ -233,6 +233,12 @@ async function getSession(request, env) {
   try { return JSON.parse(raw); } catch (_) { return null; }
 }
 async function requireUser(request, env) { requireBindings(env); const session = await getSession(request, env); if (!session?.uid) throw Object.assign(new Error('Authentication required'), { status: 401 }); const row = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE pi_uid = ?1 LIMIT 1').bind(session.uid).first(); if (!row || row.status !== 'active') throw Object.assign(new Error('User is not active'), { status: 403 }); return { session, user: row }; }
+async function getOptionalUser(request, env) {
+  const session = await getSession(request, env);
+  if (!session?.uid) return null;
+  const row = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE pi_uid = ?1 LIMIT 1').bind(session.uid).first();
+  return row?.status === 'active' ? row : null;
+}
 const QUOTE_TTL = 900; // 15 minutes in seconds
 
 function calculateAuthoritativeFinancials(pricePerDay, depositAmount, startDateStr, endDateStr, feeRate = 0.05, minFeePi = 0.0001) {
@@ -968,21 +974,13 @@ export default {
       }
       if (method === 'GET' && path === '/api/sync/all') {
         requireBindings(env);
-        let auth = null;
-        const authHeader = request.headers.get('Authorization') || '';
-        if (authHeader.startsWith('Bearer ')) {
-          auth = await requireUser(request, env);
-        }
-        return jsonResponse(await listAll(env, auth), 200, env, origin);
+        const optionalUser = await getOptionalUser(request, env);
+        return jsonResponse(await listAll(env, optionalUser ? { user: optionalUser } : null), 200, env, origin);
       }
       if (method === 'GET' && path === '/api/listings') {
         requireBindings(env);
-        let auth = null;
-        const authHeader = request.headers.get('Authorization') || '';
-        if (authHeader.startsWith('Bearer ')) {
-          auth = await requireUser(request, env);
-        }
-        const user = auth?.user || null;
+        const optionalUser = await getOptionalUser(request, env);
+        const user = optionalUser || null;
         const isAdminUser = user ? (isAdmin(user.pi_uid, env) && user.role === 'admin') : false;
 
         let rows;
@@ -999,12 +997,8 @@ export default {
         const listingId = path.slice('/api/listings/'.length).trim();
         if (!listingId) return errorResponse('Missing listing ID', 400, env, undefined, origin);
         requireBindings(env);
-        let auth = null;
-        const authHeader = request.headers.get('Authorization') || '';
-        if (authHeader.startsWith('Bearer ')) {
-          auth = await requireUser(request, env);
-        }
-        const user = auth?.user || null;
+        const optionalUser = await getOptionalUser(request, env);
+        const user = optionalUser || null;
         const isAdminUser = user ? (isAdmin(user.pi_uid, env) && user.role === 'admin') : false;
 
         const row = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar, u.metadata owner_metadata FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.id = ?1 AND l.status != 'deleted' LIMIT 1`).bind(listingId).first();
