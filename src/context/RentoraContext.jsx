@@ -141,16 +141,6 @@ export function RentoraProvider({ children }) {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (!userIdentifier) {
-      setRentals([]);
-      setTransactions([]);
-      setReports([]);
-      setConversations([]);
-    }
-    cloudSyncService.fetchSharedData(true).catch(() => {});
-  }, [userIdentifier]);
-
   // Background polling for conversations and marketplace data
   useEffect(() => {
     if (typeof window === 'undefined') return;
