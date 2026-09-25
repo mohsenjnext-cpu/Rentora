@@ -26,7 +26,7 @@ function isRequestOriginAllowed(origin, env) {
   if (!origin) return true;
   return isOriginAllowed(origin, env);
 }
-function jsonResponse(data, status, env, origin) {
+function jsonResponse(data, status, env, origin, extraHeaders = {}) {
   const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=()', 'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'", 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' };
   if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
   Object.entries(extraHeaders || {}).forEach(([key, value]) => { if (value !== undefined && value !== null) headers[key] = String(value); });
@@ -1434,7 +1434,6 @@ export default {
             }
             await env.RENTORA_KV.delete(`session:${hash}`);
           }
-        }
         return jsonResponse({ success: true }, 200, env, origin, { 'Set-Cookie': 'rentora_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=None' });
       }
       if (method === 'POST' && path === '/api/payments/intent') {
