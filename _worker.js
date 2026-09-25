@@ -1451,7 +1451,17 @@ export default {
               paymentStatus: 'completed'
             }, 200, env, origin);
           }
-          if (!['cancelled','failed'].includes(String(paymentStatus || '').toLowerCase())) {
+          const normalizedPaymentStatus = String(paymentStatus || '').toLowerCase();
+          if (['cancelled','failed'].includes(normalizedPaymentStatus)) {
+            // A failed/cancelled Pi payment must not pin the rental to a dead
+            // payment binding. Retire the old intent, keep the rental payable,
+            // and let this request create a fresh authoritative intent.
+            await env.RENTORA_DB.batch([
+              env.RENTORA_DB.prepare("UPDATE payment_intents SET status='cancelled', updated_at=?1 WHERE id=?2 AND pi_payment_id=?3 AND status != 'completed'").bind(now(), existing.id, existing.pi_payment_id),
+              env.RENTORA_DB.prepare("UPDATE rentals SET payment_status='pending', status='pending_payment', updated_at=?1 WHERE id=?2 AND renter_user_id=?3 AND status IN ('pending_payment','payment_approved','draft')").bind(now(), rental.id, user.id)
+            ]);
+            await env.RENTORA_KV.delete(`payment-intent:${existing.id}`).catch(() => {});
+          } else {
             id = existing.id;
             expires = new Date(Date.now() + PAYMENT_INTENT_TTL * 1000).toISOString();
             await env.RENTORA_DB.prepare("UPDATE payment_intents SET amount=?1, memo=?2, expires_at=?3, updated_at=?4 WHERE id=?5 AND pi_payment_id=?6 AND status != 'cancelled'")
@@ -1697,7 +1707,14 @@ export default {
           if (existingTransaction && String(existingTransaction.payment_intent_id) === String(intent.id)) {
             return jsonResponse({ handled: true, matched: true, idempotent: true }, 200, env, origin);
           }
-          if (payment?.status?.developer_completed && resolvedTxid) {
+          if (payment?.status?.cancelled || payment?.status?.user_cancelled || String(payment?.status || '').toLowerCase() === 'cancelled' || String(payment?.status || '').toLowerCase() === 'failed') {
+            await env.RENTORA_DB.batch([
+              env.RENTORA_DB.prepare("UPDATE payment_intents SET status='cancelled', updated_at=?1 WHERE id=?2 AND status != 'completed'").bind(now(), intent.id),
+              env.RENTORA_DB.prepare("UPDATE rentals SET payment_status='pending', status='pending_payment', updated_at=?1 WHERE id=?2 AND renter_user_id=?3 AND status IN ('pending_payment','payment_approved','draft')").bind(now(), intent.rental_id, intent.user_id)
+            ]);
+            await env.RENTORA_KV.delete(`payment-intent:${intent.id}`).catch(() => {});
+            return jsonResponse({ handled: true, matched: true, reconciled: true, paymentStatus: 'cancelled' }, 200, env, origin);
+          } else if (payment?.status?.developer_completed && resolvedTxid) {
             await env.RENTORA_DB.batch([
               env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE id=?3").bind(resolvedTxid, now(), intent.id),
               env.RENTORA_DB.prepare("UPDATE rentals SET payment_status='completed', status='confirmed', updated_at=?1 WHERE id=?2").bind(now(), intent.rental_id),
