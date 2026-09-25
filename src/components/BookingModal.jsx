@@ -174,29 +174,18 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
     setIsSubmitting(true);
 
     try {
-      // 1. Authoritative Server Rental Creation (using Quote or Server calculation)
-      let persistedRental;
-      try {
-        if (serverQuote?.quoteId) {
-          persistedRental = await cloudSyncService.createRental({ quoteId: serverQuote.quoteId });
-        } else {
-          persistedRental = await cloudSyncService.createRental({
-            listingId: item.id,
-            startDate: dates.startDate,
-            endDate: dates.endDate
-          });
-        }
-      } catch (createErr) {
-        // Fallback for offline/compatibility mode
-        const draftRental = await createRentalBooking(item, {
-          startDate: dates.startDate,
-          endDate: dates.endDate,
-          daysCount,
-          notes
-        });
-        persistedRental = await cloudSyncService.broadcastNewRental(draftRental);
+      // The reservation must be created from a fresh server quote. No client-side
+      // pricing or offline/local fallback is allowed in the production payment path.
+      if (!hasAuthoritativeQuote) {
+        throw new Error(l(
+          'پیش‌فاکتور معتبر سرور آماده نیست. لطفاً چند لحظه صبر کنید و دوباره تلاش کنید.',
+          'A current server quote is required before booking. Please wait a moment and try again.',
+          'يلزم وجود عرض سعر صالح من الخادم قبل الحجز. يرجى الانتظار لحظة ثم المحاولة مرة أخرى.',
+          '预订前必须先获取有效的服务器报价，请稍候再试。'
+        ));
       }
 
+      const persistedRental = await cloudSyncService.createRental({ quoteId: serverQuote.quoteId });
       if (!persistedRental?.id) throw new Error('ثبت رزرو در سرور ناموفق بود.');
 
       // 2. Pay ONLY Rentora Platform Fee via Official Pi SDK.
@@ -308,13 +297,27 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
             </div>
           ) : (
             <form onSubmit={handleCreateBooking} className="space-y-4">
-              <div className="p-3 rounded-xl rentora-card flex items-center gap-3"><img src={item.images?.[0] || 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80'} alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0" /><div className="min-w-0 flex-1"><h4 className="font-bold text-xs text-slate-900 dark:text-white truncate">{item.title}</h4><div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5"><span className="font-mono text-[#0F6E56] dark:text-[#48D2A8] font-bold">{dailyPrice} π / {l('روز', 'day', 'يوم', '天')}</span><span>•</span><span className="truncate">{item.location || 'ایران'}</span></div></div></div>
+              {isLoadingQuote && <div className="p-3 rounded-xl bg-[#EEEDFE] dark:bg-[#26215C]/50 border border-[#534AB7]/20 text-[#26215C] dark:text-[#AFA9EC] text-[11px] font-semibold">{l('محاسبه قیمت و کارمزد از سرور در حال بروزرسانی است.', 'The server-authoritative price and fee quote is updating.', 'يتم تحديث السعر والعمولة من الخادم.', '正在更新服务器权威价格和费用报价。')}</div>}
+
+              <div className="p-3 rounded-xl rentora-card flex items-center gap-3">
+                <div className="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0 overflow-hidden flex items-center justify-center">
+                  {item.images?.[0] ? <img src={item.images[0]} alt="" className="w-full h-full object-cover" /> : <span className="text-slate-400 text-[10px]">{l('بدون تصویر', 'No image', 'بدون صورة', '无图片')}</span>}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-bold text-xs text-slate-900 dark:text-white truncate">{item.title}</h4>
+                  <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
+                    <span className="font-mono text-[#0F6E56] dark:text-[#48D2A8] font-bold">{dailyPrice} π / {l('روز', 'day', 'يوم', '天')}</span>
+                    <span>•</span>
+                    <span className="truncate">{item.location || l('موقعیت ثبت نشده', 'Location not provided', 'الموقع غير متوفر', '未提供位置')}</span>
+                  </div>
+                </div>
+              </div>
               {errorMessage && <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn"><AlertCircle className="w-4 h-4 shrink-0" /><span>{errorMessage}</span></div>}
               <div className="space-y-2"><label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-[#534AB7]" /><span>{t('bookingDatesLabel')}</span></label><div className="grid grid-cols-2 gap-2.5"><div><span className="text-[10px] text-slate-400 block mb-0.5">{t('bookingStartDate')}</span><input type="date" value={dates.startDate} min={new Date().toISOString().split('T')[0]} onChange={(e) => setDates(prev => ({ ...prev, startDate: e.target.value }))} className="w-full p-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono" /></div><div><span className="text-[10px] text-slate-400 block mb-0.5">{t('bookingEndDate')}</span><input type="date" value={dates.endDate} min={dates.startDate} onChange={(e) => setDates(prev => ({ ...prev, endDate: e.target.value }))} className="w-full p-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono" /></div></div></div>
               <div className="p-3.5 rounded-xl rentora-card space-y-2 border border-slate-150 dark:border-slate-800"><div className="flex justify-between items-center text-xs font-bold text-slate-800 dark:text-slate-200 pb-1.5 border-b border-slate-150 dark:border-slate-800"><span>{t('priceBreakdown')}</span><span className="text-[#534AB7] dark:text-[#AFA9EC] font-bold font-mono">{daysCount} {l('روز', 'days', 'أيام', '天')}</span></div><div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-300"><div><span>{l(`مبلغ اجاره (${daysCount} روز × ${dailyPrice} π):`, `Rental Total (${daysCount} days):`, `إجمالي الإيجار (${daysCount} أيام):`, `租金总额 (${daysCount} 天):`)}</span><span className="text-[10px] text-slate-400 block">{l('➔ تسویه مستقیم با مالک در محل تحویل', '➔ Direct P2P payment at pickup', '➔ دفع مباشر للمؤجر عند الاستلام', '➔ 线下当面直接向物主结清')}</span></div><span className="font-mono font-bold text-slate-900 dark:text-white">{rentalTotal} π</span></div>{deposit > 0 && <div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-300"><div><span>{t('securityDeposit')}:</span><span className="text-[10px] text-slate-400 block">{l('➔ امانت نقدی مستقیم - عودت در زمان بازگشت کالا', '➔ Direct P2P deposit - returned at handover', '➔ تأمين نقدي يُعاد مباشرة عند الإرجاع', '➔ 线下当面押金 - 完好归还时退回')}</span></div><span className="font-mono font-bold text-slate-900 dark:text-white">{deposit} π</span></div>}<div className="flex justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-800 font-medium"><span>{l('تعهد تسویه مستقیم با مالک:', 'Total direct P2P obligation:', 'إجمالي المستحق للمؤجر:', '与物主线下应结总额：')}</span><span className="font-mono font-bold text-slate-700 dark:text-slate-200">{totalObligation} π</span></div><div className="flex justify-between text-[11px] text-[#534AB7] dark:text-[#AFA9EC] font-semibold pt-2 border-t border-slate-200 dark:border-slate-700"><div><span>{t('platformFee')} ({platformFeePercentage}٪):</span><span className="text-[10px] text-slate-400 block">{l('➔ پرداخت آنلاین با کیف پول پای (تنها پرداخت آنلاین)', '➔ Paid online via Pi Wallet (Only online fee)', '➔ دفع أونلاين عبر محفظة باي', '➔ 通过 Pi 钱包在线支付（唯一在线费用）')}</span></div><span className="font-mono font-black text-[#0F6E56] dark:text-[#48D2A8] text-xs">{rentoraFee} π</span></div></div>
               <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-900 dark:text-amber-300 leading-relaxed flex items-start gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" /><span>{l('شفاف‌سازی مالی: اجاره و ودیعه مستقیماً بین مالک و مستأجر تسویه می‌شود و توسط رنتورا نگهداری نمی‌شود.', 'Financial Notice: Rental and deposit are settled directly between owner and renter and are not held by Rentora.', 'توضيح مالي: يُسوى الإيجار والتأمين مباشرة بين المؤجر والمستأجر ولا تحتفظ بها رنتورا.', '资金说明：租金与押金均由物主与租客当面直接结清，Rentora 不持有任何托管资金。')}</span></div>
               <label className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300 cursor-pointer"><input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} className="mt-0.5 rounded accent-[#26215C] dark:accent-[#534AB7] cursor-pointer" /><span>{l('قوانین تحویل مستقیم حضوری و پرداخت کارمزد پلتفرم را تایید می‌کنم.', 'I accept direct handover rules and platform fee payment.', 'أوافق على قواعد التسليم المباشر ودفع عمولة المنصة.', '我确认知晓当面交接规则并同意支付平台服务费。')}</span></label>
-              <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-2.5 text-xs font-bold cursor-pointer flex items-center justify-center gap-2 shadow-sm"><Coins className="w-4 h-4 text-amber-400" /><span>{isSubmitting ? l('در حال اتصال به کیف پول پای...', 'Connecting to Pi Wallet...', 'جارٍ الاتصال بمحفظة باي...', '正在调起 Pi 钱包支付...') : (rentoraFee === 0 ? l('تایید و ثبت رزرو رایگان', 'Confirm Free Booking', 'تأكيد الحجز المجاني', '确认免费预订') : l(`پرداخت کارمزد رنتورا با پای (${rentoraFee} π)`, `Pay Rentora Fee with Pi (${rentoraFee} π)`, `دفع عمولة رنتورا عبر باي (${rentoraFee} π)`, `通过 Pi 支付平台费 (${rentoraFee} π)`))}</span></button>
+              <button type="submit" disabled={isSubmitting || isLoadingQuote || !hasAuthoritativeQuote} className="btn-primary w-full py-2.5 text-xs font-bold cursor-pointer flex items-center justify-center gap-2 shadow-sm"><Coins className="w-4 h-4 text-amber-400" /><span>{isSubmitting ? l('در حال اتصال به کیف پول پای...', 'Connecting to Pi Wallet...', 'جارٍ الاتصال بمحفظة باي...', '正在调起 Pi 钱包支付...') : isLoadingQuote ? l('در حال دریافت محاسبه معتبر سرور...', 'Refreshing server quote...', 'جارٍ تحديث عرض السعر من الخادم...', '正在刷新服务器报价...') : (rentoraFee === 0 ? l('تایید و ثبت رزرو رایگان', 'Confirm Free Booking', 'تأكيد الحجز المجاني', '确认免费预订') : l(`پرداخت کارمزد رنتورا با پای (${rentoraFee} π)`, `Pay Rentora Fee with Pi (${rentoraFee} π)`, `دفع عمولة رنتورا عبر باي (${rentoraFee} π)`, `通过 Pi 支付平台费 (${rentoraFee} π)`))}</span></button>
             </form>
           )}
         </div>
