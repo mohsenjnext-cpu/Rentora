@@ -127,6 +127,7 @@ npx wrangler deploy
 | `PI_API_URL` | Server | Target Pi Platform API endpoint (`https://api.minepi.com/v2`). |
 | `ADMIN_PI_UIDS` | Server | Comma-separated list of authorized Pi usernames/UIDs for admin operations. |
 | `PLATFORM_FEE_RATE` | Server | Platform fee percentage (default: `0.05` for 5%). |
+| Owner activation fee | Server-authoritative | 50% of the platform fee for one canonical rental day at the listing daily price; paid once per activation cycle before reservations. |
 | `RENTORA_DB` | Cloudflare Binding | D1 Database instance binding. |
 | `RENTORA_KV` | Cloudflare Binding | KV Namespace instance binding. |
 | `NODE_ENV` | Build / Server | Runtime environment (`production`). |

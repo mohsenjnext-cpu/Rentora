@@ -219,20 +219,9 @@ export class CloudSyncService {
   async broadcastNewRental(rental) {
     if (!rental || !rental.id) throw new Error('Invalid rental payload');
 
-    const apiBase = getApiBaseUrl();
-    if (apiBase) {
-      const res = await fetch(`${apiBase}/api/sync/rental`, {
-        method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify(rental)
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.success !== true) {
-        throw new Error(data?.error || 'خطا در ثبت رزرو در سرور');
-      }
-      if (data.rental) rental = data.rental;
-    }
-
+    // Rental persistence is server-authoritative through POST /api/rentals.
+    // This helper only updates local presentation/cache and must not mutate
+    // authoritative rental financials through the retired sync endpoint.
     const cached = this.getCachedRentals();
     const updated = [rental, ...cached.filter(r => r.id !== rental.id)];
     this.saveCachedRentals(updated);

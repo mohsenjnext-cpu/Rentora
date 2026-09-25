@@ -26,13 +26,16 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
   const { 
     items = [], 
     rentals = [], 
-    toggleItemStatus, 
+    toggleItemStatus,
+    activateListingWithOwnerFee,
     confirmReturnOneTap 
   } = useRentora();
 
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'active' | 'inactive'
   const [processingRentalId, setProcessingRentalId] = useState(null);
+  const [processingListingId, setProcessingListingId] = useState(null);
   const [successToast, setSuccessToast] = useState('');
+  const [listingError, setListingError] = useState('');
 
   if (!isAuthenticated) {
     return (
@@ -86,6 +89,23 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
 
   // Total Earnings
   const totalEarnings = completedRentals.reduce((sum, r) => sum + (r.rentalTotal || r.baseAmount || 0), 0);
+
+  const handleToggleListing = async (item) => {
+    if (!item?.id || processingListingId) return;
+    setListingError('');
+    setProcessingListingId(item.id);
+    try {
+      if (!item.status || item.status === 'active') {
+        await toggleItemStatus(item.id);
+      } else {
+        await activateListingWithOwnerFee(item.id);
+      }
+    } catch (error) {
+      setListingError(error?.message || l('فعال‌سازی آگهی ناموفق بود.', 'Listing activation failed.', 'فشل تفعيل الإعلان.', '激活物品失败。'));
+    } finally {
+      setProcessingListingId(null);
+    }
+  };
 
   const handleConfirmReturn = async (rentalId) => {
     setProcessingRentalId(rentalId);
@@ -240,6 +260,12 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
           </div>
         </div>
 
+        {listingError && (
+          <div className="mb-3 p-2.5 rounded-xl border border-rose-200 bg-rose-50 text-[11px] text-rose-700 dark:bg-rose-950/30 dark:border-rose-900 dark:text-rose-300">
+            {listingError}
+          </div>
+        )}
+
         {filteredItems.length === 0 ? (
           <div className="p-8 text-center rounded-xl rentora-card space-y-2">
             <Package className="w-8 h-8 mx-auto text-slate-300 stroke-[1.5]" />
@@ -258,8 +284,8 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
                     className="flex items-center gap-3 min-w-0 cursor-pointer flex-1"
                   >
                     <img
-                      src={item.images?.[0] || 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80'}
-                      alt=""
+                      src={item.images?.[0] || undefined}
+                      alt={item.title || ''}
                       className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
                     />
                     <div className="min-w-0">
@@ -288,16 +314,17 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
 
                     <button
                       type="button"
-                      onClick={() => toggleItemStatus(item.id)}
-                      className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                      onClick={() => handleToggleListing(item)}
+                      disabled={processingListingId === item.id}
+                      className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer disabled:opacity-50 ${
                         isItemActive 
                           ? 'bg-[#E1F5EE] text-[#0F6E56]' 
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
                       }`}
-                      title={isItemActive ? l('توقف موقت نمایش آگهی', 'Pause listing', 'إيقاف مؤقت', '暂停展示') : l('فعال‌سازی نمایش آگهی', 'Activate listing', 'تفعيل', '激活展示')}
+                      title={isItemActive ? l('توقف موقت نمایش آگهی', 'Pause listing', 'إيقاف مؤقت', '暂停展示') : l('فعال‌سازی و پرداخت کارمزد مالک', 'Activate and pay owner fee', 'تفعيل ودفع عمولة المالك', '激活并支付物主服务费')}
                     >
                       {isItemActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-                      <span className="text-[10px] hidden sm:inline">{isItemActive ? t('ownerToggleActive') : t('ownerToggleInactive')}</span>
+                      <span className="text-[10px] hidden sm:inline">{processingListingId === item.id ? l('در حال پرداخت...', 'Processing...', 'جارٍ الدفع...', '处理中...') : (isItemActive ? t('ownerToggleActive') : t('ownerToggleInactive'))}</span>
                     </button>
                   </div>
                 </div>

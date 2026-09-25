@@ -259,6 +259,51 @@ export function RentoraProvider({ children }) {
     return confirmed || updatedItem;
   };
 
+  const activateListingWithOwnerFee = async (itemId) => {
+    const item = items.find(i => i.id === itemId);
+    if (!item) throw new Error('آگهی موردنظر پیدا نشد.');
+    if (!currentUser || item.ownerUid !== currentUser.uid) throw new Error('دسترسی به فعال‌سازی آگهی مجاز نیست.');
+
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
+
+    const response = await fetch(`${apiBase}/api/listings/${encodeURIComponent(itemId)}/activate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.success) {
+      throw new Error(data?.error || 'ساخت تعهد فعال‌سازی آگهی ناموفق بود.');
+    }
+
+    if (data.active === true) {
+      await refreshApp();
+      return data;
+    }
+
+    const paymentIntentId = data.paymentIntentId || data.obligation?.id;
+    if (!paymentIntentId) throw new Error('تعهد کارمزد فعال‌سازی از سرور دریافت نشد.');
+
+    const paymentResult = await piService.createPayment({
+      paymentData: {
+        amount: Number(data.obligation?.amount || 0),
+        memo: data.obligation?.memo || `Rentora Owner Activation Fee · 1-day 50% share #${String(itemId).slice(-12)}`,
+        metadata: {
+          role: 'owner',
+          listingId: itemId,
+          paymentIntentId,
+          purpose: 'platform_fee',
+          activationCycle: data.activationCycle || data.obligation?.activation_cycle || null
+        }
+      },
+      paymentIntentId
+    });
+
+    await refreshApp();
+    return { ...data, paymentResult };
+  };
+
   const toggleItemStatus = (itemId) => {
     const current = items.find(i => i.id === itemId);
     if (!current) return;
@@ -281,15 +326,10 @@ export function RentoraProvider({ children }) {
   const fetchRentalContact = async (rentalId) => {
     if (!rentalId) throw new Error('شناسه رزرو برای دریافت اطلاعات تماس الزامی است.');
     const apiBase = getApiBaseUrl();
-    const headers = { 'Content-Type': 'application/json' };
-    try {
-      const raw = localStorage.getItem('rentora_live_v1_session');
-      const session = raw ? JSON.parse(raw) : null;
-      if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
-    } catch (_) {}
     const res = await fetch(`${apiBase}/api/rentals/${encodeURIComponent(rentalId)}/contact`, {
       method: 'GET',
-      headers
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error || 'دسترسی به اطلاعات تماس امکان‌پذیر نیست.');
@@ -299,15 +339,10 @@ export function RentoraProvider({ children }) {
   const fetchListingContact = async (listingId) => {
     if (!listingId) throw new Error('شناسه آگهی برای دریافت اطلاعات تماس الزامی است.');
     const apiBase = getApiBaseUrl();
-    const headers = { 'Content-Type': 'application/json' };
-    try {
-      const raw = localStorage.getItem('rentora_live_v1_session');
-      const session = raw ? JSON.parse(raw) : null;
-      if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
-    } catch (_) {}
     const res = await fetch(`${apiBase}/api/listings/${encodeURIComponent(listingId)}/contact`, {
       method: 'GET',
-      headers
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error || 'دسترسی به اطلاعات تماس آگهی امکان‌پذیر نیست.');
@@ -420,6 +455,8 @@ export function RentoraProvider({ children }) {
 
   const executePiPaymentForRental = async (rentalId, draftRental) => {
     if (!draftRental) throw new Error("اطلاعات رزرو نامعتبر است.");
+    if (!rentalId || rentalId !== draftRental.id) throw new Error("شناسه رزرو با پرداخت منطبق نیست.");
+
     const paymentResult = await piService.createPayment({
       paymentData: {
         amount: draftRental.rentoraFee,
@@ -436,36 +473,19 @@ export function RentoraProvider({ children }) {
       },
       paymentIntentId: draftRental.paymentIntentId
     });
-    const txid = paymentResult.txid, paymentId = paymentResult.paymentId;
-    const confirmedRental = {
-      ...draftRental,
-      status: RENTAL_STATES.CONFIRMED,
-      renterCommissionPaid: true,
-      paymentStatus: "paid_confirmed",
-      piPaymentId: paymentId,
-      piTxRef: txid,
-      paidAt: new Date().toISOString()
-    };
-    setRentals(prev => {
-      const updated = [confirmedRental, ...prev.filter(r => r.id !== confirmedRental.id)];
-      cloudSyncService.saveCachedRentals(updated);
-      return updated;
-    });
-    await cloudSyncService.broadcastNewRental(confirmedRental);
+
+    // The Worker decides whether the rental is confirmed. Never promote it
+    // in the browser based only on a successful Pi SDK callback.
+    await refreshApp();
     return paymentResult;
   };
 
   const transitionRentalStatus = async (rentalId, action) => {
     const apiBase = getApiBaseUrl();
-    const headers = { 'Content-Type': 'application/json' };
-    try {
-      const raw = localStorage.getItem('rentora_live_v1_session');
-      const session = raw ? JSON.parse(raw) : null;
-      if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
-    } catch (_) {}
     const response = await fetch(`${apiBase}/api/sync/rental/status`, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ rentalId, action })
     });
     const data = await response.json().catch(() => ({}));
@@ -618,6 +638,7 @@ export function RentoraProvider({ children }) {
       createItemListing: addItem,
       updateItem,
       toggleItemStatus,
+      activateListingWithOwnerFee,
       deleteItem,
       createRentalBooking,
       executePiPaymentForRental,

@@ -6,10 +6,7 @@ import { PiAuthProvider, usePiAuth } from './context/PiAuthContext';
 import { RentoraProvider, useRentora } from './context/RentoraContext';
 
 // Components
-import Header from './components/Header';
-import Sidebar from './components/Sidebar';
-import BottomNav from './components/BottomNav';
-import Footer from './components/Footer';
+import AppShell from './app/AppShell';
 import PiAuthModal from './components/PiAuthModal';
 import WalletModal from './components/WalletModal';
 import BookingModal from './components/BookingModal';
@@ -144,9 +141,17 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFC] dark:bg-[#0B0E17] text-[#111827] dark:text-[#F3F4F6] flex flex-col">
-      <Header onNavigate={handleNavigate} currentPage={currentTab} onOpenSidebar={() => setMobileSidebarOpen(true)} onOpenChat={() => handleOpenChat(null)} />
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 pb-28 md:pb-12">
+    <AppShell
+      currentTab={currentTab}
+      onNavigate={handleNavigate}
+      onOpenSidebar={() => setMobileSidebarOpen(true)}
+      mobileSidebarOpen={mobileSidebarOpen}
+      setMobileSidebarOpen={setMobileSidebarOpen}
+      onOpenChat={handleOpenChat}
+      onOpenHelp={handleOpenHelp}
+      onOpenSecurity={handleOpenSecurity}
+      onOpenSupport={handleOpenSupport}
+    >
         {currentTab === 'home' && <HomePage onNavigate={handleNavigate} onSelectItem={handleSelectItem} onRentItem={handleRentItem} />}
         {currentTab === 'discover' && <DiscoverPage initialCategory={discoverInitialCategory} initialQuery={discoverInitialQuery} onSelectItem={handleSelectItem} onRentItem={handleRentItem} />}
         {currentTab === 'item-detail' && selectedItem && <ItemDetailPage item={selectedItem} onBack={() => setCurrentTab(previousTab || 'discover')} onNavigateToActivity={() => setCurrentTab('activity')} onNavigateToOwnerHub={() => setCurrentTab('owner-hub')} onEditItem={handleEditItem} onOpenChat={(item) => handleOpenChat(item)} onOpenPublicProfile={handleOpenPublicProfile} />}
@@ -157,9 +162,6 @@ function MainApp() {
         {currentTab === 'profile' && <ProfilePage onNavigate={handleNavigate} onSelectItem={handleSelectItem} onRentItem={handleRentItem} onOpenPublicProfile={handleOpenPublicProfile} />}
         {currentTab === 'admin' && (isAdmin ? <AdminDashboardPage onNavigate={handleNavigate} onOpenPublicProfile={handleOpenPublicProfile} onEditItem={handleEditItem} /> : <div className="py-20 text-center max-w-md mx-auto space-y-4 animate-fadeIn select-none"><div className="w-14 h-14 mx-auto rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 flex items-center justify-center border border-rose-200 dark:border-rose-900 shadow-sm"><Lock className="w-7 h-7 stroke-[1.8]" /></div><div className="space-y-1"><h2 className="text-lg font-bold text-slate-900 dark:text-white">دسترسی غیرمجاز (۴۰۳)</h2><p className="text-xs text-slate-500 max-w-xs mx-auto">دسترسی به این بخش اختصاصی مدیران تاییدشده رنتورا است.</p></div><button type="button" onClick={() => handleNavigate('home')} className="btn-primary px-4 py-2 text-xs font-bold cursor-pointer">بازگشت به خانه</button></div>)}
         {currentTab === 'settings' && <SettingsPage onNavigate={handleNavigate} onOpenHelp={handleOpenHelp} onOpenSecurity={handleOpenSecurity} onOpenSupport={handleOpenSupport} />}
-      </main>
-      <Footer onNavigate={handleNavigate} onOpenHelp={handleOpenHelp} />
-      <Sidebar currentTab={currentTab} onNavigate={handleNavigate} mobileOpen={mobileSidebarOpen} setMobileOpen={setMobileSidebarOpen} onOpenChat={() => handleOpenChat(null)} onOpenHelp={handleOpenHelp} onOpenSecurity={handleOpenSecurity} onOpenSupport={handleOpenSupport} />
       <PiAuthModal />
       <WalletModal />
       <HelpCenterModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} initialTab={helpInitialTab} />
@@ -167,8 +169,7 @@ function MainApp() {
       <SupportModal isOpen={isSupportModalOpen} onClose={() => setIsSupportModalOpen(false)} onOpenDispute={() => handleOpenHelp('rules')} />
       <ChatModal isOpen={isChatModalOpen} onClose={() => { setIsChatModalOpen(false); setChatTargetItem(null); setChatTargetRental(null); }} initialItem={chatTargetItem} initialRental={chatTargetRental} onDirectRent={(item) => { setIsChatModalOpen(false); handleRentItem(item); }} onOpenPublicProfile={handleOpenPublicProfile} />
       {directBookingItem && <BookingModal item={directBookingItem} isOpen={isDirectBookingOpen} onClose={() => { setIsDirectBookingOpen(false); setDirectBookingItem(null); }} onBookingSuccess={() => { setIsDirectBookingOpen(false); setDirectBookingItem(null); setCurrentTab('activity'); }} />}
-      <BottomNav currentTab={currentTab} onNavigate={handleNavigate} />
-    </div>
+    </AppShell>
   );
 }
 

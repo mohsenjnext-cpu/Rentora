@@ -4,6 +4,11 @@ import fs from 'node:fs';
 
 const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
 const piAuthContext = fs.readFileSync(new URL('../src/context/PiAuthContext.jsx', import.meta.url), 'utf8');
+const rentoraContext = fs.readFileSync(new URL('../src/context/RentoraContext.jsx', import.meta.url), 'utf8');
+const cloudSyncService = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
+const piService = fs.readFileSync(new URL('../src/services/piService.js', import.meta.url), 'utf8');
+const ownerHub = fs.readFileSync(new URL('../src/pages/OwnerHubPage.jsx', import.meta.url), 'utf8');
+const activationMigration = fs.readFileSync(new URL('../db/migrations/0013_owner_fee_activation_cycle.sql', import.meta.url), 'utf8');
 
 function section(start, end) {
   const from = worker.indexOf(start);
@@ -12,25 +17,24 @@ function section(start, end) {
   return worker.slice(from, to === -1 ? worker.length : to);
 }
 
-test('payment intent amount is server-owned', () => {
+test('payment intent amount is server-owned and obligation-bound', () => {
   const intent = section("path === '/api/payments/intent'", "path === '/api/payments/approve'");
-  assert.match(intent, /SELECT r\.,?\s*\*?,?\s*l\.title/);
-  assert.match(intent, /bind\(body\.rentalId, user\.id\)/);
-  assert.match(intent, /rental\.platform_fee/);
+  assert.match(intent, /payment_obligations/);
+  assert.match(intent, /obligation\.amount/);
   assert.doesNotMatch(intent, /body\.amount/);
+  assert.match(intent, /body\?\.paymentIntentId/);
 });
 
-test('payment approval route requires an authenticated, user-bound intent', () => {
+test('payment approval route requires an authenticated, obligation-bound payment', () => {
   const approve = section("path === '/api/payments/approve'", "path === '/api/payments/complete'");
   assert.match(approve, /requireUser\(request, env\)/);
-  assert.match(approve, /payment_intents WHERE id=\?1 AND user_id=\?2/);
+  assert.match(approve, /payment_obligations WHERE id=\?1 AND user_id=\?2/);
   assert.match(approve, /body\.paymentIntentId/);
-  assert.match(approve, /validatePiPayment\(payment, intent, user\)/);
-  assert.match(approve, /\['created','pending','approved'\]/);
+  assert.match(approve, /validatePiPayment\(payment, obligation, user\)/);
   assert.match(worker, /const payerUid = payment\?\.user\?\.uid \|\| payment\?\.from_address\?\.uid/);
   assert.match(worker, /Pi payer mismatch/);
-  assert.match(worker, /metadataIntent/);
-  assert.match(worker, /Pi payment metadata binding is missing or invalid/);
+  assert.match(worker, /paymentMeta\.paymentIntentId/);
+  assert.match(worker, /Pi payment metadata obligation binding is invalid/);
 });
 
 test('payment approval uses an atomic D1 claim for the Pi payment ID', () => {
@@ -40,24 +44,104 @@ test('payment approval uses an atomic D1 claim for the Pi payment ID', () => {
   assert.match(approve, /concurrently claimed by another payment/);
 });
 
-test('payment completion requires an approved intent and strict Pi binding', () => {
+test('payment completion requires an approved obligation and strict Pi binding', () => {
   const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
-  assert.match(complete, /intent\.pi_payment_id && intent\.pi_payment_id !== body\.paymentId/);
+  assert.match(complete, /obligation\.pi_payment_id && obligation\.pi_payment_id !== body\.paymentId/);
   assert.match(complete, /\['approved','completed'\]\.includes/);
   assert.match(worker, /Pi payment identifier mismatch/);
   assert.match(worker, /Pi payment amount mismatch/);
   assert.match(worker, /Pi payment memo mismatch/);
-  assert.match(worker, /payment metadata binding is missing or invalid/);
+  assert.match(worker, /Pi payment metadata obligation binding is invalid/);
   assert.match(complete, /\['approved','completed','complete'\]/);
 });
 
-test('payment completion can recover when Pi is already completed but D1 has not finalized it', () => {
+test('payment completion reconciles the authoritative Pi transaction hash', () => {
   const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
-  assert.match(complete, /\['approved','completed','complete'\]\.includes\(status\)/);
-  assert.match(complete, /if \(!completionResponse\.ok && !\['completed','complete'\]\.includes\(status\)\)/);
-  assert.match(complete, /UPDATE payment_intents SET pi_payment_id=\?1,pi_txid=\?2,status='completed'/);
-  assert.match(complete, /UPDATE rentals SET payment_status='completed',status='confirmed'/);
+  assert.match(complete, /verifiedPayment\?\.transaction\?\.txid/);
+  assert.match(complete, /const actualTxid/);
+  assert.match(complete, /Pi transaction hash mismatch/);
+  assert.match(complete, /UPDATE payment_obligations SET pi_payment_id=\?1, pi_txid=\?2, status='completed'/);
   assert.match(complete, /INSERT OR IGNORE INTO transactions/);
+});
+
+test('owner completion activates the listing only after owner fee completion', () => {
+  const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
+  assert.match(complete, /owner_fee_payment_status='completed'/);
+  assert.match(complete, /status='active'/);
+  assert.match(complete, /activated_at/);
+});
+
+test('renter completion requires owner activation fee completion', () => {
+  const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
+  assert.match(complete, /Owner activation fee is not completed/);
+  assert.match(complete, /renter_fee_payment_status='completed'/);
+});
+
+test('reservation creation treats owner activation as listing-level and creates only the renter obligation', () => {
+  const rentals = section("path === '/api/rentals'", "path === '/api/sync/rental'");
+  assert.match(rentals, /listing\.owner_fee_payment_status !== 'completed'/);
+  assert.match(rentals, /'completed', 'unpaid'/);
+  assert.match(rentals, /'renter', 'platform_fee'/);
+  assert.doesNotMatch(rentals, /'owner', 'platform_fee'/);
+});
+
+test('reservation creation requires an unexpired server quote and rejects client pricing fallback', () => {
+  const rentals = section("path === '/api/rentals'", "path === '/api/sync/rental'");
+  assert.match(rentals, /if \(!quote\)/);
+  assert.match(rentals, /پیش‌فاکتور معتبر سرور/);
+  assert.match(rentals, /const listingId = quote\.listingId/);
+  assert.doesNotMatch(rentals, /quote\?\.listingId \|\| String\(body\.listingId/);
+  assert.match(rentals, /quote\.platformFee !== financials\.platformFee/);
+  assert.match(rentals, /quote\.totalAmount !== financials\.totalAmount/);
+});
+
+test('rental and renter obligation creation is atomic', () => {
+  const rentals = section("path === '/api/rentals'", "path === '/api/sync/rental'");
+  assert.match(rentals, /const rentalStatement = env\.RENTORA_DB\.prepare/);
+  assert.match(rentals, /const renterObligationStatement = env\.RENTORA_DB\.prepare/);
+  assert.match(rentals, /await env\.RENTORA_DB\.batch\(\[rentalStatement, renterObligationStatement\]\)/);
+});
+
+test('expired payment obligations cannot be silently revived by payment intent creation', () => {
+  const intent = section("path === '/api/payments/intent'", "path === '/api/payments/approve'");
+  assert.match(intent, /obligation\.expires_at/);
+  assert.match(intent, /Payment obligation is expired/);
+  assert.match(intent, /const expires = obligation\.expires_at/);
+  assert.doesNotMatch(intent, /new Date\(Date\.now\(\) \+ PAYMENT_INTENT_TTL \* 1000\)\.toISOString\(\)/);
+});
+
+test('retired rental sync endpoint cannot mutate authoritative rental financials', () => {
+  const legacy = section("path === '/api/sync/rental'", "path === '/api/sync/rental/status'");
+  assert.match(legacy, /410/);
+  assert.match(legacy, /Legacy rental sync endpoint is retired/);
+});
+
+test('frontend reservation confirmation is not synthesized from a Pi callback', () => {
+  assert.match(rentoraContext, /Worker decides whether the rental is confirmed/);
+  assert.doesNotMatch(rentoraContext, /status: RENTAL_STATES\.CONFIRMED/);
+  assert.doesNotMatch(rentoraContext, /paymentStatus: "paid_confirmed"/);
+});
+
+test('frontend rental sync is cache-only and no longer posts client-owned rental state', () => {
+  assert.doesNotMatch(cloudSyncService, /\/api\/sync\/rental/);
+  assert.match(cloudSyncService, /Rental persistence is server-authoritative through POST \/api\/rentals/);
+});
+
+test('Pi payment intent requests include an explicit role and owner listing context', () => {
+  assert.match(piService, /role/);
+  assert.match(piService, /listingId/);
+  assert.match(piService, /paymentData\?\.metadata\?\.role/);
+  assert.match(piService, /paymentData\?\.metadata\?\.listingId/);
+});
+
+test('owner hub activation goes through the server owner-fee payment flow', () => {
+  assert.match(ownerHub, /activateListingWithOwnerFee/);
+  assert.match(ownerHub, /pay owner fee|pay owner fee|owner fee|کارمزد مالک/i);
+});
+
+test('frontend contact and rental transitions use HttpOnly cookie credentials', () => {
+  assert.doesNotMatch(rentoraContext, /localStorage\.getItem\('rentora_live_v1_session'\)/);
+  assert.match(rentoraContext, /credentials: 'include'/);
 });
 
 test('server logout revokes the KV session', () => {
@@ -72,6 +156,10 @@ test('worker has no marketplace memory fallback', () => {
   assert.match(worker, /requireBindings\(env\)/);
 });
 
+test('CORS preflight allows the session bridge client header', () => {
+  assert.match(worker, /Access-Control-Allow-Headers.*X-Rentora-Client/);
+});
+
 test('frontend auth bridge uses HttpOnly cookie sessions instead of browser-stored bearer tokens', () => {
   assert.doesNotMatch(piAuthContext, /localStorage\.getItem\(STORAGE_KEY_USER\)/);
   assert.doesNotMatch(piAuthContext, /session\.sessionToken/);
@@ -79,4 +167,70 @@ test('frontend auth bridge uses HttpOnly cookie sessions instead of browser-stor
   assert.match(piAuthContext, /credentials: init\.credentials \|\| 'include'/);
   assert.match(piAuthContext, /headers\.set\('X-Rentora-Client', 'web'\)/);
   assert.match(piAuthContext, /localStorage\.removeItem\('rentora_live_v1_session'\)/);
+});
+
+test('incomplete payment reconciliation preserves authoritative completion transitions', () => {
+  const incomplete = section("path === '/api/payments/incomplete'", "path.startsWith('/api/listings/')");
+  assert.match(incomplete, /validatePiPayment\(payment, obligation, obligationUser\)/);
+  assert.match(incomplete, /owner_fee_payment_status='completed'/);
+  assert.match(incomplete, /renter_fee_payment_status='completed'/);
+  assert.match(incomplete, /INSERT OR IGNORE INTO transactions/);
+  assert.doesNotMatch(incomplete, /UPDATE payment_obligations SET status='completed'.*WHERE id=\?3/);
+});
+
+test('renter contact details stay locked until confirmed rental payment', () => {
+  const contact = section("path.startsWith('/api/rentals/') && path.endsWith('/contact')", "path.startsWith('/api/listings/') && path.endsWith('/contact')");
+  assert.match(contact, /row\.payment_status === 'completed'/);
+  assert.match(contact, /\['confirmed', 'active', 'completed'\]\.includes\(row\.rental_status\)/);
+  assert.match(contact, /Contact information is locked until rental payment is confirmed/);
+});
+
+test('owner activation fee uses the canonical one-day 50/50 basis', () => {
+  const activate = section("path.startsWith('/api/listings/') && path.endsWith('/activate')", "path === '/api/sync/item'");
+  assert.match(activate, /canonicalDailyRate/);
+  assert.match(activate, /canonicalOneDayPlatformFee/);
+  assert.match(activate, /canonicalDays: 1/);
+  assert.match(activate, /ownerActivationFee: ownerFee/);
+  assert.match(activate, /Number\(\(canonicalOneDayPlatformFee \/ 2\)\.toFixed\(4\)\)/);
+  assert.match(activate, /feeRate/);
+});
+
+test('owner activation cycle claim is atomic against concurrent requests', () => {
+  const activate = section("path.startsWith('/api/listings/') && path.endsWith('/activate')", "path === '/api/sync/item'");
+  assert.match(activate, /UPDATE listings/);
+  assert.match(activate, /activation_cycle=\?1/);
+  assert.match(activate, /owner_fee_payment_status!='completed'/);
+  assert.match(activate, /activation_cycle IS NULL AND \?6 IS NULL/);
+  assert.match(activate, /claim\?\.meta\?\.changes/);
+  assert.match(activate, /concurrently changed/);
+  assert.match(activate, /INSERT INTO payment_obligations/);
+});
+
+test('owner activation obligations are bound to an activation cycle in D1', () => {
+  assert.match(worker, /payment_obligations\(id,rental_id,listing_id,user_id,role,purpose,amount,currency,status,memo,metadata,activation_cycle,expires_at,created_at,updated_at\)/);
+  assert.match(worker, /activationCycle: cycle/);
+  assert.match(worker, /activation_cycle=\?3/);
+  assert.match(activationMigration, /ALTER TABLE payment_obligations ADD COLUMN activation_cycle TEXT NOT NULL DEFAULT 'initial'/);
+  assert.match(activationMigration, /DROP INDEX IF EXISTS uq_payment_obligations_listing_role_purpose/);
+  assert.match(activationMigration, /uq_payment_obligations_listing_role_purpose_cycle/);
+});
+
+
+test('incomplete payment recovery requires the authenticated obligation owner', () => {
+  const incomplete = section("path === '/api/payments/incomplete'", "path.startsWith('/api/listings/')");
+  assert.match(incomplete, /const \{ user \} = await requireUser\(request, env\)/);
+  assert.match(incomplete, /WHERE pi_payment_id=\?1 AND user_id=\?2 LIMIT 1/);
+  assert.match(incomplete, /bind\(paymentId, user\.id\)/);
+});
+
+test('renter completion confirms the rental after the renter half completes', () => {
+  const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
+  assert.match(
+    complete,
+    /const bothCompleted = rental &&\\s+rental\.owner_fee_payment_status === 'completed';/
+  );
+  assert.match(
+    complete,
+    /renter_fee_payment_status='completed', renter_fee_payment_id=\?1, payment_status='completed', status=\$\{bothCompleted \? "'confirmed'" : "status"\}/
+  );
 });

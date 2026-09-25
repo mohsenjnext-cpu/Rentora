@@ -15,7 +15,8 @@ import {
   Car,
   PartyPopper,
   Home,
-  LayoutGrid
+  LayoutGrid,
+  Check
 } from 'lucide-react';
 
 export default function DiscoverPage({ initialCategory = 'all', initialQuery = '', onSelectItem, onRentItem }) {
@@ -26,7 +27,8 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [selectedCondition, setSelectedCondition] = useState('all');
   const [selectedCity, setSelectedCity] = useState('');
-  const [maxPrice, setMaxPrice] = useState(100);
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
@@ -48,7 +50,9 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
       if (item.status && item.status !== 'active') return false;
       if (selectedCategory !== 'all' && item.category !== selectedCategory) return false;
       if (selectedCondition !== 'all' && item.condition !== selectedCondition) return false;
-      if (item.pricePerDay && item.pricePerDay > maxPrice) return false;
+      const price = Number(item.pricePerDay || 0);
+      if (minPrice !== '' && price < Number(minPrice)) return false;
+      if (maxPrice !== '' && price > Number(maxPrice)) return false;
       
       const loc = (item.location || '').toLowerCase();
       if (selectedCity && !loc.includes(selectedCity.toLowerCase().trim())) return false;
@@ -67,18 +71,27 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
       if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
       return new Date(b.createdAt || 0) - new Date(a.createdAt || 0); // newest
     });
-  }, [items, query, selectedCategory, selectedCondition, selectedCity, maxPrice, sortBy]);
+  }, [items, query, selectedCategory, selectedCondition, selectedCity, minPrice, maxPrice, sortBy]);
 
   const clearFilters = () => {
     setQuery('');
     setSelectedCategory('all');
     setSelectedCondition('all');
     setSelectedCity('');
-    setMaxPrice(100);
+    setMinPrice('');
+    setMaxPrice('');
     setSortBy('newest');
   };
 
-  const isFiltered = query !== '' || selectedCategory !== 'all' || selectedCondition !== 'all' || selectedCity !== '' || maxPrice < 100;
+  const isFiltered = query !== '' || selectedCategory !== 'all' || selectedCondition !== 'all' || selectedCity !== '' || minPrice !== '' || maxPrice !== '';
+
+  const appliedFilters = [
+    selectedCategory !== 'all' ? filterCategories.find((cat) => cat.id === selectedCategory)?.label : null,
+    selectedCondition !== 'all' ? l('وضعیت', 'Condition', 'الحالة', '状态') + ': ' + selectedCondition : null,
+    selectedCity ? selectedCity : null,
+    minPrice !== '' ? l('حداقل', 'Min', 'الحد الأدنى', '最低') + ` ${minPrice} π` : null,
+    maxPrice !== '' ? l('حداکثر', 'Max', 'الحد الأقصى', '最高') + ` ${maxPrice} π` : null,
+  ].filter(Boolean);
 
   return (
     <div className="space-y-4 pb-16 select-none">
@@ -128,6 +141,18 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
         </div>
       </div>
 
+      {/* Applied filter overview: always visible once the result set is scoped. */}
+      {isFiltered && appliedFilters.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5" aria-label={l('فیلترهای فعال', 'Applied filters', 'الفلاتر المطبقة', '已应用筛选')}>
+          {appliedFilters.map((label, index) => (
+            <span key={label + index} className="shrink-0 inline-flex items-center gap-1 rounded-full bg-[#EEEDFE] dark:bg-[#1E1B3D] text-[#26215C] dark:text-[#EEEDFE] px-2.5 py-1 text-[10px] font-semibold">
+              <Check className="w-3 h-3" />{label}
+            </span>
+          ))}
+          <button type="button" onClick={clearFilters} className="shrink-0 text-[10px] font-bold text-[#534AB7] dark:text-[#AFA9EC] px-1.5 py-1">{t('btnReset')}</button>
+        </div>
+      )}
+
       {/* 2. Row showing Result Count + Sort Control */}
       <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 py-1 border-b border-slate-150 dark:border-slate-800">
         <span className="text-[11px] font-medium">
@@ -173,10 +198,10 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
 
       {/* 4. Filter Sheet Modal */}
       {filterSheetOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs animate-fadeIn">
           <div 
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-4 sm:p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-md bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-xl p-4 sm:p-5 space-y-4 max-h-[88vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
               <span className="text-xs font-bold text-slate-900 dark:text-white">
@@ -219,21 +244,33 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
               </div>
             </div>
 
-            {/* Price Slider */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
-                <span>{t('discoverFilterMaxPrice')}:</span>
-                <span className="text-[#0F6E56] font-mono font-black">{maxPrice} π</span>
+            {/* Price range: explicit values avoid an arbitrary hard-coded ceiling. */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                {l('بازه قیمت روزانه', 'Daily price range', 'نطاق السعر اليومي', '每日价格范围')}
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  inputMode="decimal"
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(e.target.value)}
+                  placeholder={l('از π', 'Min π', 'من π', '最低 π')}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#1E1D33] text-slate-900 dark:text-white text-xs"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  inputMode="decimal"
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  placeholder={l('تا π', 'Max π', 'إلى π', '最高 π')}
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#1E1D33] text-slate-900 dark:text-white text-xs"
+                />
               </div>
-              <input
-                type="range"
-                min="1"
-                max="100"
-                step="1"
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(Number(e.target.value))}
-                className="w-full accent-[#534AB7] cursor-pointer"
-              />
             </div>
 
             {/* Condition Dropdown */}
