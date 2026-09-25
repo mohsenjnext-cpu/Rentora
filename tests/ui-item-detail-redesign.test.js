@@ -72,3 +72,25 @@ test('rental creation client contract requires an authoritative quote id', () =>
   assert.match(sync, /if \(!quoteId\) throw new Error/);
   assert.match(sync, /const body = \{ quoteId \};/);
 });
+
+
+test('active booking path cannot fall back to client-supplied listing dates', () => {
+  const booking = fs.readFileSync(new URL('../src/components/BookingModal.jsx', import.meta.url), 'utf8');
+  assert.match(booking, /const persistedRental = await cloudSyncService\.createRental\(\{ quoteId: serverQuote\.quoteId \}\)/);
+  assert.doesNotMatch(booking, /createRental\(\{[\s\S]*listingId: item\.id/);
+  assert.doesNotMatch(booking, /createRental\(\{[\s\S]*startDate: dates\.startDate/);
+  assert.doesNotMatch(booking, /createRental\(\{[\s\S]*endDate: dates\.endDate/);
+});
+
+test('context rental compatibility wrapper delegates only to authoritative quote creation', () => {
+  const context = fs.readFileSync(new URL('../src/context/RentoraContext.jsx', import.meta.url), 'utf8');
+  const start = context.indexOf('const createRentalBooking');
+  const end = context.indexOf('const executePiPaymentForRental', start);
+  assert.ok(start >= 0 && end > start);
+  const bookingFn = context.slice(start, end);
+  assert.match(bookingFn, /quoteId/);
+  assert.match(bookingFn, /cloudSyncService\.createRental\(\{ quoteId \}\)/);
+  assert.doesNotMatch(bookingFn, /FinancialEngine/);
+  assert.doesNotMatch(bookingFn, /Math\.random/);
+  assert.doesNotMatch(bookingFn, /pricePerDay|dailyRate|securityDeposit|rentalTotal|rentoraFee/);
+});
