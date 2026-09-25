@@ -22,8 +22,8 @@ test('compact listing card keeps shared business behavior in ItemCard', () => {
 test('Home renders shared listing card skeletons during initial load', () => {
   assert.match(home, /isInitialItemsLoading/);
   assert.match(home, /variant="skeleton"/);
-  assert.match(home, /Array.from({ length: 4 }/);
-  assert.match(home, /Array.from({ length: 8 }/);
+  assert.ok(home.includes('Array.from({ length: 4 }'));
+  assert.ok(home.includes('Array.from({ length: 8 }'));
 });
 
 test('listing card exposes a dedicated skeleton variant', () => {
