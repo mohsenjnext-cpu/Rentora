@@ -30,3 +30,10 @@ test('redesigned item detail provides keyboard-friendly 44px touch targets', () 
   assert.match(file, /min-h-11/);
   assert.match(file, /focus-visible:ring-2/);
 });
+
+test('app keeps the legacy item detail and exposes the redesign additively behind an explicit preview flag', () => {
+  const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  assert.match(app, /ItemDetailRedesign/);
+  assert.match(app, /ui.*redesign/);
+  assert.match(app, /ItemDetailPage/);
+});
