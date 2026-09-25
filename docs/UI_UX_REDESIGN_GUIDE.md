@@ -51,9 +51,9 @@
 - [x] Tabs
 - [ ] Modal/drawer
 - [ ] Toast/notification
-- [ ] Skeleton/loading
-- [ ] Empty states
-- [ ] Error states
+- [x] Skeleton/loading
+- [x] Empty states
+- [x] Error states
 - [ ] Confirmation/destructive actions
 - [ ] Navigation components
 - [ ] Motion rules
@@ -504,3 +504,15 @@ Added additive shared primitives under `src/components/ui/`:
 The primitives remain presentation-only and do not introduce new business state or API contracts.
 
 **Status:** Implemented. Dedicated component tests and broad page migration remain pending.
+
+
+## Design System Implementation 03 — Feedback & Loading Primitives — 2026-09-25
+
+Added additive shared primitives under `src/components/ui/`:
+- `RentoraSkeleton`: reusable loading placeholder with dark-mode support.
+- `RentoraEmptyState`: accessible empty result state with optional icon, description and action slot.
+- `RentoraAlert`: semantic info/success/warning/error feedback surface with appropriate status/alert roles.
+
+These components contain no business logic and are safe to introduce incrementally around existing real data flows.
+
+**Status:** Implemented. Page migration, dedicated regression coverage and final accessibility review remain pending.
