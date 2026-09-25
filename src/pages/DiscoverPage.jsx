@@ -114,20 +114,16 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
           </div>
 
           {/* Inline Filter Button (Opens filter sheet) */}
-          <button
+          <RentoraButton
             type="button"
+            variant={isFiltered ? 'primary' : 'secondary'}
+            size="sm"
             onClick={() => setFilterSheetOpen(true)}
-            className={`p-2 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-              isFiltered
-                ? 'bg-[#26215C] text-white border-[#26215C] dark:bg-[#534AB7]'
-                : 'rentora-card text-slate-700 dark:text-slate-200 hover:border-[#534AB7]'
-            }`}
-            title={t('discoverFilterBtn')}
+            aria-label={t('discoverFilterBtn')}
           >
-            <SlidersHorizontal className="w-4 h-4 stroke-[1.8]" />
+            <SlidersHorizontal className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
             <span className="hidden sm:inline">{l('فیلترها', 'Filters', 'الفلاتر', '筛选')}</span>
-          </button>
-        </div>
+          </RentoraButton>        </div>
       </div>
 
       {/* 2. Row showing Result Count + Sort Control */}
@@ -137,8 +133,9 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
         </span>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px]">{t('discoverSortBy')}:</span>
+          <label htmlFor="discover-sort" className="text-[11px]">{t('discoverSortBy')}:</label>
           <select
+            id="discover-sort"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
             className="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-semibold text-xs cursor-pointer focus:outline-none"
@@ -207,8 +204,8 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
       >
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('discoverFilterCategory')}</label>
-            <div className="grid grid-cols-2 gap-2">
+            <span id="discover-category-label" className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('discoverFilterCategory')}</span>
+            <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby="discover-category-label">
               {filterCategories.map(cat => {
                 const Icon = cat.icon;
                 const isSel = selectedCategory === cat.id;
