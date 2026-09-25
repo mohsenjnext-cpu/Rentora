@@ -2893,7 +2893,7 @@ export default {
           currency: 'PI'
         };
 
-        await env.RENTORA_DB.prepare(`
+        const rentalStatement = env.RENTORA_DB.prepare(`
           INSERT INTO rentals(
             id, listing_id, renter_user_id, owner_user_id, start_date, end_date,
             rental_amount, deposit_amount, platform_fee, total_amount,
@@ -2928,7 +2928,7 @@ export default {
           financials.platformFeeTotal,
           financials.ownerPlatformFee,
           financials.renterPlatformFee
-        ).run();
+        );
 
         // Owner activation is a listing-level obligation and must already be completed
         // before a rental can be created. Only the renter half is payable for this rental.
@@ -2936,7 +2936,7 @@ export default {
         const renterMemo = `Rentora Renter Fee #${String(rentalId).slice(-12)}`;
         const obligationExpires = new Date(Date.now() + PAYMENT_INTENT_TTL * 1000).toISOString();
 
-        await env.RENTORA_DB.prepare(`
+        const renterObligationStatement = env.RENTORA_DB.prepare(`
           INSERT INTO payment_obligations(
             id, rental_id, listing_id, user_id, role, purpose, amount, currency,
             status, memo, metadata, expires_at, created_at, updated_at
@@ -2949,6 +2949,9 @@ export default {
           JSON.stringify({ rentalId, listingId: listing.id, role: 'renter', expectedAmount: financials.renterPlatformFee }),
           obligationExpires, createdAt
         );
+
+        // Rental and renter obligation must commit together.
+        await env.RENTORA_DB.batch([rentalStatement, renterObligationStatement]);
 
         const createdRental = await env.RENTORA_DB.prepare(`
           SELECT r.*, l.price_per_day, ru.pi_uid renter_pi_uid, ru.username renter_username, ou.pi_uid owner_pi_uid, ou.username owner_username
