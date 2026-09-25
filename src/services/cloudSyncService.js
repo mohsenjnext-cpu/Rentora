@@ -281,6 +281,24 @@ export class CloudSyncService {
     return data.overview;
   }
 
+  async submitSupportTicket({ subject = '', message = '' } = {}) {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+    const res = await fetch(`${apiBase}/api/support/tickets`, {
+      credentials: 'include',
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ subject: String(subject || '').trim(), message: String(message || '').trim() })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success !== true) {
+      const err = new Error(data?.error || 'ارسال درخواست پشتیبانی ناموفق بود.');
+      err.status = res.status;
+      throw err;
+    }
+    return data.ticket;
+  }
+
   async fetchWalletBalance() {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('API Base URL is not configured');
