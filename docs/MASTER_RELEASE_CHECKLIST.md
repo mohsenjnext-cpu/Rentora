@@ -183,3 +183,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - Session transport hardening: server sessions are now issued through an HttpOnly, Secure, SameSite=None `rentora_session` cookie; logout revokes the KV session and clears the cookie. The sync client no longer reads browser-stored session bearer tokens and sends credentialed requests.
 - Client secret audit checkpoint: Pi server API keys remain server-only; browser code uses the public API base URL and Pi SDK access token only for the login handoff. No server API key was found in the audited client service/config files.
 - CI after auth hardening commit a8527d08c8a65b645083a01fda0603b2112c2d44: NOT RUN / no workflow run reported yet.
+
+
+- Cookie-session compatibility: optional-auth `/api/sync/all` and listing read routes now resolve the same HttpOnly session cookie instead of depending only on a bearer Authorization header.
+- CI after cookie/session hardening commit 272947465c719103b77ed8341f0e4f0dfbf64824: NOT RUN / no workflow run reported yet.
