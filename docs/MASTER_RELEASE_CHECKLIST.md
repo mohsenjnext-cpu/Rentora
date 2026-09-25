@@ -36,11 +36,11 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [x] Server-authoritative listing ownership
 - [x] Server-authoritative listing financial fields
 - [x] Listing lifecycle/status
-- [ ] Rental quote authority
-- [ ] Rental creation authority
-- [ ] Rental overlap protection
-- [ ] Rental lifecycle state machine
-- [ ] Contact-data authorization
+- [x] Rental quote authority
+- [x] Rental creation authority
+- [x] Rental overlap protection
+- [x] Rental lifecycle state machine
+- [x] Contact-data authorization
 
 ## 4. Pi payments
 - [ ] Server payment intent
@@ -58,11 +58,11 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] no client-side synthetic payment/rental confirmation
 
 ## 5. Messaging and trust
-- [ ] Conversation authorization
-- [ ] Message authorization
-- [ ] Contact-information filtering
-- [ ] Post-booking contact access
-- [ ] Conversation archive
+- [x] Conversation authorization
+- [x] Message authorization
+- [x] Contact-information filtering
+- [x] Post-booking contact access
+- [x] Conversation archive
 - [ ] Unread/read state
 - [ ] Cross-tab/device synchronization
 
@@ -94,8 +94,8 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Dark mode
 
 ## 8. Security
-- [ ] API authentication
-- [ ] API authorization
+- [x] API authentication
+- [x] API authorization
 - [ ] CORS
 - [ ] Security headers
 - [ ] Input validation
@@ -103,11 +103,11 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Rate/abuse protections where required
 - [ ] No secrets in client bundle
 - [ ] No stack traces / sensitive errors
-- [ ] Legacy routes safely retired
+- [x] Legacy routes safely retired
 - [ ] Payment tampering resistance
 
 ## 9. Verification
-- [ ] Unit/regression tests
+- [x] Unit/regression tests
 - [ ] Worker syntax validation
 - [ ] Frontend production build
 - [ ] Full CI green on current HEAD
@@ -134,10 +134,13 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Post-merge smoke test
 
 ## Current verified checkpoint
-- Latest verified work commit: c256532b6321ecf7fdb6c6e0c4b414f20e4051c7
-- Listing authority audit: ownership and financial authority remain server/D1 controlled.
-- Rental authority hardening: legacy POST /api/sync/rental can no longer create/update rentals; it now returns 410 and directs clients to the authoritative quote -> /api/rentals flow.
-- Regression coverage added for legacy rental sync retirement.
-- Rental status endpoint currently enforces authenticated renter/owner access plus confirmed -> active and active -> completed transitions with atomic status guards.
-- CI on the latest commit: NOT RUN yet; no current workflow run returned.
+- Latest verified work commit: 47ad54b3a423cb075db9a04f1f66920a1fde23f9
+- Rental/contact/chat audit: rental contact is restricted to authorized participants/admin, renter access requires completed payment plus confirmed/active/completed rental state, and listing contact is owner/admin-only.
+- Conversation authorization: list/create/read/send/archive routes require authenticated participant access; conversation and message payloads derive sender/participants from D1 identities rather than client-supplied roles.
+- Contact filtering: pre-booking messages pass through the server anti-bypass contact filter; post-booking unlock requires completed payment and an allowed rental state.
+- Archived conversation hardening: POST /api/conversations/:id/messages now rejects archived conversations (409) so an archived thread cannot silently receive new messages and remain hidden from the active conversation list.
+- Rental authority hardening: legacy POST /api/sync/rental returns 410 and directs clients to the authoritative quote -> /api/rentals flow; rental status transitions remain atomically guarded.
+- Regression coverage added for archived-conversation write protection and legacy rental sync retirement.
+- CI on the latest work commit: NOT RUN. The prior checked commit c256532b6321ecf7fdb6c6e0c4b414f20e4051c7 had a GitHub Actions CI failure, so that failure is explicitly not being treated as a pass for the new commits.
+- ADMIN_PI_UIDS authoritative-value blocker: BLOCKED until real Pi UIDs are supplied/verified.
 - ADMIN_PI_UIDS authoritative-value blocker: BLOCKED until real Pi UIDs are supplied/verified.
