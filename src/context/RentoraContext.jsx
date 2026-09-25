@@ -30,6 +30,7 @@ export function RentoraProvider({ children }) {
   const [latestNotification, setLatestNotification] = useState(null);
   const knownMsgIdsRef = useRef(new Set());
   const isInitialLoadDoneRef = useRef(false);
+  const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const userIdentifier = currentUser?.uid || currentUser?.id || null;
@@ -107,9 +108,22 @@ export function RentoraProvider({ children }) {
   }, [userIdentifier, usernameIdentifier, getReadTimestamps]);
 
   useEffect(() => {
-    refreshConversations().finally(() => {
-      setTimeout(() => { isInitialLoadDoneRef.current = true; }, 1200);
-    });
+    let cancelled = false;
+    const loadInitialData = async () => {
+      try {
+        await Promise.all([
+          cloudSyncService.fetchSharedData(true),
+          refreshConversations()
+        ]);
+      } finally {
+        if (!cancelled) {
+          isInitialLoadDoneRef.current = true;
+          setIsInitialLoadDone(true);
+        }
+      }
+    };
+    loadInitialData().catch(() => {});
+    return () => { cancelled = true; };
   }, [refreshConversations]);
 
   useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'config_v9', JSON.stringify(platformConfig)); } catch (e) {} }, [platformConfig]);
@@ -610,6 +624,7 @@ export function RentoraProvider({ children }) {
       clearLatestNotification: () => setLatestNotification(null),
       platformConfig,
       isRefreshing,
+      isInitialLoadDone,
       refreshApp,
       purgeDatabase,
       toggleFavorite,
