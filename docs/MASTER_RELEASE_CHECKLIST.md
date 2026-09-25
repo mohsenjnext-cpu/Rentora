@@ -134,7 +134,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Post-merge smoke test
 
 ## Current verified checkpoint
-- Latest verified work commit: 46f1cf943d4560d47d1fa6624b73055dbc955633
+- Latest verified work commit: 832ef625a5b3909de975f71f0a3ad5e7e6f6c80e
 - Rental/contact/chat audit: rental contact is restricted to authorized participants/admin, renter access requires completed payment plus confirmed/active/completed rental state, and listing contact is owner/admin-only.
 - Conversation authorization: list/create/read/send/archive routes require authenticated participant access; conversation and message payloads derive sender/participants from D1 identities rather than client-supplied roles.
 - Contact filtering: pre-booking messages pass through the server anti-bypass contact filter; post-booking unlock requires completed payment and an allowed rental state.
@@ -160,3 +160,8 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - CI run #821 on the checklist checkpoint failed because one regression test still expected the old INSERT OR IGNORE transaction persistence; implementation is intentionally strict INSERT. The test was corrected in 46f1cf943d4560d47d1fa6624b73055dbc955633 and requires a fresh green run before verification is marked complete.
 
 - CI diagnosis: runs #830-833 failed only in regression assertions expecting legacy `INSERT OR IGNORE`; those tests were corrected. Completion now also returns idempotently when the same transaction is already bound to the same intent, avoiding duplicate inserts during concurrent retries.
+
+- Payment-intent expiry hardening: an expired Rentora intent with a bound Pi payment is reconciled against the Pi API before replacement; active/unfinalized bindings are retained and their Rentora expiry is renewed instead of orphaning the Pi payment.
+- Native Pi error reconciliation: SDK onError now forwards an identified payment to the server-side incomplete-payment reconciliation path, so client errors do not invent a final payment state.
+- CORS hardening: preflight now permits Idempotency-Key and X-Idempotency-Key used by payout operations; origin allowlisting remains explicit and wildcard origins are rejected.
+- CI status after latest fixes: IN PROGRESS/QUEUED on current branch HEAD 832ef625a5b3909de975f71f0a3ad5e7e6f6c80e6; previous failures were stale runs on earlier commits and are not treated as current verification.
