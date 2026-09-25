@@ -423,3 +423,12 @@ Verified on `main` before implementation work:
 **Implementation:** Added additive Rentora tokens for semantic colors, typography, spacing extensions, radii, elevation, breakpoints and motion easing. Existing :root semantic variables now reference the token layer where safe. No legacy component was removed or behaviorally rewritten.
 
 **Status:** Research/decision/initial token implementation complete. Individual shared components remain incomplete until they are migrated and tested.
+
+
+## Research Decision 03 — Listing Card Convergence — 2026-09-25
+
+**Finding:** HomePage had a separate mobile-only listing card implementation while ItemCard already served the desktop/grid path. This duplicated ownership logic, favorite behavior, imagery, actions and financial display.
+
+**Decision:** Treat ItemCard as the shared listing-card primitive and migrate mobile Home to it progressively. Preserve the existing mobile visual wrapper during migration where necessary, but do not maintain two independent business implementations.
+
+**Status:** Initial convergence started by moving ItemCard to shared design tokens. Full Home mobile migration remains pending until parity and interaction regression tests are complete.
