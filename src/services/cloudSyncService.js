@@ -198,11 +198,12 @@ export class CloudSyncService {
     return data.quote;
   }
 
-  async createRental({ quoteId, listingId, startDate, endDate }) {
+  async createRental({ quoteId }) {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('API Base URL is not configured');
 
-    const body = quoteId ? { quoteId } : { listingId, startDate, endDate };
+    if (!quoteId) throw new Error('quoteId is required');
+    const body = { quoteId };
     const res = await fetch(`${apiBase}/api/rentals`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
