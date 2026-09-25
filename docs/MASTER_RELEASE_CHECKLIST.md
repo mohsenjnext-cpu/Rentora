@@ -47,15 +47,15 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Locked payment metadata
 - [ ] Authoritative Pi amount
 - [ ] Pi createPayment
-- [ ] approve
-- [ ] complete
+- [x] approve
+- [x] complete
 - [ ] cancellation
 - [ ] failed/pending states
-- [ ] incomplete-payment recovery
-- [ ] idempotency / duplicate protection
-- [ ] transaction persistence
+- [x] incomplete-payment recovery
+- [x] idempotency / duplicate protection
+- [x] transaction persistence
 - [ ] payout / A2U flow
-- [ ] no client-side synthetic payment/rental confirmation
+- [x] no client-side synthetic payment/rental confirmation
 
 ## 5. Messaging and trust
 - [x] Conversation authorization
@@ -134,7 +134,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Post-merge smoke test
 
 ## Current verified checkpoint
-- Latest verified work commit: 9354e625ddd946aef0845ae12ea74b9c0492f6eb
+- Latest verified work commit: f004e2de005a2ad210b9c747bdab91ec617ef198
 - Rental/contact/chat audit: rental contact is restricted to authorized participants/admin, renter access requires completed payment plus confirmed/active/completed rental state, and listing contact is owner/admin-only.
 - Conversation authorization: list/create/read/send/archive routes require authenticated participant access; conversation and message payloads derive sender/participants from D1 identities rather than client-supplied roles.
 - Contact filtering: pre-booking messages pass through the server anti-bypass contact filter; post-booking unlock requires completed payment and an allowed rental state.
@@ -144,3 +144,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - CI on the latest work commit: NOT RUN. The most recent observed GitHub Actions run was on c256532b6321ecf7fdb6c6e0c4b414f20e4051c7 and FAILED in `npm test` with 2 brittle assertions; those failures were diagnosed and the affected tests were corrected in subsequent commits. No Actions run/status is currently reported for 9354e625ddd946aef0845ae12ea74b9c0492f6eb yet.
 - ADMIN_PI_UIDS authoritative-value blocker: BLOCKED until real Pi UIDs are supplied/verified.
 - ADMIN_PI_UIDS authoritative-value blocker: BLOCKED until real Pi UIDs are supplied/verified.
+- Payment approval race hardening: the intent is now atomically bound to the Pi payment before the external Pi approval call. A competing payment ID therefore cannot be approved and later orphaned by losing the D1 claim; transient approval/API failure preserves the same binding for retry.
+- Payment-intent recovery hardening: a live intent already bound to a Pi payment is reused rather than reset, preventing a new intent/payment from orphaning the previously bound Pi payment.
+- Payment regression coverage added for approval claim ordering and live payment-intent binding preservation.
+- CI on the current HEAD: NOT RUN / NOT REPORTED. GitHub Actions returned no workflow runs and no combined status for f004e2de005a2ad210b9c747bdab91ec617ef198 at the time of this checkpoint.
