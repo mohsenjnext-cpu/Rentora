@@ -366,3 +366,16 @@ A future session should be able to read this file and continue the project witho
 - Service-layer debt: `cloudSyncService` still defines the historical `rentora_live_v1_session` storage key even though session authority is now the HttpOnly cookie. Any new UI must not depend on that key.
 - Visual debt: App/Header/BottomNav/Sidebar/Admin use repeated literal colors, radii and shadows. New tokenized primitives should replace these incrementally.
 - IA implication: user experience should be organized around three jobs: Discover & Rent, List & Manage, Account & Communication. Admin remains a separate operational workspace sharing the same visual system.
+
+
+### 2026-09-25 Payment Engine implementation + CI verification
+- Implemented the shared 50/50 platform-fee payment engine on `codex/shared-fee-payment-engine` using server-authoritative `payment_obligations` and owner activation-cycle state.
+- Owner listing activation now creates an activation-cycle owner fee obligation; a listing cannot become bookable until the owner obligation is verified completed.
+- Renter reservation payment remains tied to the authoritative rental obligation; confirmation requires the required fee state.
+- Pi payment validation now binds payer, obligation, role/purpose, listing/rental, activation cycle and exact server amount. Completion reconciles the authoritative Pi transaction ID and is idempotent.
+- Migration `0014_listing_activation_fee_state.sql` adds owner activation-cycle and fee-status state without inventing historical payments; legacy listings remain `legacy_unverified`.
+- Latest regression-fix commit: `d7673b84c1694f54e4a0d699f53710995fa24724` (`test: match optional-chain payment intent input`).
+- GitHub Actions CI run #499 (`36106270622`) is **GREEN**: security regression tests, Worker syntax validation and frontend build all passed.
+- Product contract blocker remains: the approved model says the owner pays 50% of the platform fee at listing activation, while the total fee is defined by reservation economics. The current docs do not define an authoritative reservation/fee basis available at activation. Do not silently derive the owner fee from one day, listing price, or another invented basis. This must be explicitly decided before production deployment.
+- Refund/lifecycle branches beyond the currently implemented payment/activation engine still require full backend implementation and end-to-end Pi Testnet validation before production release.
+- Next action: resolve the owner-fee economic basis, then complete lifecycle/refund implementation and real Pi Testnet validation before merging/deploying.
