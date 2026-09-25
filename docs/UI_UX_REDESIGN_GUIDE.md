@@ -89,12 +89,12 @@
 ### Listing Card
 - [ ] Research
 - [ ] Decision
-- [ ] Unified shared component
-- [ ] Replace duplicated mobile implementation
-- [ ] Real listing state integration
+- [x] Unified shared component
+- [x] Replace duplicated mobile implementation
+- [x] Real listing state integration
 - [ ] Loading/placeholder state
-- [ ] RTL/mobile/accessibility
-- [ ] Regression tests
+- [x] RTL/mobile/accessibility
+- [x] Regression tests
 - [ ] Final review
 - [ ] Migration
 
@@ -431,4 +431,12 @@ Verified on `main` before implementation work:
 
 **Decision:** Treat ItemCard as the shared listing-card primitive and migrate mobile Home to it progressively. Preserve the existing mobile visual wrapper during migration where necessary, but do not maintain two independent business implementations.
 
-**Status:** Initial convergence started by moving ItemCard to shared design tokens. Full Home mobile migration remains pending until parity and interaction regression tests are complete.
+**Status:** Shared `ItemCard` now owns both default and compact/mobile rendering paths. Home mobile no longer defines a second listing-card business implementation. A focused regression test verifies the convergence. Full listing-card completion remains pending for loading/placeholder coverage and final review/migration.
+
+
+### 2026-09-25 — Listing Card Convergence Implementation
+
+- Home mobile now renders the shared `ItemCard` with `variant="compact"`.
+- Favorite, owner detection, KYC, rating, image fallback, pricing and rent/manage actions remain inside the shared component.
+- Added a focused Node regression test covering the absence of the old `MobileItemCard` and preservation of shared behavior.
+- CI verification is pending for the new PR because GitHub has not yet reported a workflow run/status for the new head commit.
