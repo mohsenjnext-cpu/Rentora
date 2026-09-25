@@ -258,8 +258,17 @@ class PiNetworkService {
                 onCancel?.(paymentId);
                 fail(new Error('پرداخت توسط شما لغو شد.'));
               },
-              onError: (error, payment) => {
+              onError: async (error, payment) => {
                 onError?.(error, payment);
+                // A native SDK error is not authoritative. If Pi supplied a payment
+                // identifier, ask the server to reconcile its actual state instead of
+                // guessing failed/cancelled/completed on the client.
+                const paymentId = payment?.identifier || payment?.id;
+                if (paymentId) {
+                  try {
+                    await this.handleIncompletePayment({ ...payment, identifier: paymentId });
+                  } catch (_) {}
+                }
                 fail(new Error(error?.message || 'تراکنش Pi با خطا متوقف شد.'));
               }
             }
