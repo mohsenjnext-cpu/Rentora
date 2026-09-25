@@ -121,7 +121,7 @@ test('incomplete Pi callback cannot mutate a rental without verified intent bind
   assert.match(route, /metadataIntent/);
   assert.match(route, /Math\.abs\(payerAmount - expectedAmount\)/);
   assert.match(route, /UPDATE rentals SET payment_status='completed', status='confirmed'/);
-  assert.match(route, /INSERT OR IGNORE INTO transactions/);
+  assert.match(route, /INSERT INTO transactions\(/);
 });
 
 
