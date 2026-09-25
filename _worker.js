@@ -1776,16 +1776,24 @@ export default {
         }
       }
       if (method === 'POST' && path === '/api/sync/item') { const { user } = await requireUser(request, env); const item = await readJson(request);
-        if (!item?.id || !String(item.title || '').trim()) return errorResponse('Invalid listing', 400, env, undefined, origin);
+        const listingId = String(item?.id || '').trim();
+        const title = String(item?.title || '').trim();
+        const description = String(item?.description || '').trim();
+        const category = item?.category == null ? '' : String(item.category).trim();
+        const location = item?.location == null ? '' : String(item.location).trim();
+        const listingStatus = String(item?.status || 'active').trim().toLowerCase();
+        if (!listingId || listingId.length > 128 || !title) return errorResponse('Invalid listing', 400, env, undefined, origin);
+        if (title.length > 200 || description.length > 5000 || category.length > 100 || location.length > 200) return errorResponse('Listing field length exceeds the allowed limit', 400, env, undefined, origin);
+        if (!['draft','active','paused','deleted'].includes(listingStatus)) return errorResponse('Invalid listing status', 400, env, undefined, origin);
         const cInfo = item.contactInfo || (item.phoneContact ? { contactPhone: item.phoneContact } : null);
         const sanitizedItem = sanitizeListingPublicMetadata(item);
         const existing = await env.RENTORA_DB.prepare('SELECT * FROM listings WHERE id=?1 LIMIT 1').bind(item.id).first();
         if (existing) {
           if (existing.owner_user_id !== user.id && !isAdmin(user.pi_uid, env)) return errorResponse('Listing ownership denied', 403, env, undefined, origin);
-          const isDeleting = item.status === 'deleted' && existing.status !== 'deleted';
+          const isDeleting = listingStatus === 'deleted' && existing.status !== 'deleted';
           const existingMeta = parseMetadata(existing.metadata);
           const price = Number(existing.price_per_day); const deposit = Number(existing.deposit_amount);
-          await env.RENTORA_DB.prepare(`UPDATE listings SET title=?1,description=?2,category=?3,location=?4,status=?5,metadata=?6,updated_at=?7 WHERE id=?8`).bind(String(item.title).trim(), item.description || '', item.category || null, item.location || null, item.status || 'active', JSON.stringify(sanitizedItem), now(), item.id).run();
+          await env.RENTORA_DB.prepare(`UPDATE listings SET title=?1,description=?2,category=?3,location=?4,status=?5,metadata=?6,updated_at=?7 WHERE id=?8`).bind(title, description, category || null, location || null, listingStatus, JSON.stringify(sanitizedItem), now(), listingId).run();
           if (cInfo && typeof cInfo === 'object') {
             const cName = String(cInfo.contactName || cInfo.name || '').trim() || null;
             const cPhone = String(cInfo.contactPhone || cInfo.phone || cInfo.phoneContact || '').trim() || null;
@@ -1812,7 +1820,7 @@ export default {
         }
         const price = Number(item.pricePerDay); const deposit = Number(item.deposit || 0);
         if (!Number.isFinite(price) || price < 0 || !Number.isFinite(deposit) || deposit < 0) return errorResponse('Invalid listing price', 400, env, undefined, origin);
-        await env.RENTORA_DB.prepare(`INSERT INTO listings(id,owner_user_id,title,description,category,location,price_per_day,deposit_amount,platform_fee_rate,status,metadata,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,'active',?10,?11,?11)`).bind(item.id, user.id, String(item.title).trim(), item.description || '', item.category || null, item.location || null, price, deposit, Number(env.PLATFORM_FEE_RATE || 0.05), JSON.stringify(sanitizedItem), now()).run();
+        await env.RENTORA_DB.prepare(`INSERT INTO listings(id,owner_user_id,title,description,category,location,price_per_day,deposit_amount,platform_fee_rate,status,metadata,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,'active',?10,?11,?11)`).bind(listingId, user.id, title, description, category || null, location || null, price, deposit, Number(env.PLATFORM_FEE_RATE || 0.05), JSON.stringify(sanitizedItem), now()).run();
         if (cInfo && typeof cInfo === 'object') {
           const cName = String(cInfo.contactName || cInfo.name || '').trim() || null;
           const cPhone = String(cInfo.contactPhone || cInfo.phone || cInfo.phoneContact || '').trim() || null;
