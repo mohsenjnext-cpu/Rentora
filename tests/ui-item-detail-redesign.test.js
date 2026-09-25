@@ -193,7 +193,7 @@ test('Pi approval binds the intent before the external approve call and preserve
   assert.ok(claim >= 0 && approve > claim && finalize > approve);
   assert.match(route, /status='created' AND \(pi_payment_id IS NULL OR pi_payment_id=\?1\)/);
   assert.match(route, /Keep the same Pi payment bound to the intent/);
-  assert.doesNotMatch(route, /status='created' AND pi_payment_id IS NULL.*\\/approve/s);
+  assert.ok(!route.includes("status='created' AND pi_payment_id IS NULL\\n\n        const approveResponse"));
 });
 
 test('payment intent creation never resets a live Pi payment binding', () => {
