@@ -55,7 +55,7 @@ test('booking and report modals converge on shared interaction primitives', () =
   assert.match(booking, /RentoraButton/);
   assert.match(booking, /RentoraInput/);
   assert.match(booking, /RentoraAlert/);
-  assert.doesNotMatch(booking, /offline\\/compatibility mode/);
+  assert.doesNotMatch(booking, /offline\/compatibility mode/);
   assert.doesNotMatch(booking, /broadcastNewRental/);
   assert.match(booking, /serverQuote/);
   assert.match(booking, /hasAuthoritativeQuote/);
