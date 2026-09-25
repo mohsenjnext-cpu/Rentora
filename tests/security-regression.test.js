@@ -4,7 +4,7 @@ import fs from 'node:fs';
 
 const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
 const piAuthContext = fs.readFileSync(new URL('../src/context/PiAuthContext.jsx', import.meta.url), 'utf8');
-const activationMigration = fs.readFileSync(new URL('../db/migrations/0015_payment_obligation_activation_cycle.sql', import.meta.url), 'utf8');
+const activationMigration = fs.readFileSync(new URL('../db/migrations/0013_owner_fee_activation_cycle.sql', import.meta.url), 'utf8');
 
 function section(start, end) {
   const from = worker.indexOf(start);
@@ -98,7 +98,7 @@ test('owner activation obligations are bound to an activation cycle in D1', () =
   assert.match(worker, /payment_obligations\(id,rental_id,listing_id,user_id,role,purpose,amount,currency,status,memo,metadata,activation_cycle,expires_at,created_at,updated_at\)/);
   assert.match(worker, /activationCycle: cycle/);
   assert.match(worker, /activation_cycle=\?3/);
-  assert.match(activationMigration, /ALTER TABLE payment_obligations ADD COLUMN activation_cycle TEXT/);
+  assert.match(activationMigration, /ALTER TABLE payment_obligations ADD COLUMN activation_cycle TEXT NOT NULL DEFAULT 'initial'/);
   assert.match(activationMigration, /DROP INDEX IF EXISTS uq_payment_obligations_listing_role_purpose/);
   assert.match(activationMigration, /uq_payment_obligations_listing_role_purpose_cycle/);
 });
