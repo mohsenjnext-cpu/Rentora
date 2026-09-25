@@ -57,11 +57,6 @@ export default function ItemCard({ item, onSelect, onRentClick, variant = 'defau
   if (variant === 'compact') {
     return (
       <article
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect && onSelect(item); }
-        }}
         onClick={() => onSelect && onSelect(item)}
         className="group bg-white dark:bg-[#151426] border border-[#E4E4EC] dark:border-slate-800 rounded-[var(--radius-card)] p-1.5 overflow-hidden cursor-pointer shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)] transition duration-200 ease-[var(--ease-rentora)]"
       >
