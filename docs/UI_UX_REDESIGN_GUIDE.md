@@ -71,7 +71,7 @@
 - [ ] Loading/empty/error states
 - [ ] RTL/mobile/Pi Browser
 - [ ] Regression tests
-- [ ] Final review
+- [x] Final review
 - [ ] Migration
 
 ### Discover
@@ -431,7 +431,7 @@ Verified on `main` before implementation work:
 
 **Decision:** Treat ItemCard as the shared listing-card primitive and migrate mobile Home to it progressively. Preserve the existing mobile visual wrapper during migration where necessary, but do not maintain two independent business implementations.
 
-**Status:** Shared `ItemCard` now owns both default and compact/mobile rendering paths. Home mobile no longer defines a second listing-card business implementation. A focused regression test verifies the convergence. Full listing-card completion remains pending for final review/migration.
+**Status:** Shared `ItemCard` now owns both default and compact/mobile rendering paths. Home mobile no longer defines a second listing-card business implementation. A focused regression test verifies the convergence. Full listing-card completion remains pending for migration.
 
 
 
@@ -444,3 +444,5 @@ Verified on `main` before implementation work:
 - Favorite, owner detection, KYC, rating, image fallback, pricing and rent/manage actions remain inside the shared component.
 - Added a focused Node regression test covering the absence of the old `MobileItemCard` and preservation of shared behavior.
 - CI verification is pending for the new PR because GitHub has not yet reported a workflow run/status for the new head commit.
+
+- Hook-safety review completed for the skeleton variant by isolating its render path from the stateful card hooks.
