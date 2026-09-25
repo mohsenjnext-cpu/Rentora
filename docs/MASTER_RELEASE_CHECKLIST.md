@@ -202,3 +202,6 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - Local rental-cache removal: `cloudSyncService` no longer reads or writes `rentora_live_v1_rentals`; rental/payment state is rehydrated from the server and remains authoritative in D1. A legacy removal key is still cleared on logout for cleanup.
 - Cache-invalidation status remains open because broader public-media/browser-cache invalidation semantics still need a final endpoint-by-endpoint audit.
 - CI after rental-cache removal commit `08edfec0606a885739fa69b7ac77b23edca76dd2`: NOT RUN / NOT REPORTED.
+
+- Listing mutation validation hardening: `POST /api/sync/item` now bounds listing ID/title/description/category/location lengths, validates the listing status enum, and caps newly-created daily price/deposit at 1,000,000,000 PI-equivalent units. Existing listing financial fields remain D1-authoritative and are not overwritten by client update payloads.
+- CI after validation commit `6b1953b4d4bf088f6253cf2cf97e4e18aa4b6605`: NOT RUN / NOT REPORTED.
