@@ -40,6 +40,20 @@ test('payment approval uses an atomic D1 claim for the Pi payment ID', () => {
   assert.match(approve, /concurrently claimed by another payment/);
 });
 
+test('incomplete Pi reconciliation rejects transaction identity collisions before confirming', () => {
+  const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+  const start = worker.indexOf("path === '/api/payments/incomplete'");
+  const end = worker.indexOf("path === '/api/sync/item'", start);
+  assert.ok(start >= 0 && end > start);
+  const route = worker.slice(start, end);
+  assert.match(route, /SELECT payment_intent_id, pi_payment_id, pi_txid FROM transactions WHERE pi_payment_id=\?1 OR pi_txid=\?2/);
+  assert.match(route, /Pi transaction is already bound to another payment intent/);
+  assert.match(route, /idempotent: true/);
+  assert.match(route, /INSERT INTO transactions\(/);
+  assert.doesNotMatch(route, /INSERT OR IGNORE INTO transactions/);
+});
+
+
 test('payment completion requires an approved intent and strict Pi binding', () => {
   const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
   assert.match(complete, /intent\.pi_payment_id && intent\.pi_payment_id !== body\.paymentId/);
