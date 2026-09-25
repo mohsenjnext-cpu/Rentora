@@ -150,3 +150,8 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - CI on the current HEAD: NOT RUN / NOT REPORTED. GitHub Actions returned no workflow runs and no combined status for f004e2de005a2ad210b9c747bdab91ec617ef198 at the time of this checkpoint.
 - Payment completion hardening: completion now rejects a client txid that conflicts with the Pi-authoritative transaction txid and checks existing transaction identity before confirming the rental. This prevents a reused/conflicting txid from silently colliding with another payment intent.
 - Payment completion regression coverage added for Pi txid mismatch and cross-intent transaction conflicts.
+
+
+### Latest Audit Updates
+- Incomplete Pi reconciliation transaction identity hardening: transaction collisions are rejected before rental confirmation; same-intent duplicate reconciliation is idempotent; reconciliation transaction inserts are strict rather than `INSERT OR IGNORE`.
+- CI run #809: FAIL, 310/311 tests passed; sole failure was a brittle optional-chaining regex assertion in `tests/ui-item-detail-redesign.test.js`, now corrected.
