@@ -143,3 +143,16 @@ test('listing KYC badge cannot be asserted by client-supplied listing metadata',
   assert.match(listingView, /ownerMeta\.kycStatus === 'verified'/);
   assert.doesNotMatch(listingView, /meta\.ownerKYC/);
 });
+
+
+test('cloud sync requests carry the server session token for authenticated API routes', () => {
+  const sync = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
+  const start = sync.indexOf('getAuthHeaders()');
+  const end = sync.indexOf('\\n  }', start);
+  assert.ok(start >= 0 && end > start);
+  const helper = sync.slice(start, end);
+  assert.match(helper, /localStorage\\.getItem\\(STORAGE_USER_KEY\\)/);
+  assert.match(helper, /session\\?\\.sessionToken/);
+  assert.match(helper, /headers\\.Authorization =/);
+  assert.match(helper, /Bearer/);
+});
