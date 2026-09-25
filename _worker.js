@@ -1596,6 +1596,9 @@ export default {
         if (existingTransaction && String(existingTransaction.payment_intent_id) !== String(intent.id)) {
           return errorResponse('Transaction is already bound to another payment intent', 409, env, undefined, origin);
         }
+        if (existingTransaction && String(existingTransaction.payment_intent_id) === String(intent.id)) {
+          return jsonResponse({ completed: true, paymentId: intent.pi_payment_id || body.paymentId, txid: intent.pi_txid || body.txid, idempotent: true }, 200, env, origin);
+        }
 
         const completionResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}/complete`, {
           method: 'POST',
