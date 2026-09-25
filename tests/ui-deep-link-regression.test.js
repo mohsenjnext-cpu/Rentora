@@ -23,3 +23,10 @@ test('redesigned item share uses the current canonical page URL', () => {
 test('legacy item detail share also benefits from the canonical route', () => {
   assert.match(legacy, /navigator\.clipboard\.writeText\(window\.location\.href\)/);
 });
+
+
+test('direct listing route exposes an explicit not-found state after initial sync completes', () => {
+  assert.match(app, /const \{ items, isInitialLoadDone \} = useRentora\(\)/);
+  assert.match(app, /currentTab === 'item-detail' && !selectedItem && isInitialLoadDone/);
+  assert.match(app, /آگهی پیدا نشد/);
+});
