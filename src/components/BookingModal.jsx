@@ -29,8 +29,6 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
   const {
-    calculatePricing,
-    createRentalBooking,
     executePiPaymentForRental,
     fetchRentalContact
   } = useRentora();
