@@ -1463,6 +1463,49 @@ export default {
         await env.RENTORA_KV.put(`payment-intent:${id}`, JSON.stringify({ userId: user.id, rentalId: rental.id, amount: canonicalAmount, memo, metadata }), { expirationTtl: PAYMENT_INTENT_TTL });
         return jsonResponse({ paymentIntentId: id, id, amount: canonicalAmount, memo, metadata, expiresAt: expires }, 201, env, origin);
       }
+      if (method === 'POST' && path === '/api/payments/cancel') {
+        const { user } = await requireUser(request, env);
+        const body = await readJson(request);
+        if (!body.paymentIntentId) return errorResponse('paymentIntentId is required', 400, env, undefined, origin);
+
+        const intent = await env.RENTORA_DB.prepare(
+          'SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1'
+        ).bind(body.paymentIntentId, user.id).first();
+        if (!intent) return errorResponse('Payment intent not found', 404, env, undefined, origin);
+        if (intent.status === 'cancelled') {
+          return jsonResponse({ cancelled: true, idempotent: true }, 200, env, origin);
+        }
+        if (intent.status === 'completed') {
+          return errorResponse('Completed payment cannot be cancelled', 409, env, undefined, origin);
+        }
+
+        if (body.paymentId && intent.pi_payment_id && String(body.paymentId) !== String(intent.pi_payment_id)) {
+          return errorResponse('Payment ID does not match intent', 409, env, undefined, origin);
+        }
+
+        const paymentId = body.paymentId || intent.pi_payment_id;
+        if (paymentId) {
+          const paymentResponse = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
+          const payment = await paymentResponse.json().catch(() => ({}));
+          if (paymentResponse.ok) {
+            const status = validatePiPayment(payment, { ...intent, pi_payment_id: paymentId }, user);
+            if (['completed','complete'].includes(status) || payment?.status?.developer_completed) {
+              return errorResponse('Completed payment cannot be cancelled', 409, env, undefined, origin);
+            }
+          }
+        }
+
+        await env.RENTORA_DB.batch([
+          env.RENTORA_DB.prepare(
+            "UPDATE payment_intents SET status='cancelled', updated_at=?1 WHERE id=?2 AND user_id=?3 AND status IN ('created','approved')"
+          ).bind(now(), intent.id, user.id),
+          env.RENTORA_DB.prepare(
+            "UPDATE rentals SET payment_status='cancelled', status='cancelled', updated_at=?1 WHERE id=?2 AND renter_user_id=?3 AND status IN ('draft','pending_payment','payment_approved')"
+          ).bind(now(), intent.rental_id, user.id)
+        ]);
+        await env.RENTORA_KV.delete(`payment-intent:${intent.id}`).catch(() => {});
+        return jsonResponse({ cancelled: true, paymentIntentId: intent.id, rentalId: intent.rental_id }, 200, env, origin);
+      }
       if (method === 'POST' && path === '/api/payments/approve') {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
