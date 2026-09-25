@@ -156,3 +156,16 @@ test('cloud sync requests carry the server session token for authenticated API r
   assert.match(helper, /headers\\.Authorization =/);
   assert.match(helper, /Bearer/);
 });
+
+
+test('legacy rental sync endpoint is retired so client payloads cannot bypass quote authority', () => {
+  const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+  const route = worker.indexOf("path === '/api/sync/rental'");
+  assert.ok(route >= 0);
+  const next = worker.indexOf("path === '/api/sync/rental/status'", route);
+  assert.ok(next > route);
+  const block = worker.slice(route, next);
+  assert.match(block, /Legacy rental endpoint is permanently deprecated/);
+  assert.match(block, /410/);
+  assert.doesNotMatch(block, /INSERT INTO rentals/);
+});
