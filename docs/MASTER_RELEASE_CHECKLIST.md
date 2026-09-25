@@ -134,8 +134,8 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Post-merge smoke test
 
 ## Current verified checkpoint
-- Current UI branch HEAD: 92c1f3fcbc965ac6b381408418f57ab73b121169
-- GitHub Actions CI for current HEAD: PASS
+- Latest security-hardening commit: e2109512bcc97f0d512cb280aeee01b2bc29c470
+- GitHub Actions CI: PASS on preceding HEAD 92c1f3fcbc965ac6b381408418f57ab73; new hardening commit requires fresh CI verification
 - Previous regex CI failure: fixed
 - Duplicate native payment retry guard: fixed and covered by CI
 - ADMIN_PI_UIDS authoritative-value blocker: BLOCKED until real Pi UIDs are supplied/verified
