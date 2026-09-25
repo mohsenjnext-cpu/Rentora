@@ -36,23 +36,28 @@ export default function ItemCard({ item, onSelect, onRentClick, variant = 'defau
   if (variant === 'compact') {
     return (
       <article
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect && onSelect(item); }
+        }}
         onClick={() => onSelect && onSelect(item)}
         className="group bg-white dark:bg-[#151426] border border-[#E4E4EC] dark:border-slate-800 rounded-[var(--radius-card)] p-1.5 overflow-hidden cursor-pointer shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)] transition duration-200 ease-[var(--ease-rentora)]"
       >
         <div className="relative h-28 rounded-xl overflow-hidden bg-[#D8D7F5] dark:bg-[#27254A]">
           <img src={imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
           {item.ownerKYC && (
-            <span className="absolute top-2 left-2 rounded px-1.5 py-0.5 text-[9px] font-bold badge-trust flex items-center gap-0.5 shadow-xs">
+            <span className="absolute top-2 left-2 rtl:left-auto rtl:right-2 rounded px-1.5 py-0.5 text-[9px] font-bold badge-trust flex items-center gap-0.5 shadow-xs">
               <ShieldCheck className="w-2.5 h-2.5 stroke-[2.2]" />
               <span>KYC</span>
             </span>
           )}
           {isOwner && (
-            <span className="absolute top-2 left-2 mt-6 rounded px-1.5 py-0.5 text-[9px] font-bold bg-rentora-primary-soft dark:bg-[#26215C] text-rentora-primary dark:text-rentora-primary-soft shadow-xs">
+            <span className="absolute top-2 left-2 rtl:left-auto rtl:right-2 mt-6 rounded px-1.5 py-0.5 text-[9px] font-bold bg-rentora-primary-soft dark:bg-[#26215C] text-rentora-primary dark:text-rentora-primary-soft shadow-xs">
               {l('آگهی من', 'Mine', 'إعلاني', '我的发布')}
             </span>
           )}
-          <button type="button" aria-label={t('btnFavorite')} onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }} className="absolute top-2 right-2 w-8 h-8 rounded-full bg-[#26215C]/60 text-white flex items-center justify-center z-10">
+          <button type="button" aria-label={t('btnFavorite')} onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }} className="absolute top-2 right-2 rtl:right-auto rtl:left-2 w-8 h-8 rounded-full bg-[#26215C]/60 text-white flex items-center justify-center z-10">
             <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
           </button>
         </div>
