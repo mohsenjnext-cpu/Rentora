@@ -134,7 +134,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Post-merge smoke test
 
 ## Current verified checkpoint
-- Latest verified work commit: f004e2de005a2ad210b9c747bdab91ec617ef198
+- Latest verified work commit: a5201e6cb40cebfb485458640a4a5b7e3246c2fd
 - Rental/contact/chat audit: rental contact is restricted to authorized participants/admin, renter access requires completed payment plus confirmed/active/completed rental state, and listing contact is owner/admin-only.
 - Conversation authorization: list/create/read/send/archive routes require authenticated participant access; conversation and message payloads derive sender/participants from D1 identities rather than client-supplied roles.
 - Contact filtering: pre-booking messages pass through the server anti-bypass contact filter; post-booking unlock requires completed payment and an allowed rental state.
@@ -148,3 +148,5 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - Payment-intent recovery hardening: a live intent already bound to a Pi payment is reused rather than reset, preventing a new intent/payment from orphaning the previously bound Pi payment.
 - Payment regression coverage added for approval claim ordering and live payment-intent binding preservation.
 - CI on the current HEAD: NOT RUN / NOT REPORTED. GitHub Actions returned no workflow runs and no combined status for f004e2de005a2ad210b9c747bdab91ec617ef198 at the time of this checkpoint.
+- Payment completion hardening: completion now rejects a client txid that conflicts with the Pi-authoritative transaction txid and checks existing transaction identity before confirming the rental. This prevents a reused/conflicting txid from silently colliding with another payment intent.
+- Payment completion regression coverage added for Pi txid mismatch and cross-intent transaction conflicts.
