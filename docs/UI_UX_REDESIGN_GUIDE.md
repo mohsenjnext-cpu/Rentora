@@ -516,3 +516,15 @@ Added additive shared primitives under `src/components/ui/`:
 These components contain no business logic and are safe to introduce incrementally around existing real data flows.
 
 **Status:** Implemented. Page migration, dedicated regression coverage and final accessibility review remain pending.
+
+
+## Design System Implementation 04 — Dialog, Drawer & Confirmation — 2026-09-25
+
+Added additive shared interaction primitives under `src/components/ui/`:
+- `RentoraModal`: modal dialog semantics, labelled/described content, Escape handling, backdrop close, focus containment and focus restoration.
+- `RentoraDrawer`: side-panel dialog semantics, Escape handling, focus containment and focus restoration.
+- `RentoraConfirm`: reusable confirmation/destructive-action composition using the shared Modal and Button primitives, with loading protection against accidental dismissal.
+
+These components are presentation primitives only. They do not alter existing booking, payment, report, delete, or account business flows.
+
+**Status:** Implemented. Existing legacy modals remain operational; migration and dedicated regression coverage remain pending.
