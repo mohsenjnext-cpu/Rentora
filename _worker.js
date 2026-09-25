@@ -1439,6 +1439,22 @@ export default {
         };
 
         if (existing) {
+          // A payment intent that is already bound to a Pi payment must be reusable for
+          // approval/completion recovery. Never reset the binding and orphan that payment.
+          if (existing.pi_payment_id && existing.status !== 'cancelled' && new Date(existing.expires_at) > new Date()) {
+            return jsonResponse({
+              paymentIntentId: existing.id,
+              id: existing.id,
+              amount: canonicalAmount,
+              memo: existing.memo || memo,
+              metadata: {
+                ...metadata,
+                paymentIntentId: existing.id
+              },
+              expiresAt: existing.expires_at,
+              boundPaymentId: existing.pi_payment_id
+            }, 200, env, origin);
+          }
           await env.RENTORA_DB.prepare(`UPDATE payment_intents SET id=?1, amount=?2, memo=?3, status='created', pi_payment_id=NULL, pi_txid=NULL, created_at=?4, expires_at=?5, updated_at=?4 WHERE rental_id=?6`).bind(id, canonicalAmount, memo, now(), expires, rental.id).run();
         } else {
           await env.RENTORA_DB.prepare(`INSERT INTO payment_intents(id,rental_id,user_id,amount,memo,status,created_at,expires_at,updated_at) VALUES(?1,?2,?3,?4,?5,'created',?6,?7,?6)`).bind(id, rental.id, user.id, canonicalAmount, memo, now(), expires).run();
@@ -1464,22 +1480,37 @@ export default {
         const status = validatePiPayment(payment, intent, user);
         if (!['created','pending','approved'].includes(status)) return errorResponse(`Pi payment cannot be approved from status ${status || 'unknown'}`, 409, env, undefined, origin);
 
+        // Atomically bind the intent BEFORE touching Pi. This closes the race where
+        // two different Pi payments could both be approved while only one wins the D1 claim.
+        const claim = await env.RENTORA_DB.prepare(`UPDATE payment_intents SET pi_payment_id=?1,updated_at=?2 WHERE id=?3 AND status='created' AND (pi_payment_id IS NULL OR pi_payment_id=?1)`).bind(body.paymentId, now(), intent.id).run();
+        if (!Number(claim?.meta?.changes || 0)) {
+          intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(intent.id, user.id).first();
+          if (!intent || intent.pi_payment_id !== body.paymentId || !['created','approved','completed'].includes(intent.status)) {
+            return errorResponse('Payment intent was concurrently claimed by another payment', 409, env, undefined, origin);
+          }
+          if (intent.status === 'completed' || intent.status === 'approved') {
+            return jsonResponse({ approved: true, paymentId: body.paymentId, idempotent: true }, 200, env, origin);
+          }
+        }
+
         const approveResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}/approve`, { method: 'POST', body: '{}' });
         const approved = await approveResponse.json().catch(() => ({}));
         if (!approveResponse.ok && !(approveResponse.status === 400 && String(JSON.stringify(approved)).toLowerCase().includes('already'))) {
+          // Keep the same Pi payment bound to the intent so a retry can recover from
+          // transient Pi/API failures without allowing a different payment to race in.
           return errorResponse('Pi payment approval failed', 502, env, { details: approved }, origin);
         }
 
-        const claim = await env.RENTORA_DB.prepare(`UPDATE payment_intents SET pi_payment_id=?1,status='approved',updated_at=?2 WHERE id=?3 AND status='created' AND pi_payment_id IS NULL`).bind(body.paymentId, now(), intent.id).run();
-        if (!Number(claim?.meta?.changes || 0)) {
+        const approvedClaim = await env.RENTORA_DB.prepare(`UPDATE payment_intents SET status='approved',updated_at=?1 WHERE id=?2 AND status='created' AND pi_payment_id=?3`).bind(now(), intent.id, body.paymentId).run();
+        if (!Number(approvedClaim?.meta?.changes || 0)) {
           intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(intent.id, user.id).first();
           if (!intent || intent.pi_payment_id !== body.paymentId || !['approved','completed'].includes(intent.status)) {
-            return errorResponse('Payment intent was concurrently claimed by another payment', 409, env, undefined, origin);
+            return errorResponse('Payment intent was concurrently finalized by another request', 409, env, undefined, origin);
           }
         }
         await env.RENTORA_DB.prepare(`UPDATE rentals SET status='payment_approved',updated_at=?1 WHERE id=?2 AND status IN ('pending_payment','payment_approved')`).bind(now(), intent.rental_id).run();
 
-        return jsonResponse({ approved: true, paymentId: body.paymentId, data: approved, idempotent: Number(claim?.meta?.changes || 0) === 0 }, 200, env, origin);
+        return jsonResponse({ approved: true, paymentId: body.paymentId, data: approved, idempotent: Number(approvedClaim?.meta?.changes || 0) === 0 }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/payments/complete') {
         const { user } = await requireUser(request, env);
