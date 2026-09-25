@@ -1691,35 +1691,79 @@ export default {
         const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
         const txid = String(body?.txid || paymentObj?.transaction?.txid || '').trim();
         if (!paymentId) return jsonResponse({ handled: false, error: 'paymentId is required' }, 400, env, origin);
+
         try {
           const response = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
-          const payment = await response.json().catch(() => ({}));
+          let payment = await response.json().catch(() => ({}));
           const obligation = await env.RENTORA_DB.prepare(
             'SELECT * FROM payment_obligations WHERE pi_payment_id=?1 LIMIT 1'
           ).bind(paymentId).first();
 
           if (response.ok && obligation) {
-            const resolvedTxid = txid || payment?.transaction?.txid;
-            if (payment?.status?.developer_completed) {
-              await env.RENTORA_DB.prepare(
-                "UPDATE payment_obligations SET status='completed', pi_txid=?1, updated_at=?2 WHERE id=?3"
-              ).bind(resolvedTxid || null, now(), obligation.id).run().catch(() => {});
-            } else if (payment?.status?.transaction_verified && resolvedTxid) {
-              await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, {
-                method: 'POST',
-                body: JSON.stringify({ txid: resolvedTxid })
-              }).catch(() => {});
-              await env.RENTORA_DB.prepare(
-                "UPDATE payment_obligations SET status='completed', pi_txid=?1, updated_at=?2 WHERE id=?3"
-              ).bind(resolvedTxid, now(), obligation.id).run().catch(() => {});
-            } else if (!payment?.status?.developer_approved) {
-              await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, { method: 'POST', body: '{}' }).catch(() => {});
-              await env.RENTORA_DB.prepare(
-                "UPDATE payment_obligations SET status='approved', updated_at=?1 WHERE id=?2"
-              ).bind(now(), obligation.id).run().catch(() => {});
+            const obligationUser = await env.RENTORA_DB.prepare(
+              'SELECT * FROM users WHERE id=?1 LIMIT 1'
+            ).bind(obligation.user_id).first();
+            if (!obligationUser) return jsonResponse({ handled: false, error: 'payment owner not found' }, 409, env, origin);
+
+            if (obligation.status !== 'completed') {
+              const validationStatus = validatePiPayment(payment, obligation, obligationUser);
+              if (validationStatus === 'cancelled') {
+                await env.RENTORA_DB.prepare(
+                  "UPDATE payment_obligations SET status='cancelled', updated_at=?1 WHERE id=?2 AND status <> 'completed'"
+                ).bind(now(), obligation.id).run();
+              } else if (validationStatus === 'completed') {
+                const actualTxid = String(payment?.transaction?.txid || txid || '').trim();
+                if (!actualTxid) return jsonResponse({ handled: false, error: 'verified transaction hash is missing' }, 409, env, origin);
+
+                const statements = [
+                  env.RENTORA_DB.prepare(
+                    "UPDATE payment_obligations SET status='completed', pi_payment_id=?1, pi_txid=?2, updated_at=?3 WHERE id=?4 AND status IN ('created','approved')"
+                  ).bind(paymentId, actualTxid, now(), obligation.id)
+                ];
+
+                if (obligation.role === 'owner') {
+                  statements.push(
+                    env.RENTORA_DB.prepare(
+                      "UPDATE listings SET owner_fee_payment_status='completed', owner_fee_obligation_id=?1, status='active', activated_at=?2, updated_at=?2 WHERE id=?3 AND owner_user_id=?4 AND activation_cycle=?5"
+                    ).bind(obligation.id, now(), obligation.listing_id, obligation.user_id, obligation.activation_cycle)
+                  );
+                } else if (obligation.rental_id) {
+                  const rental = await env.RENTORA_DB.prepare(
+                    'SELECT * FROM rentals WHERE id=?1 LIMIT 1'
+                  ).bind(obligation.rental_id).first();
+                  const listing = await env.RENTORA_DB.prepare(
+                    'SELECT owner_fee_payment_status FROM listings WHERE id=?1 LIMIT 1'
+                  ).bind(obligation.listing_id).first();
+                  if (!listing || listing.owner_fee_payment_status !== 'completed') {
+                    return jsonResponse({ handled: false, error: 'Owner activation fee is not completed' }, 409, env, origin);
+                  }
+                  const bothCompleted = rental &&
+                    rental.owner_fee_payment_status === 'completed' &&
+                    rental.renter_fee_payment_status === 'completed';
+                  statements.push(
+                    env.RENTORA_DB.prepare(
+                      `UPDATE rentals SET renter_fee_payment_status='completed', renter_fee_payment_id=?1, payment_status='completed', status=${bothCompleted ? "'confirmed'" : "status"}, updated_at=?2 WHERE id=?3 AND renter_user_id=?4`
+                    ).bind(paymentId, now(), obligation.rental_id, obligation.user_id)
+                  );
+                }
+
+                statements.push(
+                  env.RENTORA_DB.prepare(
+                    `INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at,rental_id,listing_id,payment_obligation_id,fee_role,purpose)
+                     VALUES(?1,NULL,?2,?3,?4,?5,'platform_fee','completed',?6,?7,?8,?9,?10,'platform_fee')`
+                  ).bind(`tx_${crypto.randomUUID()}`, paymentId, actualTxid, obligation.user_id, obligation.amount, now(), obligation.rental_id || null, obligation.listing_id || null, obligation.id, obligation.role)
+                );
+
+                await env.RENTORA_DB.batch(statements);
+              } else if (validationStatus === 'approved') {
+                await env.RENTORA_DB.prepare(
+                  "UPDATE payment_obligations SET status='approved', updated_at=?1 WHERE id=?2 AND status='created'"
+                ).bind(now(), obligation.id).run();
+              }
             }
           }
         } catch (_) {}
+
         return jsonResponse({ handled: true }, 200, env, origin);
       }
 
