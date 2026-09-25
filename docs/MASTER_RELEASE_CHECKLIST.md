@@ -50,7 +50,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [x] approve
 - [x] complete
 - [x] cancellation
-- [ ] failed/pending states
+- [x] failed/pending states
 - [x] incomplete-payment recovery
 - [x] idempotency / duplicate protection
 - [x] transaction persistence
@@ -70,7 +70,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [x] D1 schema and migrations
 - [x] Foreign keys / uniqueness
 - [x] KV usage and TTLs
-- [ ] R2/media handling
+- [x] R2/media handling
 - [ ] Cache invalidation
 - [ ] No sensitive business state in localStorage
 - [ ] Server data remains source of truth
@@ -99,7 +99,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [x] CORS
 - [x] Security headers
 - [ ] Input validation
-- [ ] Image validation
+- [x] Image validation
 - [ ] Rate/abuse protections where required
 - [ ] No secrets in client bundle
 - [ ] No stack traces / sensitive errors
@@ -169,3 +169,8 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - Security/storage audit checkpoint: API responses now include CSP, HSTS, X-Frame-Options, nosniff, and restrictive Permissions/Referrer policies; schema audit confirms D1 foreign keys, uniqueness constraints, payment/rental state checks, payout operation guards, and KV-backed payment-intent TTL usage.
 
 - CI verification: runs #860 and #861 completed successfully on the checklist-updated HEAD, confirming the current test/build workflow is green after the stale transaction assertions were removed.
+
+
+- Failed/cancelled Pi payment convergence: payment intent creation now reconciles the bound Pi payment before reuse; a Pi payment reported as cancelled/failed retires the dead intent binding, returns the rental to pending_payment, clears its KV intent snapshot, and allows a fresh authoritative intent. Incomplete-payment reconciliation applies the same convergence without confirming the rental.
+- R2/media audit: upload validates declared MIME against file magic bytes, enforces a 2MB decoded limit, stores to R2 when available with immutable cache metadata, falls back to KV, and GET /api/images/:id supports R2/KV retrieval with lazy R2 migration and nosniff headers.
+- CI for payment convergence commit 60c6fdea9bc174a023497972e4fbc84186959d64: NOT RUN / no workflow run reported yet.
