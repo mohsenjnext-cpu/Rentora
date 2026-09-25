@@ -1690,6 +1690,7 @@ export default {
       }
 
       if (method === 'POST' && path === '/api/payments/incomplete') {
+        const { user } = await requireUser(request, env);
         const body = await readJson(request);
         const paymentObj = body?.payment || {};
         const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
@@ -1700,8 +1701,8 @@ export default {
           const response = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
           let payment = await response.json().catch(() => ({}));
           const obligation = await env.RENTORA_DB.prepare(
-            'SELECT * FROM payment_obligations WHERE pi_payment_id=?1 LIMIT 1'
-          ).bind(paymentId).first();
+            'SELECT * FROM payment_obligations WHERE pi_payment_id=?1 AND user_id=?2 LIMIT 1'
+          ).bind(paymentId, user.id).first();
 
           if (response.ok && obligation) {
             const obligationUser = await env.RENTORA_DB.prepare(
@@ -1742,8 +1743,7 @@ export default {
                     return jsonResponse({ handled: false, error: 'Owner activation fee is not completed' }, 409, env, origin);
                   }
                   const bothCompleted = rental &&
-                    rental.owner_fee_payment_status === 'completed' &&
-                    rental.renter_fee_payment_status === 'completed';
+                    rental.owner_fee_payment_status === 'completed';
                   statements.push(
                     env.RENTORA_DB.prepare(
                       `UPDATE rentals SET renter_fee_payment_status='completed', renter_fee_payment_id=?1, payment_status='completed', status=${bothCompleted ? "'confirmed'" : "status"}, updated_at=?2 WHERE id=?3 AND renter_user_id=?4`
