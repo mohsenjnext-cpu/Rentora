@@ -64,3 +64,11 @@ test('booking and report modals converge on shared interaction primitives', () =
   assert.match(report, /RentoraAlert/);
   assert.match(report, /RentoraEmptyState/);
 });
+
+
+test('rental creation client contract requires an authoritative quote id', () => {
+  const sync = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
+  assert.match(sync, /async createRental\(\{ quoteId \}\)/);
+  assert.match(sync, /if \(!quoteId\) throw new Error/);
+  assert.match(sync, /const body = \{ quoteId \};/);
+});
