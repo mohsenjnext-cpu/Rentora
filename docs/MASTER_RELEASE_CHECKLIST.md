@@ -134,13 +134,13 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Post-merge smoke test
 
 ## Current verified checkpoint
-- Latest verified work commit: 47ad54b3a423cb075db9a04f1f66920a1fde23f9
+- Latest verified work commit: 9354e625ddd946aef0845ae12ea74b9c0492f6eb
 - Rental/contact/chat audit: rental contact is restricted to authorized participants/admin, renter access requires completed payment plus confirmed/active/completed rental state, and listing contact is owner/admin-only.
 - Conversation authorization: list/create/read/send/archive routes require authenticated participant access; conversation and message payloads derive sender/participants from D1 identities rather than client-supplied roles.
 - Contact filtering: pre-booking messages pass through the server anti-bypass contact filter; post-booking unlock requires completed payment and an allowed rental state.
 - Archived conversation hardening: POST /api/conversations/:id/messages now rejects archived conversations (409) so an archived thread cannot silently receive new messages and remain hidden from the active conversation list.
 - Rental authority hardening: legacy POST /api/sync/rental returns 410 and directs clients to the authoritative quote -> /api/rentals flow; rental status transitions remain atomically guarded.
 - Regression coverage added for archived-conversation write protection and legacy rental sync retirement.
-- CI on the latest work commit: NOT RUN. The prior checked commit c256532b6321ecf7fdb6c6e0c4b414f20e4051c7 had a GitHub Actions CI failure, so that failure is explicitly not being treated as a pass for the new commits.
+- CI on the latest work commit: NOT RUN. The most recent observed GitHub Actions run was on c256532b6321ecf7fdb6c6e0c4b414f20e4051c7 and FAILED in `npm test` with 2 brittle assertions; those failures were diagnosed and the affected tests were corrected in subsequent commits. No Actions run/status is currently reported for 9354e625ddd946aef0845ae12ea74b9c0492f6eb yet.
 - ADMIN_PI_UIDS authoritative-value blocker: BLOCKED until real Pi UIDs are supplied/verified.
 - ADMIN_PI_UIDS authoritative-value blocker: BLOCKED until real Pi UIDs are supplied/verified.
