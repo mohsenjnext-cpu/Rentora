@@ -259,6 +259,51 @@ export function RentoraProvider({ children }) {
     return confirmed || updatedItem;
   };
 
+  const activateListingWithOwnerFee = async (itemId) => {
+    const item = items.find(i => i.id === itemId);
+    if (!item) throw new Error('آگهی موردنظر پیدا نشد.');
+    if (!currentUser || item.ownerUid !== currentUser.uid) throw new Error('دسترسی به فعال‌سازی آگهی مجاز نیست.');
+
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
+
+    const response = await fetch(`${apiBase}/api/listings/${encodeURIComponent(itemId)}/activate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.success) {
+      throw new Error(data?.error || 'ساخت تعهد فعال‌سازی آگهی ناموفق بود.');
+    }
+
+    if (data.active === true) {
+      await refreshApp();
+      return data;
+    }
+
+    const paymentIntentId = data.paymentIntentId || data.obligation?.id;
+    if (!paymentIntentId) throw new Error('تعهد کارمزد فعال‌سازی از سرور دریافت نشد.');
+
+    const paymentResult = await piService.createPayment({
+      paymentData: {
+        amount: Number(data.obligation?.amount || 0),
+        memo: data.obligation?.memo || `Rentora Owner Activation #${String(itemId).slice(-12)}`,
+        metadata: {
+          role: 'owner',
+          listingId: itemId,
+          paymentIntentId,
+          purpose: 'platform_fee',
+          activationCycle: data.activationCycle || data.obligation?.activation_cycle || null
+        }
+      },
+      paymentIntentId
+    });
+
+    await refreshApp();
+    return { ...data, paymentResult };
+  };
+
   const toggleItemStatus = (itemId) => {
     const current = items.find(i => i.id === itemId);
     if (!current) return;
@@ -593,6 +638,7 @@ export function RentoraProvider({ children }) {
       createItemListing: addItem,
       updateItem,
       toggleItemStatus,
+      activateListingWithOwnerFee,
       deleteItem,
       createRentalBooking,
       executePiPaymentForRental,
