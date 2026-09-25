@@ -361,7 +361,7 @@ test('TASK 2: Admin Database Purge with strict Foreign Key ordering', async () =
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${adminToken}`
+      'Cookie': adminCookie
     }
   });
 
@@ -560,15 +560,15 @@ test('FINAL REAL USER FLOW TEST: Complete end-to-end lifecycle', async () => {
     }), env);
     assert.equal(login1Res.status, 200);
     const user1Data = await login1Res.json();
-    const token1 = user1Data.sessionToken;
-    assert.ok(token1);
+    const userCookie = login1Res.headers.get('Set-Cookie')?.split(';')[0];
+    assert.ok(userCookie, 'Pi login must issue the HttpOnly session cookie');
 
     // 2. View / Create Listing
     const createItemRes = await worker.fetch(new Request('http://localhost/api/sync/item', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token1}`
+        'Cookie': userCookie
       },
       body: JSON.stringify({
         id: 'item_camera_pro',
@@ -584,7 +584,7 @@ test('FINAL REAL USER FLOW TEST: Complete end-to-end lifecycle', async () => {
     // 3. User 1 Logout
     const logoutRes = await worker.fetch(new Request('http://localhost/api/auth/logout', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token1}` }
+      headers: { 'Cookie': userCookie }
     }), env);
     assert.equal(logoutRes.status, 200);
 
@@ -610,7 +610,8 @@ test('FINAL REAL USER FLOW TEST: Complete end-to-end lifecycle', async () => {
     }), env);
     assert.equal(adminLoginRes.status, 200);
     const adminData = await adminLoginRes.json();
-    const adminToken = adminData.sessionToken;
+    const adminCookie = adminLoginRes.headers.get('Set-Cookie')?.split(';')[0];
+    assert.ok(adminCookie, 'Admin login must issue the HttpOnly session cookie');
     assert.equal(adminData.user.role, 'admin');
 
     // 5. Admin Database Purge
