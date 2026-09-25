@@ -576,3 +576,19 @@ Added:
 - Added focused regression assertions for primitive convergence and prevention of the removed offline booking fallback.
 
 **Status:** Booking and Report modal presentation migration completed. Automated workflow verification and runtime Pi Browser/device review remain pending. Final Booking & Payment Definition of Done remains incomplete until incomplete-payment, pending/cancelled/failed-state presentation, E2E coverage and final review are verified.
+
+
+## Design System Implementation 10 — Authoritative Rental & Payment State Convergence — 2026-09-25
+
+### Decision
+The booking/payment UI must have one business path: server quote → server rental → Pi payment intent/approve/complete → server-confirmed rental state. Browser code must not synthesize rental IDs, booking numbers, financial totals, confirmed rental records, or fallback rental payloads.
+
+### Implementation
+- Removed the client-side financial/rental construction from the createRentalBooking compatibility wrapper. It now requires quoteId and delegates to cloudSyncService.createRental({ quoteId }).
+- Removed the remaining listingId + startDate + endDate fallback from BookingModal.
+- Removed client-side confirmedRental synthesis, cache writes, and broadcastNewRental from executePiPaymentForRental; Pi completion is now treated as authoritative only through the server payment flow.
+- Hardened /api/payments/incomplete so the SDK callback is not trusted directly: the server re-fetches the Pi payment, binds it to a D1 payment intent, verifies payer identity, metadata/rental binding, and amount before mutating payment/rental/transaction state.
+- Added regression assertions covering the authoritative rental contract, absence of client-side financial synthesis, and incomplete-payment intent binding.
+
+### Verification status
+Implementation pass completed. Automated workflow execution for the latest branch head still needs to be checked, and runtime Pi Browser/device verification remains pending. Payment DoD is not marked complete until those verification layers are observed.
