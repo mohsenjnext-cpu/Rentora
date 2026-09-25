@@ -94,3 +94,27 @@ test('frontend auth bridge uses HttpOnly cookie sessions instead of browser-stor
   assert.match(piAuthContext, /headers\.set\('X-Rentora-Client', 'web'\)/);
   assert.match(piAuthContext, /localStorage\.removeItem\('rentora_live_v1_session'\)/);
 });
+
+
+test('Pi cancellation converges payment intent and rental state server-side', () => {
+  const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+  const start = worker.indexOf("path === '/api/payments/cancel'");
+  const end = worker.indexOf("path === '/api/payments/approve'", start);
+  assert.ok(start >= 0 && end > start);
+  const route = worker.slice(start, end);
+  assert.match(route, /paymentIntentId is required/);
+  assert.match(route, /status='cancelled'/);
+  assert.match(route, /payment_status='cancelled', status='cancelled'/);
+  assert.match(route, /Completed payment cannot be cancelled/);
+  assert.match(route, /RENTORA_KV\.delete/);
+});
+
+test('Pi native cancellation callback invokes server-side cancellation', () => {
+  const service = fs.readFileSync(new URL('../src/services/piService.js', import.meta.url), 'utf8');
+  const context = fs.readFileSync(new URL('../src/context/RentoraContext.jsx', import.meta.url), 'utf8');
+  assert.match(service, /async cancelPaymentOnServer\(paymentId, paymentIntentId\)/);
+  assert.match(service, /api\/payments\/cancel/);
+  assert.match(service, /onCancel: \(paymentId\) =>/);
+  assert.match(context, /onCancel: async \(paymentId\)/);
+  assert.match(context, /piService\.cancelPaymentOnServer\(paymentId, draftRental\.paymentIntentId\)/);
+});
