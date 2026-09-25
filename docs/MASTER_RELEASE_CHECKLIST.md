@@ -108,9 +108,9 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 
 ## 9. Verification
 - [x] Unit/regression tests
-- [ ] Worker syntax validation
-- [ ] Frontend production build
-- [ ] Full CI green on current HEAD
+- [x] Worker syntax validation
+- [x] Frontend production build
+- [x] Full CI green on current HEAD
 - [ ] Runtime API verification
 - [ ] Pi Browser verification
 - [ ] Mobile verification
@@ -167,3 +167,5 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - CI status after latest fixes: IN PROGRESS/QUEUED on current branch HEAD 832ef625a5b3909de975f71f0a3ad5e7e6f6c80e6; previous failures were stale runs on earlier commits and are not treated as current verification.
 
 - Security/storage audit checkpoint: API responses now include CSP, HSTS, X-Frame-Options, nosniff, and restrictive Permissions/Referrer policies; schema audit confirms D1 foreign keys, uniqueness constraints, payment/rental state checks, payout operation guards, and KV-backed payment-intent TTL usage.
+
+- CI verification: runs #860 and #861 completed successfully on the checklist-updated HEAD, confirming the current test/build workflow is green after the stale transaction assertions were removed.
