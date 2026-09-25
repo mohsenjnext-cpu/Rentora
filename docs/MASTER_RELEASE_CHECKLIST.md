@@ -24,8 +24,8 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 
 ## 2. Identity and authorization
 - [ ] Pi SDK authentication
-- [ ] Server session creation and validation
-- [ ] Logout and session revocation
+- [x] Server session creation and validation
+- [x] Logout and session revocation
 - [ ] Session-expiry handling
 - [ ] User profile authority
 - [ ] KYC authority and presentation
@@ -72,7 +72,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [x] KV usage and TTLs
 - [x] R2/media handling
 - [ ] Cache invalidation
-- [ ] No sensitive business state in localStorage
+- [x] No sensitive business state in localStorage
 - [ ] Server data remains source of truth
 
 ## 7. UI system and UX
@@ -101,7 +101,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Input validation
 - [x] Image validation
 - [x] Rate/abuse protections where required
-- [ ] No secrets in client bundle
+- [x] No secrets in client bundle
 - [ ] No stack traces / sensitive errors
 - [x] Legacy routes safely retired
 - [x] Payment tampering resistance
@@ -178,3 +178,8 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 
 - Abuse/rate-limit hardening: KV-backed request throttles now cover Pi login, payment intent/approve/complete/incomplete, uploads, reports, and message sends. Limits are scoped per short-lived IP bucket and return HTTP 429 with retry metadata. This is a basic edge throttle, not a replacement for durable WAF/bot controls.
 - CI for the latest security-throttle test commit 2d3a82ecf7e7bde827ee284f1b6a6151315bb43f: NOT RUN / no workflow run reported yet.
+
+
+- Session transport hardening: server sessions are now issued through an HttpOnly, Secure, SameSite=None `rentora_session` cookie; logout revokes the KV session and clears the cookie. The sync client no longer reads browser-stored session bearer tokens and sends credentialed requests.
+- Client secret audit checkpoint: Pi server API keys remain server-only; browser code uses the public API base URL and Pi SDK access token only for the login handoff. No server API key was found in the audited client service/config files.
+- CI after auth hardening commit a8527d08c8a65b645083a01fda0603b2112c2d44: NOT RUN / no workflow run reported yet.
