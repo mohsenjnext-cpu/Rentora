@@ -1775,19 +1775,24 @@ export default {
         const { user } = await requireUser(request, env);
         const listingId = path.slice('/api/listings/'.length, -'/activate'.length).trim();
         if (!listingId) return errorResponse('listingId is required', 400, env, undefined, origin);
+
         const listing = await env.RENTORA_DB.prepare('SELECT * FROM listings WHERE id=?1 LIMIT 1').bind(listingId).first();
         if (!listing) return errorResponse('Listing not found', 404, env, undefined, origin);
         if (listing.owner_user_id !== user.id) return errorResponse('Listing ownership denied', 403, env, undefined, origin);
+
         if (listing.status === 'active' && listing.owner_fee_payment_status === 'completed') {
           const existing = await env.RENTORA_DB.prepare('SELECT * FROM payment_obligations WHERE id=?1 LIMIT 1').bind(listing.owner_fee_obligation_id).first().catch(() => null);
           return jsonResponse({ success: true, active: true, activationCycle: listing.activation_cycle, obligation: existing || null, idempotent: true }, 200, env, origin);
         }
 
-        const pending = await env.RENTORA_DB.prepare(
-          "SELECT * FROM payment_obligations WHERE listing_id=?1 AND rental_id IS NULL AND user_id=?2 AND role='owner' AND purpose='platform_fee' AND activation_cycle=?3 AND status IN ('created','approved') LIMIT 1"
-        ).bind(listing.id, user.id, listing.activation_cycle).first();
+        const currentCycle = listing.activation_cycle || null;
+        const pending = currentCycle
+          ? await env.RENTORA_DB.prepare(
+              "SELECT * FROM payment_obligations WHERE listing_id=?1 AND rental_id IS NULL AND user_id=?2 AND role='owner' AND purpose='platform_fee' AND activation_cycle=?3 AND status IN ('created','approved') AND expires_at>?4 LIMIT 1"
+            ).bind(listing.id, user.id, currentCycle, now()).first()
+          : null;
         if (pending) {
-          return jsonResponse({ success: true, active: false, activationCycle: listing.activation_cycle, paymentIntentId: pending.id, obligation: pending }, 200, env, origin);
+          return jsonResponse({ success: true, active: false, activationCycle: currentCycle, paymentIntentId: pending.id, obligation: pending }, 200, env, origin);
         }
 
         const cycle = 'act_' + crypto.randomUUID();
@@ -1797,10 +1802,32 @@ export default {
         const expires = new Date(Date.now() + PAYMENT_INTENT_TTL * 1000).toISOString();
         const memo = `Rentora Owner Activation Fee #${String(listing.id).slice(-12)}`;
         const metadata = { paymentIntentId: obligationId, obligationId, rentalId: null, listingId: listing.id, role: 'owner', purpose: 'platform_fee', activationCycle: cycle, expectedAmount: ownerFee, currency: 'PI', memo };
-        await env.RENTORA_DB.batch([
-          env.RENTORA_DB.prepare("UPDATE listings SET status='paused', activation_cycle=?1, owner_fee_payment_status='unpaid', owner_fee_obligation_id=?2, activated_at=NULL, updated_at=?3 WHERE id=?4 AND owner_user_id=?5").bind(cycle, obligationId, now(), listing.id, user.id),
-          env.RENTORA_DB.prepare("INSERT INTO payment_obligations(id,rental_id,listing_id,user_id,role,purpose,amount,currency,status,memo,metadata,activation_cycle,expires_at,created_at,updated_at) VALUES(?1,NULL,?2,?3,'owner','platform_fee',?4,'PI','created',?5,?6,?7,?8,?9,?9)").bind(obligationId, listing.id, user.id, ownerFee, memo, JSON.stringify(metadata), cycle, expires, now())
-        ]);
+
+        // Claim the activation cycle atomically. Two concurrent requests may both read the
+        // same listing, but only the first request whose expected cycle still matches can
+        // advance the listing and create the new obligation.
+        const claim = await env.RENTORA_DB.prepare(
+          `UPDATE listings
+           SET status='paused', activation_cycle=?1, owner_fee_payment_status='unpaid',
+               owner_fee_obligation_id=?2, activated_at=NULL, updated_at=?3
+           WHERE id=?4 AND owner_user_id=?5 AND owner_fee_payment_status!='completed'
+             AND ((activation_cycle IS NULL AND ?6 IS NULL) OR activation_cycle=?6)`
+        ).bind(cycle, obligationId, now(), listing.id, user.id, currentCycle).run();
+
+        if (Number(claim?.meta?.changes || 0) !== 1) {
+          const concurrent = await env.RENTORA_DB.prepare(
+            "SELECT * FROM payment_obligations WHERE listing_id=?1 AND rental_id IS NULL AND user_id=?2 AND role='owner' AND purpose='platform_fee' AND activation_cycle=(SELECT activation_cycle FROM listings WHERE id=?1 LIMIT 1) AND status IN ('created','approved') AND expires_at>?3 LIMIT 1"
+          ).bind(listing.id, user.id, now()).first();
+          if (concurrent) {
+            return jsonResponse({ success: true, active: false, activationCycle: concurrent.activation_cycle, paymentIntentId: concurrent.id, obligation: concurrent }, 200, env, origin);
+          }
+          return errorResponse('Listing activation was concurrently changed. Retry the activation request.', 409, env, undefined, origin);
+        }
+
+        await env.RENTORA_DB.prepare(
+          "INSERT INTO payment_obligations(id,rental_id,listing_id,user_id,role,purpose,amount,currency,status,memo,metadata,activation_cycle,expires_at,created_at,updated_at) VALUES(?1,NULL,?2,?3,'owner','platform_fee',?4,'PI','created',?5,?6,?7,?8,?9,?9)"
+        ).bind(obligationId, listing.id, user.id, ownerFee, memo, JSON.stringify(metadata), cycle, expires, now()).run();
+
         return jsonResponse({ success: true, active: false, activationCycle: cycle, paymentIntentId: obligationId, obligation: { id: obligationId, amount: ownerFee, role: 'owner', purpose: 'platform_fee', status: 'created', activation_cycle: cycle, metadata } }, 201, env, origin);
       }
 
