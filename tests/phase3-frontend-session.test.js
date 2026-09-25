@@ -149,3 +149,13 @@ test('Phase 3: Rental data and payment state are derived strictly from server AP
   assert.equal(clientRentals[0].paymentStatus, 'completed');
   assert.equal(clientTransactions[0].piTxRef, '0xabc123');
 });
+
+
+test('Rental and payment state is not persisted in localStorage', async () => {
+  const fs = await import('node:fs');
+  const source = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
+  assert.match(source, /getCachedRentals\(\)\s*\{[\s\S]*?return \[\];/);
+  assert.match(source, /saveCachedRentals\(_rentals\)\s*\{/);
+  assert.doesNotMatch(source, /localStorage\.getItem\(STORAGE_RENTALS_KEY\)/);
+  assert.doesNotMatch(source, /localStorage\.setItem\(STORAGE_RENTALS_KEY/);
+});
