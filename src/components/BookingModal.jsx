@@ -169,6 +169,15 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
         throw createErr;
       }
 
+      if (!serverQuote?.quoteId) {
+        throw new Error(l(
+          'پیش‌فاکتور معتبر از سرور دریافت نشده است.',
+          'A valid server quote is required before booking.',
+          'يجب الحصول على عرض سعر معتمد من الخادم قبل الحجز.',
+          '预订前必须先取得有效的服务器报价。'
+        ));
+      }
+
       if (!persistedRental?.id) throw new Error('ثبت رزرو در سرور ناموفق بود.');
 
       // 2. Pay ONLY Rentora Platform Fee via Official Pi SDK.
