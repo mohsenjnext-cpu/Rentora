@@ -159,3 +159,17 @@ test('Rental and payment state is not persisted in localStorage', async () => {
   assert.doesNotMatch(source, /localStorage\.getItem\(STORAGE_RENTALS_KEY\)/);
   assert.doesNotMatch(source, /localStorage\.setItem\(STORAGE_RENTALS_KEY/);
 });
+
+
+test('Phase 3: Logout clears private Rentora context state immediately', async () => {
+  const fs = await import('node:fs');
+  const source = fs.readFileSync(new URL('../src/context/RentoraContext.jsx', import.meta.url), 'utf8');
+
+  assert.match(source, /if \(currentUser\) return;/);
+  assert.match(source, /setRentals\(\[\]\)/);
+  assert.match(source, /setTransactions\(\[\]\)/);
+  assert.match(source, /setReports\(\[\]\)/);
+  assert.match(source, /setConversations\(\[\]\)/);
+  assert.match(source, /knownMsgIdsRef\.current\.clear\(\)/);
+  assert.match(source, /cloudSyncService\.clearUserSessionCache\(\)/);
+});
