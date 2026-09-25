@@ -565,3 +565,14 @@ Added:
 - Added regression coverage for primitive adoption and preserved real-flow entry points.
 
 **Status:** Item Detail presentation convergence pass completed. Legacy Item Detail remains available. Runtime device review, report-modal migration, booking-modal migration, error-state mapping and final migration remain pending.
+
+## Design System Implementation 09 — Booking & Report Modal Convergence — 2026-09-25
+
+- Migrated BookingModal presentation to the shared `RentoraModal`, `RentoraButton`, `RentoraInput` and `RentoraAlert` primitives.
+- Preserved the real server quote → rental creation → Pi fee payment → verified contact unlock flow.
+- Removed the BookingModal offline/compatibility fallback that could broadcast a client-created rental when the authoritative server creation failed.
+- Financial display in BookingModal now uses the authoritative server quote only; booking submission stays disabled until a valid quote is available.
+- Migrated ReportModal to `RentoraModal`, `RentoraButton`, `RentoraAlert` and `RentoraEmptyState`, preserving the existing `submitReport` contract and success/error states.
+- Added focused regression assertions for primitive convergence and prevention of the removed offline booking fallback.
+
+**Status:** Booking and Report modal presentation migration completed. Automated workflow verification and runtime Pi Browser/device review remain pending. Final Booking & Payment Definition of Done remains incomplete until incomplete-payment, pending/cancelled/failed-state presentation, E2E coverage and final review are verified.
