@@ -137,7 +137,7 @@ export default function ItemDetailRedesign({
       </section>
 
       {bookingOpen && <BookingModal item={item} isOpen={bookingOpen} onClose={() => setBookingOpen(false)} onBookingSuccess={onBookingSuccess} />}
-      {reportOpen && <ReportModal isOpen={reportOpen} onClose={() => setReportOpen(false)} item={item} />}
+      {reportOpen && <ReportModal isOpen={reportOpen} onClose={() => setReportOpen(false)} target={item} type="listing" />}
     </main>
   );
 }
