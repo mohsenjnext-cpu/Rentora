@@ -205,3 +205,17 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 
 - Listing mutation validation hardening: `POST /api/sync/item` now bounds listing ID/title/description/category/location lengths, validates the listing status enum, and caps newly-created daily price/deposit at 1,000,000,000 PI-equivalent units. Existing listing financial fields remain D1-authoritative and are not overwritten by client update payloads.
 - CI after validation commit `6b1953b4d4bf088f6253cf2cf97e4e18aa4b6605`: NOT RUN / NOT REPORTED.
+
+
+### 2026-09-26 continuation audit
+- PR #39 shared-fee payment engine was re-audited against the current `main` baseline. The branch is 80 commits ahead of `main` and remains independently unmerged.
+- Two correctness/security defects were found in the candidate implementation:
+  1. Renter completion calculated the final rental confirmation before applying the renter completion, so a valid owner-completed + renter-completing payment could remain `pending_payment` instead of becoming `confirmed`.
+  2. `/api/payments/incomplete` did not require an authenticated session and initially looked up the obligation by Pi payment ID alone.
+- Both defects were fixed on `codex/shared-fee-payment-engine`:
+  - commit `b1701c6616d1b6f6864412fbc45daa34eee892dc`: authenticated/user-bound incomplete recovery and correct renter confirmation calculation.
+  - commit `a7a1dc51c1d14b9c9a16a3b58b8278a3fa33575a`: regression coverage for both conditions.
+- GitHub Actions currently reports no workflow run for the new test commit, so these fixes are **not yet CI-verified**.
+- Release checklist implication: the shared 50/50 fee model must not be treated as release-verified until PR #39's current head passes the full test/build validation and receives the independent merge decision.
+- UI audit continuation: `ItemDetailPage` still uses the legacy in-memory navigation model, so `navigator.clipboard` shares the current shell URL rather than a stable listing deep-link. Deep-link/routing strategy remains an open product/architecture item.
+- UI redesign remains alongside-build only. PR #40 is still a draft and must not replace the legacy shell until feature-by-feature real-backend, state, RTL/mobile/accessibility and regression validation is complete.
