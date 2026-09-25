@@ -1547,6 +1547,8 @@ export default {
           purpose: obligation.purpose,
           activationCycle: obligation.activation_cycle || null,
           expectedAmount: amount,
+          payerUserId: user.id,
+          payerPiUid: user.pi_uid,
           currency: obligation.currency || 'PI',
           memo: obligation.memo
         };
