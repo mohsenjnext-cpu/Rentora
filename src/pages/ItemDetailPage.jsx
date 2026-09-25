@@ -83,9 +83,9 @@ export default function ItemDetailPage({
     } catch (e) {}
   };
 
-  const imagesList = (item.images && item.images.length > 0)
-    ? item.images
-    : ['https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80'];
+  const imagesList = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
+  const hasImages = imagesList.length > 0;
+  const listingStatus = String(item.status || '').toLowerCase();
 
   return (
     <div className="max-w-2xl mx-auto space-y-4 pb-24 select-none">
@@ -155,13 +155,22 @@ export default function ItemDetailPage({
       {/* 2. Main Image Carousel (Gallery) */}
       <div className="space-y-2">
         <div className="relative aspect-[16/10] w-full rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-800">
-          <img
-            src={imagesList[activeImageIndex]}
-            alt={item.title}
-            className="w-full h-full object-cover"
-          />
+          {hasImages ? (
+            <img
+              src={imagesList[activeImageIndex]}
+              alt={item.title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-400 dark:text-slate-500">
+              <span className="text-3xl" aria-hidden="true">▧</span>
+              <span className="text-xs font-semibold">
+                {l('تصویر ثبت نشده است', 'No listing image', 'لا توجد صورة للإعلان', '暂无商品图片')}
+              </span>
+            </div>
+          )}
 
-          {/* Badges in top corners */}
+          {/* Badges in top corners */
           {item.ownerKYC && (
             <div className="absolute top-3 left-3 rtl:left-auto rtl:right-3 flex items-center gap-1.5">
               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold badge-trust flex items-center gap-1 shadow-sm">
@@ -173,7 +182,7 @@ export default function ItemDetailPage({
         </div>
 
         {/* Thumbnail row if multiple images */}
-        {imagesList.length > 1 && (
+        {hasImages && imagesList.length > 1 && (
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
             {imagesList.map((img, idx) => (
               <button
@@ -199,11 +208,17 @@ export default function ItemDetailPage({
           </span>
           <span className="flex items-center gap-1 text-slate-500 font-medium">
             <MapPin className="w-3.5 h-3.5 text-slate-400 stroke-[1.8]" />
-            <span>{item.location || 'ایران'}</span>
+            <span>{item.location || l('موقعیت ثبت نشده', 'Location not provided', 'الموقع غير محدد', '未提供位置')}</span>
           </span>
+          {listingStatus && listingStatus !== 'active' && (
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300">
+              {listingStatus === 'draft' ? l('پیش‌نویس', 'Draft', 'مسودة', '草稿') : listingStatus}
+            </span>
+          )}
           <span className="flex items-center gap-0.5 text-amber-600 font-bold">
             <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 stroke-[2]" />
-            <span>{averageRating ? `${averageRating}` : l('جدید', 'New', 'جديد', '新发布')}</span>
+            <span>{averageRating ? `${averageRating}` : l('بدون امتیاز', 'No rating', 'لا يوجد تقييم', '暂无评分')}</span>
+            {totalReviews > 0 && <span className="text-slate-400 font-medium">({totalReviews})</span>}
           </span>
         </div>
 
@@ -304,8 +319,8 @@ export default function ItemDetailPage({
 
         <div className="pt-1.5 text-[10px] text-slate-400 border-t border-slate-200 dark:border-slate-800 leading-relaxed">
           {l(
-            'مبالغ اجاره و ودیعه مستقیماً در زمان تحویل بین موجر و مستأجر تسویه می‌شود و رنتورا تنها کارمزد رزرو را دریافت می‌کند.',
-            'Rental fee and security deposit are settled directly between owner and renter at handover. Rentora only processes the booking commission fee.',
+            'مبلغ اجاره و ودیعه مستقیماً در زمان تحویل بین موجر و مستأجر تسویه می‌شود. کارمزد رنتورا فقط در مرحله رزرو و بر اساس محاسبه معتبر سرور نمایش داده و پرداخت می‌شود.',
+            'Rental and deposit are settled directly between owner and renter at handover. The Rentora fee is shown and paid during reservation using the server-authoritative quote.',
             'يُسوى الإيجار والتأمين مباشرة بين المؤجر والمستأجر عند الاستلام، وتحصل رنتورا عمولة الحجز فقط.',
             '租金与押金均由双方当面直接结清，Rentora 仅收取预订平台费。'
           )}
@@ -357,6 +372,7 @@ export default function ItemDetailPage({
               <button
                 type="button"
                 onClick={() => setBookingModalOpen(true)}
+                aria-label={l('شروع رزرو و مشاهده محاسبه کارمزد', 'Start reservation and view fee quote', 'بدء الحجز وعرض العمولة', '开始预订并查看平台费')}
                 className="btn-primary px-5 py-2 text-xs font-black cursor-pointer flex items-center gap-1.5 shadow-sm"
               >
                 <Coins className="w-4 h-4 text-amber-400" />
