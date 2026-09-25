@@ -69,15 +69,9 @@ export class CloudSyncService {
   }
 
   getAuthHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    try {
-      const raw = localStorage.getItem(STORAGE_USER_KEY);
-      const session = raw ? JSON.parse(raw) : null;
-      if (session?.sessionToken) {
-        headers.Authorization = `Bearer ${session.sessionToken}`;
-      }
-    } catch (_) {}
-    return headers;
+    // Authentication is carried by the server-issued HttpOnly session cookie.
+    // Never read or persist bearer session tokens in browser storage.
+    return { 'Content-Type': 'application/json' };
   }
 
   async compressImage(file, maxWidth = 800, quality = 0.7) {
@@ -118,6 +112,7 @@ export class CloudSyncService {
     if (apiBase) {
       try {
         const res = await fetch(`${apiBase}/api/upload`, {
+          credentials: 'include',
           method: 'POST',
           headers: this.getAuthHeaders(),
           body: JSON.stringify({ data: dataUrl, mimeType: 'image/jpeg' })
@@ -137,6 +132,7 @@ export class CloudSyncService {
     const apiBase = getApiBaseUrl();
     if (apiBase) {
       const res = await fetch(`${apiBase}/api/sync/user`, {
+        credentials: 'include',
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(userObj)
@@ -165,6 +161,7 @@ export class CloudSyncService {
     const apiBase = getApiBaseUrl();
     if (apiBase) {
       const res = await fetch(`${apiBase}/api/sync/item`, {
+        credentials: 'include',
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(item)
@@ -194,6 +191,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/rentals/quote`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ listingId, startDate, endDate })
@@ -213,6 +211,7 @@ export class CloudSyncService {
     if (!quoteId) throw new Error('quoteId is required');
     const body = { quoteId };
     const res = await fetch(`${apiBase}/api/rentals`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(body)
@@ -231,6 +230,7 @@ export class CloudSyncService {
     const apiBase = getApiBaseUrl();
     if (apiBase) {
       const res = await fetch(`${apiBase}/api/sync/rental`, {
+        credentials: 'include',
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(rental)
@@ -266,6 +266,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/admin/overview?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         ...this.getAuthHeaders(),
@@ -289,6 +290,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/wallet/balance?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         ...this.getAuthHeaders(),
@@ -314,6 +316,7 @@ export class CloudSyncService {
     const key = idempotencyKey || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `user_payout_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
 
     const res = await fetch(`${apiBase}/api/wallet/withdraw`, {
+      credentials: 'include',
       method: 'POST',
       headers: {
         ...this.getAuthHeaders(),
@@ -344,6 +347,7 @@ export class CloudSyncService {
     const key = idempotencyKey || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `admin_payout_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
 
     const res = await fetch(`${apiBase}/api/admin/payout`, {
+      credentials: 'include',
       method: 'POST',
       headers: {
         ...this.getAuthHeaders(),
@@ -373,6 +377,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/admin/users?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         ...this.getAuthHeaders(),
@@ -397,6 +402,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/admin/users/${encodeURIComponent(userId)}/status`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ status })
@@ -417,6 +423,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/admin/users/${encodeURIComponent(userId)}/kyc`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ kycStatus })
@@ -437,6 +444,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/admin/listings/${encodeURIComponent(listingId)}/status`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ status })
@@ -461,6 +469,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/reports`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(reportData)
@@ -481,6 +490,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/reports/${encodeURIComponent(reportId)}/resolve`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ status })
@@ -500,6 +510,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/admin/cleanup`, {
+      credentials: 'include',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -522,6 +533,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/sync/purge`, {
+      credentials: 'include',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -562,6 +574,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/rentals/${encodeURIComponent(rentalId)}/review-status?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         ...this.getAuthHeaders(),
@@ -586,6 +599,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/rentals/${encodeURIComponent(rentalId)}/reviews`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ rating, reviewText })
@@ -606,6 +620,7 @@ export class CloudSyncService {
     if (!apiBase) return { stats: { totalReviews: 0, averageRating: null, isNew: true }, reviews: [] };
 
     const res = await fetch(`${apiBase}/api/users/${encodeURIComponent(userId)}/reviews?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -629,6 +644,7 @@ export class CloudSyncService {
     if (!apiBase) return { stats: { totalReviews: 0, averageRating: null, isNew: true }, reviews: [] };
 
     const res = await fetch(`${apiBase}/api/listings/${encodeURIComponent(listingId)}/reviews?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -655,6 +671,7 @@ export class CloudSyncService {
     if (!apiBase) return [];
 
     const res = await fetch(`${apiBase}/api/conversations?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         ...this.getAuthHeaders(),
@@ -676,6 +693,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/conversations`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ listingId, rentalId })
@@ -694,6 +712,7 @@ export class CloudSyncService {
     if (!apiBase) return { messages: [] };
 
     const res = await fetch(`${apiBase}/api/conversations/${encodeURIComponent(conversationId)}/messages?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         ...this.getAuthHeaders(),
@@ -716,6 +735,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/conversations/${encodeURIComponent(conversationId)}/messages`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ text, messageType })
@@ -737,6 +757,7 @@ export class CloudSyncService {
     if (!apiBase) return false;
 
     const res = await fetch(`${apiBase}/api/conversations/${encodeURIComponent(conversationId)}/archive`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({})
@@ -775,6 +796,7 @@ export class CloudSyncService {
     try {
       const url = `${apiBase}/api/sync/all?_t=${Date.now()}`;
       const res = await fetch(url, {
+        credentials: 'include',
         method: 'GET',
         headers: {
           ...this.getAuthHeaders(),
