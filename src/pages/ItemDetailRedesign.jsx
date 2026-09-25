@@ -34,7 +34,7 @@ export default function ItemDetailRedesign({
       .catch(() => {})
       .finally(() => { if (active) setLoadingReviews(false); });
     return () => { active = false; };
-  }, [item?.id, fetchListingReviews]);
+  }, [item?.id]);
 
   if (!item) return null;
 
