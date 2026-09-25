@@ -100,11 +100,16 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
 
       {/* Pricing and Action Footer */}
       <div className="p-2.5 sm:p-3 pt-0 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/60 mt-1">
-        <div>
+        <div className="min-w-0">
           <span className="text-[9px] text-slate-400 font-medium block leading-none">{t('dailyRent')}</span>
-          <div className="text-xs sm:text-sm font-black text-[#0F6E56] dark:text-[#48D2A8] font-mono mt-0.5">
+          <div className="text-xs sm:text-sm font-black text-[#0F6E56] dark:text-[#48D2A8] font-mono mt-0.5 whitespace-nowrap">
             {item.pricePerDay} π <span className="text-[10px] font-normal text-slate-400">/{l('روز', 'd', 'يوم', '天')}</span>
           </div>
+          {item.deposit !== undefined && item.deposit !== null && item.deposit !== '' && (
+            <div className="text-[9px] text-slate-400 mt-1 whitespace-nowrap">
+              {l('ودیعه', 'Deposit', 'التأمين', '押金')}: {item.deposit} π
+            </div>
+          )}
         </div>
 
         {isOwner ? (
