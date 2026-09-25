@@ -71,7 +71,7 @@ export default function ReportModal({ target, type = 'listing', isOpen, onClose 
     >
       {submitted ? (
         <RentoraEmptyState
-          icon={CheckCircle2}
+          icon={<CheckCircle2 className="h-7 w-7" />}
           title={l('گزارش تخلف ثبت شد', 'Report Submitted', 'تم تسجيل البلاغ', '举报已提交受理')}
           description={l('تیم داوری رنتورا مورد گزارش‌شده را بررسی خواهد نمود.', 'Rentora moderation team will review this issue.', 'سيقوم فريق المشرفين بمراجعة البلاغ واتخاذ الإجراءات اللازمة.', 'Rentora 审核团队将尽快核实并处理此项违规。')}
         />
