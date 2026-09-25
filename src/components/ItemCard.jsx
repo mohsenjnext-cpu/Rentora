@@ -36,7 +36,7 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
   return (
     <div
       onClick={() => onSelect && onSelect(item)}
-      className="group bg-white dark:bg-[#151426] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 overflow-hidden shadow-2xs hover:shadow-md transition duration-200 flex flex-col justify-between cursor-pointer select-none"
+      className="group bg-white dark:bg-[#151426] rounded-[var(--radius-card)] border border-slate-200/80 dark:border-slate-800/80 overflow-hidden shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)] transition duration-200 ease-[var(--ease-rentora)] flex flex-col justify-between cursor-pointer select-none"
     >
       <div>
         {/* Image Container with Badges */}
@@ -92,7 +92,7 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
           </div>
 
           {/* Title */}
-          <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white line-clamp-1 group-hover:text-[#534AB7] transition">
+          <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white line-clamp-1 group-hover:text-rentora-primary-mid transition">
             {item.title}
           </h3>
         </div>
@@ -102,7 +102,7 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
       <div className="p-2.5 sm:p-3 pt-0 flex items-center justify-between border-t border-slate-100 dark:border-slate-800/60 mt-1">
         <div>
           <span className="text-[9px] text-slate-400 font-medium block leading-none">{t('dailyRent')}</span>
-          <div className="text-xs sm:text-sm font-black text-[#0F6E56] dark:text-[#48D2A8] font-mono mt-0.5">
+          <div className="text-xs sm:text-sm font-black text-rentora-success dark:text-[#48D2A8] font-mono mt-0.5">
             {item.pricePerDay} π <span className="text-[10px] font-normal text-slate-400">/{l('روز', 'd', 'يوم', '天')}</span>
           </div>
         </div>
