@@ -179,3 +179,30 @@ test('archived conversations cannot accept new messages', () => {
   assert.match(block, /conv\.status === 'archived'/);
   assert.match(block, /Archived conversations are read-only/);
 });
+
+
+test('Pi approval binds the intent before the external approve call and preserves the binding for retry', () => {
+  const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+  const start = worker.indexOf("path === '/api/payments/approve'");
+  const end = worker.indexOf("path === '/api/payments/complete'", start);
+  assert.ok(start >= 0 && end > start);
+  const route = worker.slice(start, end);
+  const claim = route.indexOf("UPDATE payment_intents SET pi_payment_id=?1");
+  const approve = route.indexOf("'/approve'");
+  const finalize = route.indexOf("UPDATE payment_intents SET status='approved'");
+  assert.ok(claim >= 0 && approve > claim && finalize > approve);
+  assert.match(route, /status='created' AND \(pi_payment_id IS NULL OR pi_payment_id=\?1\)/);
+  assert.match(route, /Keep the same Pi payment bound to the intent/);
+  assert.doesNotMatch(route, /status='created' AND pi_payment_id IS NULL.*\\/approve/s);
+});
+
+test('payment intent creation never resets a live Pi payment binding', () => {
+  const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+  const start = worker.indexOf("path === '/api/payments/intent'");
+  const end = worker.indexOf("path === '/api/payments/approve'", start);
+  assert.ok(start >= 0 && end > start);
+  const route = worker.slice(start, end);
+  assert.match(route, /existing\.pi_payment_id/);
+  assert.match(route, /boundPaymentId/);
+  assert.match(route, /Never reset the binding and orphan that payment/);
+});
