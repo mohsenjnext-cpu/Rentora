@@ -4,9 +4,9 @@ Date: 2026-09-25
 
 ## Research inputs
 
-- Baymard's 2026 search research reports that users commonly rely on search and that search results should make applied scopes/filters visible and actionable. citeturn0search3turn0search1
-- Baymard's product-list research emphasizes scannability and displaying the attributes users need to decide whether to open or skip an item. citeturn0search6
-- Baymard's mobile research recommends an explicit applied-filter overview above mobile results and treats mobile filtering as a distinct interaction from desktop filtering. citeturn0search5turn0search4
+- Baymard's 2026 search research reports that users commonly rely on search and that search results should make applied scopes/filters visible and actionable.
+- Baymard's product-list research emphasizes scannability and displaying the attributes users need to decide whether to open or skip an item.
+- Baymard's mobile research recommends an explicit applied-filter overview above mobile results and treats mobile filtering as a distinct interaction from desktop filtering.
 
 ## Rentora decisions
 
