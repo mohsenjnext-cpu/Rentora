@@ -40,9 +40,6 @@ export default function WalletModal({ isOpen, onClose }) {
       const data = await cloudSyncService.fetchWalletBalance();
       if (data) {
         setBalanceData(data);
-        if (data.withdrawable > 0) {
-          setWithdrawAmount(String(data.withdrawable));
-        }
       }
     } catch (_) {}
     finally {
