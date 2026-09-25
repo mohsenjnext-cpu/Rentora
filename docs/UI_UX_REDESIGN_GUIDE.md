@@ -548,3 +548,11 @@ Added:
 - Added `tests/ui-discover-primitives.test.js` covering primitive convergence, preserved filtering integration, and input hardening.
 
 **Status:** Discover additive state/primitive adoption completed. Loading and empty presentation are now wired to real client state. Error-state presentation, mobile/Pi Browser device review, full accessibility regression and final migration remain pending.
+## Design System Implementation 07 — Discover Accessibility Convergence — 2026-09-25
+
+- Replaced the remaining Discover page-specific filter trigger with RentoraButton.
+- Added an explicit accessible label/id relationship for the sort control.
+- Added a labelled group semantics for category filter buttons while retaining aria-pressed state.
+- Added regression assertions for these accessibility contracts.
+
+**Status:** Discover primitive convergence and accessibility markup pass completed. Full device review, error-state mapping, automated runtime/browser accessibility coverage, final review and migration remain pending.
