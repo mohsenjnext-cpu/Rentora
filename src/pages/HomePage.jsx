@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { useRentora } from '../context/RentoraContext';
+import { usePiAuth } from '../context/PiAuthContext';
 import CategoryBar from '../components/CategoryBar';
 import ItemCard from '../components/ItemCard';
 import EmptyState from '../components/EmptyState';
