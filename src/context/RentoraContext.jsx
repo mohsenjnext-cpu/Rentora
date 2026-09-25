@@ -285,15 +285,10 @@ export function RentoraProvider({ children }) {
   const fetchRentalContact = async (rentalId) => {
     if (!rentalId) throw new Error('شناسه رزرو برای دریافت اطلاعات تماس الزامی است.');
     const apiBase = getApiBaseUrl();
-    const headers = { 'Content-Type': 'application/json' };
-    try {
-      const raw = localStorage.getItem('rentora_live_v1_session');
-      const session = raw ? JSON.parse(raw) : null;
-      if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
-    } catch (_) {}
     const res = await fetch(`${apiBase}/api/rentals/${encodeURIComponent(rentalId)}/contact`, {
       method: 'GET',
-      headers
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error || 'دسترسی به اطلاعات تماس امکان‌پذیر نیست.');
@@ -303,15 +298,10 @@ export function RentoraProvider({ children }) {
   const fetchListingContact = async (listingId) => {
     if (!listingId) throw new Error('شناسه آگهی برای دریافت اطلاعات تماس الزامی است.');
     const apiBase = getApiBaseUrl();
-    const headers = { 'Content-Type': 'application/json' };
-    try {
-      const raw = localStorage.getItem('rentora_live_v1_session');
-      const session = raw ? JSON.parse(raw) : null;
-      if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
-    } catch (_) {}
     const res = await fetch(`${apiBase}/api/listings/${encodeURIComponent(listingId)}/contact`, {
       method: 'GET',
-      headers
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error || 'دسترسی به اطلاعات تماس آگهی امکان‌پذیر نیست.');
@@ -365,15 +355,10 @@ export function RentoraProvider({ children }) {
 
   const transitionRentalStatus = async (rentalId, action) => {
     const apiBase = getApiBaseUrl();
-    const headers = { 'Content-Type': 'application/json' };
-    try {
-      const raw = localStorage.getItem('rentora_live_v1_session');
-      const session = raw ? JSON.parse(raw) : null;
-      if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
-    } catch (_) {}
     const response = await fetch(`${apiBase}/api/sync/rental/status`, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ rentalId, action })
     });
     const data = await response.json().catch(() => ({}));
