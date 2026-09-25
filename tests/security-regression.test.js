@@ -85,6 +85,31 @@ test('reservation creation treats owner activation as listing-level and creates 
   assert.doesNotMatch(rentals, /'owner', 'platform_fee'/);
 });
 
+test('reservation creation requires an unexpired server quote and rejects client pricing fallback', () => {
+  const rentals = section("path === '/api/rentals'", "path === '/api/sync/rental'");
+  assert.match(rentals, /if \(!quote\)/);
+  assert.match(rentals, /پیش‌فاکتور معتبر سرور/);
+  assert.match(rentals, /const listingId = quote\.listingId/);
+  assert.doesNotMatch(rentals, /quote\?\.listingId \|\| String\(body\.listingId/);
+  assert.match(rentals, /quote\.platformFee !== financials\.platformFee/);
+  assert.match(rentals, /quote\.totalAmount !== financials\.totalAmount/);
+});
+
+test('rental and renter obligation creation is atomic', () => {
+  const rentals = section("path === '/api/rentals'", "path === '/api/sync/rental'");
+  assert.match(rentals, /const rentalStatement = env\.RENTORA_DB\.prepare/);
+  assert.match(rentals, /const renterObligationStatement = env\.RENTORA_DB\.prepare/);
+  assert.match(rentals, /await env\.RENTORA_DB\.batch\(\[rentalStatement, renterObligationStatement\]\)/);
+});
+
+test('expired payment obligations cannot be silently revived by payment intent creation', () => {
+  const intent = section("path === '/api/payments/intent'", "path === '/api/payments/approve'");
+  assert.match(intent, /obligation\.expires_at/);
+  assert.match(intent, /Payment obligation is expired/);
+  assert.match(intent, /const expires = obligation\.expires_at/);
+  assert.doesNotMatch(intent, /new Date\(Date\.now\(\) \+ PAYMENT_INTENT_TTL \* 1000\)\.toISOString\(\)/);
+});
+
 test('retired rental sync endpoint cannot mutate authoritative rental financials', () => {
   const legacy = section("path === '/api/sync/rental'", "path === '/api/sync/rental/status'");
   assert.match(legacy, /410/);
