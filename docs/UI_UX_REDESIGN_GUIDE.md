@@ -538,3 +538,13 @@ Added:
 - Discover now adopts `RentoraInput`, `RentoraButton` and `RentoraModal` for search, filter actions and the filter dialog while preserving the existing filtering/sorting/data contracts.
 
 **Status:** Additive migration completed for the Discover filter/search surface. Full Discover Definition of Done remains pending because loading/real-state regression, mobile/Pi Browser review, accessibility regression coverage and final review are not yet complete.
+
+## Design System Implementation 06 — Discover State & Primitive Hardening — 2026-09-25
+
+- Hardened `RentoraInput` with a generated accessible id when neither `id` nor `name` is supplied.
+- Added reusable leading/trailing adornment slots to `RentoraInput`; Discover uses them to restore search/clear affordances without duplicating input styling.
+- Discover now uses `RentoraEmptyState` for the zero-result state and keeps the real ItemCard/filter/search business behavior intact.
+- Discover loading now reflects the provider's actual `isInitialLoadDone` server-sync lifecycle rather than a timer or fabricated delay.
+- Added `tests/ui-discover-primitives.test.js` covering primitive convergence, preserved filtering integration, and input hardening.
+
+**Status:** Discover additive state/primitive adoption completed. Loading and empty presentation are now wired to real client state. Error-state presentation, mobile/Pi Browser device review, full accessibility regression and final migration remain pending.
