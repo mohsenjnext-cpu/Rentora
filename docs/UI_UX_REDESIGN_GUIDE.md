@@ -472,3 +472,13 @@ Verified on `main` before implementation work:
 
 - Hook-safety review found a conditional-hook hazard and it was corrected by keeping all ItemCard hooks unconditional before the skeleton branch.
 - Compact-card accessibility review found that an interactive card wrapper containing nested buttons is not a sound semantic pattern. The wrapper's interactive role and keyboard handler were removed; the full keyboard/focus pattern remains pending before final review.
+
+## Audit Finding 05 — Deployment/Configuration Verification — 2026-09-25
+
+- PR #40 remains draft and unmerged. GitHub CI is green on the latest head commit 26bca45.
+- The separate Cloudflare Pages integration reported Build failed for 26bca45. Therefore GitHub CI success is not being treated as deployment verification.
+- wrangler.toml on the UI branch currently declares ADMIN_PI_UIDS = "avina60,mohsenjnext", while Worker authorization compares users.pi_uid against that list. The project audit requires Pi UIDs, not usernames. This configuration mismatch is a release-verification blocker and must not be silently changed without authoritative values.
+- No merge or deployment was performed.
+
+Next action: continue additive UI/UX audit and implementation while keeping Cloudflare deployment failure and admin UID configuration as explicit release blockers.
+
