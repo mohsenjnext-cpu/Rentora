@@ -17,3 +17,17 @@ test('compact listing card keeps shared business behavior in ItemCard', () => {
   assert.match(card, /onRentClick\?\.\(item\)/);
   assert.match(card, /isOwner/);
 });
+
+
+test('Home renders shared listing card skeletons during initial load', () => {
+  assert.match(home, /isInitialItemsLoading/);
+  assert.match(home, /variant="skeleton"/);
+  assert.match(home, /Array.from({ length: 4 }/);
+  assert.match(home, /Array.from({ length: 8 }/);
+});
+
+test('listing card exposes a dedicated skeleton variant', () => {
+  assert.match(card, /variant === 'skeleton'/);
+  assert.match(card, /aria-hidden="true"/);
+  assert.match(card, /animate-pulse/);
+});
