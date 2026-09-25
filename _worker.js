@@ -1535,8 +1535,10 @@ export default {
         }
         if (status === 'cancelled' || status === 'failed') return errorResponse('Payment obligation is not payable', 409, env, undefined, origin);
 
-        const expires = obligation.expires_at && new Date(obligation.expires_at) > new Date()
-          ? obligation.expires_at : new Date(Date.now() + PAYMENT_INTENT_TTL * 1000).toISOString();
+        if (!obligation.expires_at || new Date(obligation.expires_at) <= new Date()) {
+          return errorResponse('Payment obligation is expired. Create a new reservation or activation cycle.', 409, env, undefined, origin);
+        }
+        const expires = obligation.expires_at;
         const amount = toCanonicalDecimal(obligation.amount);
         const metadata = {
           paymentIntentId: obligation.id,
@@ -2817,8 +2819,11 @@ export default {
           }
         }
 
-        const listingId = quote?.listingId || String(body.listingId || '').trim();
-        if (!listingId) return errorResponse('listingId or quoteId is required', 400, env, undefined, origin);
+        if (!quote) {
+          return errorResponse('یک پیش‌فاکتور معتبر سرور برای ایجاد رزرو الزامی است.', 400, env, undefined, origin);
+        }
+        const listingId = quote.listingId;
+        if (!listingId) return errorResponse('Invalid authoritative quote', 400, env, undefined, origin);
 
         // Fetch fresh listing from D1 to defend against race conditions and price changes
         const listing = await env.RENTORA_DB.prepare(
@@ -2833,8 +2838,8 @@ export default {
           return errorResponse('Owners cannot book or rent their own listing', 400, env, undefined, origin);
         }
 
-        const startDate = quote?.startDate || body.startDate;
-        const endDate = quote?.endDate || body.endDate;
+        const startDate = quote.startDate;
+        const endDate = quote.endDate;
         if (!startDate || !endDate) return errorResponse('startDate and endDate are required', 400, env, undefined, origin);
 
         let financials;
@@ -2852,10 +2857,15 @@ export default {
         }
 
         // If quote was provided, verify price and deposit haven't changed since quote generation
-        if (quote) {
-          if (quote.pricePerDay !== financials.pricePerDay || quote.depositAmount !== financials.depositAmount) {
-            return errorResponse('قیمت یا شرایط کالا تغییر یافته است. لطفاً پیش‌فاکتور جدید دریافت نمایید.', 409, env, undefined, origin);
-          }
+        if (
+          quote.pricePerDay !== financials.pricePerDay ||
+          quote.depositAmount !== financials.depositAmount ||
+          quote.platformFee !== financials.platformFee ||
+          quote.ownerPlatformFee !== financials.ownerPlatformFee ||
+          quote.renterPlatformFee !== financials.renterPlatformFee ||
+          quote.totalAmount !== financials.totalAmount
+        ) {
+          return errorResponse('قیمت، کارمزد یا شرایط کالا تغییر یافته است. لطفاً پیش‌فاکتور جدید دریافت نمایید.', 409, env, undefined, origin);
         }
 
         // Overlap verification in D1
