@@ -125,3 +125,21 @@ test('Pi native cancellation callback invokes server-side cancellation', () => {
   assert.match(context, /onCancel: async \(paymentId\)/);
   assert.match(context, /piService\.cancelPaymentOnServer\(paymentId, draftRental\.paymentIntentId\)/);
 });
+
+
+test('failed or cancelled Pi payments release the bound intent for a fresh retry', () => {
+  const intent = section("path === '/api/payments/intent'", "path === '/api/payments/cancel'");
+  assert.match(intent, /normalizedPaymentStatus/);
+  assert.match(intent, /\['cancelled','failed'\]\.includes\(normalizedPaymentStatus\)/);
+  assert.match(intent, /UPDATE payment_intents SET status='cancelled'/);
+  assert.match(intent, /UPDATE rentals SET payment_status='pending', status='pending_payment'/);
+  assert.match(intent, /payment-intent:\\$\{existing\.id\}/);
+});
+
+test('incomplete reconciliation converges failed or cancelled Pi payments without confirming the rental', () => {
+  const incomplete = section("path === '/api/payments/incomplete'", "path === '/api/sync/item'");
+  assert.match(incomplete, /payment\?\.status\?\.cancelled/);
+  assert.match(incomplete, /String\(payment\?\.status \|\| ''\)\.toLowerCase\(\) === 'failed'/);
+  assert.match(incomplete, /paymentStatus: 'cancelled'/);
+  assert.match(incomplete, /payment_status='pending', status='pending_payment'/);
+});
