@@ -85,7 +85,11 @@ test('worker has no marketplace memory fallback', () => {
   assert.match(worker, /requireBindings\(env\)/);
 });
 
-test('CORS preflight allows the session bridge client header', () => {\n  assert.match(worker, /Access-Control-Allow-Headers.*X-Rentora-Client/);\n});\n\ntest('frontend auth bridge uses HttpOnly cookie sessions instead of browser-stored bearer tokens', () => {
+test('CORS preflight allows the session bridge client header', () => {
+  assert.match(worker, /Access-Control-Allow-Headers.*X-Rentora-Client/);
+});
+
+test('frontend auth bridge uses HttpOnly cookie sessions instead of browser-stored bearer tokens', () => {
   assert.doesNotMatch(piAuthContext, /localStorage\.getItem\(STORAGE_KEY_USER\)/);
   assert.doesNotMatch(piAuthContext, /session\.sessionToken/);
   assert.doesNotMatch(piAuthContext, /headers\.set\('Authorization'/);
