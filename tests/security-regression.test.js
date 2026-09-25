@@ -4,6 +4,8 @@ import fs from 'node:fs';
 
 const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
 const piAuthContext = fs.readFileSync(new URL('../src/context/PiAuthContext.jsx', import.meta.url), 'utf8');
+const rentoraContext = fs.readFileSync(new URL('../src/context/RentoraContext.jsx', import.meta.url), 'utf8');
+const cloudSyncService = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
 const activationMigration = fs.readFileSync(new URL('../db/migrations/0013_owner_fee_activation_cycle.sql', import.meta.url), 'utf8');
 
 function section(start, end) {
@@ -71,6 +73,36 @@ test('renter completion requires owner activation fee completion', () => {
   const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
   assert.match(complete, /Owner activation fee is not completed/);
   assert.match(complete, /renter_fee_payment_status='completed'/);
+});
+
+test('reservation creation treats owner activation as listing-level and creates only the renter obligation', () => {
+  const rentals = section("path === '/api/rentals'", "path === '/api/sync/rental'");
+  assert.match(rentals, /listing\.owner_fee_payment_status !== 'completed'/);
+  assert.match(rentals, /owner_fee_payment_status.*'completed', 'unpaid'/);
+  assert.match(rentals, /'renter', 'platform_fee'/);
+  assert.doesNotMatch(rentals, /'owner', 'platform_fee'/);
+});
+
+test('retired rental sync endpoint cannot mutate authoritative rental financials', () => {
+  const legacy = section("path === '/api/sync/rental'", "path === '/api/sync/rental/status'");
+  assert.match(legacy, /410/);
+  assert.match(legacy, /Legacy rental sync endpoint is retired/);
+});
+
+test('frontend reservation confirmation is not synthesized from a Pi callback', () => {
+  assert.match(rentoraContext, /Worker decides whether the rental is confirmed/);
+  assert.doesNotMatch(rentoraContext, /status: RENTAL_STATES\.CONFIRMED/);
+  assert.doesNotMatch(rentoraContext, /paymentStatus: "paid_confirmed"/);
+});
+
+test('frontend rental sync is cache-only and no longer posts client-owned rental state', () => {
+  assert.doesNotMatch(cloudSyncService, /\/api\/sync\/rental/);
+  assert.match(cloudSyncService, /Rental persistence is server-authoritative through POST \/api\/rentals/);
+});
+
+test('frontend contact and rental transitions use HttpOnly cookie credentials', () => {
+  assert.doesNotMatch(rentoraContext, /localStorage\.getItem\('rentora_live_v1_session'\)/);
+  assert.match(rentoraContext, /credentials: 'include'/);
 });
 
 test('server logout revokes the KV session', () => {
