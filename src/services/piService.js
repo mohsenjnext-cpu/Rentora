@@ -150,11 +150,20 @@ class PiNetworkService {
     return options;
   }
 
-  async ensurePaymentIntent(paymentIntentId, rentalId) {
-    if (!rentalId) throw new Error('شناسه رزرو برای ساخت Payment Intent لازم است.');
+  async ensurePaymentIntent(paymentIntentId, { rentalId = null, listingId = null, role = 'renter' } = {}) {
+    if (role === 'renter' && !rentalId) throw new Error('شناسه رزرو برای ساخت Payment Intent لازم است.');
+    if (role === 'owner' && !listingId) throw new Error('شناسه آگهی برای ساخت Payment Intent لازم است.');
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
-    const response = await fetch(`${apiBase}/api/payments/intent`, this.getSessionRequestOptions('POST', { rentalId, paymentIntentId: paymentIntentId || undefined }));
+    const response = await fetch(
+      `${apiBase}/api/payments/intent`,
+      this.getSessionRequestOptions('POST', {
+        rentalId: rentalId || undefined,
+        listingId: listingId || undefined,
+        role,
+        paymentIntentId: paymentIntentId || undefined
+      })
+    );
     const data = await response.json().catch(() => ({}));
     const intentId = data?.paymentIntentId || data?.id;
     if (!response.ok || !intentId || !Number.isFinite(Number(data?.amount)) || !data?.memo) {
@@ -198,7 +207,12 @@ class PiNetworkService {
     if (!(await this.waitForSdk()) || typeof window.Pi.createPayment !== 'function') throw new Error('پرداخت Pi فقط در Pi Browser رسمی امکان‌پذیر است.');
     await this.init();
 
-    const serverIntent = await this.ensurePaymentIntent(paymentIntentId, paymentData?.metadata?.rentalId);
+    const paymentRole = String(paymentData?.metadata?.role || 'renter').toLowerCase();
+    const serverIntent = await this.ensurePaymentIntent(paymentIntentId, {
+      rentalId: paymentData?.metadata?.rentalId || null,
+      listingId: paymentData?.metadata?.listingId || paymentData?.metadata?.itemId || null,
+      role: paymentRole
+    });
     const amount = serverIntent.amount;
     const memo = serverIntent.memo;
     const { onReadyForServerApproval, onReadyForServerCompletion, onCancel, onError } = callbacks || {};
