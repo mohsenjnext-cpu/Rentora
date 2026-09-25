@@ -57,11 +57,18 @@ export default function ItemCard({ item, onSelect, onRentClick, variant = 'defau
   if (variant === 'compact') {
     return (
       <article
-        onClick={() => onSelect && onSelect(item)}
-        className="group bg-white dark:bg-[#151426] border border-[#E4E4EC] dark:border-slate-800 rounded-[var(--radius-card)] p-1.5 overflow-hidden cursor-pointer shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)] transition duration-200 ease-[var(--ease-rentora)]"
+        className="group bg-white dark:bg-[#151426] border border-[#E4E4EC] dark:border-slate-800 rounded-[var(--radius-card)] p-1.5 overflow-hidden shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)] transition duration-200 ease-[var(--ease-rentora)]"
       >
         <div className="relative h-28 rounded-xl overflow-hidden bg-[#D8D7F5] dark:bg-[#27254A]">
-          <img src={imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
+          <button
+            type="button"
+            onClick={() => onSelect?.(item)}
+            aria-label={l('مشاهده آگهی', 'View listing', 'عرض الإعلان', '查看物品')}
+            className="absolute inset-0 z-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-rentora-primary-accent focus-visible:ring-inset"
+          >
+            <span className="sr-only">{item.title}</span>
+          </button>
+          <img src={imageUrl} alt="" aria-hidden="true" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
           {item.ownerKYC && (
             <span className="absolute top-2 left-2 rtl:left-auto rtl:right-2 rounded px-1.5 py-0.5 text-[9px] font-bold badge-trust flex items-center gap-0.5 shadow-xs">
               <ShieldCheck className="w-2.5 h-2.5 stroke-[2.2]" />
