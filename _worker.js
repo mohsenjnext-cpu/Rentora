@@ -1483,7 +1483,7 @@ export default {
         if (existing) {
           await env.RENTORA_DB.prepare(`UPDATE payment_intents SET id=?1, amount=?2, memo=?3, status='created', pi_payment_id=NULL, pi_txid=NULL, created_at=?4, expires_at=?5, updated_at=?4 WHERE rental_id=?6`).bind(id, canonicalAmount, memo, now(), expires, rental.id).run();
         } else {
-          await env.RENTORA_DB.prepare(`INSERT INTO payment_intents(id,rental_id,user_id,amount,memo,status,created_at,expires_at,updated_at) VALUES(?1,?2,?3,?4,?5,'created',?6,?7,?6)`).bind(id, rental.id, user.id, canonicalAmount, memo, now(), expires, rental.id ? rental.id : now()).run();
+          await env.RENTORA_DB.prepare(`INSERT INTO payment_intents(id,rental_id,user_id,amount,memo,status,created_at,expires_at,updated_at) VALUES(?1,?2,?3,?4,?5,'created',?6,?7,?6)`).bind(id, rental.id, user.id, canonicalAmount, memo, now(), expires).run();
         }
         await env.RENTORA_DB.prepare(`UPDATE rentals SET payment_status='pending', status='pending_payment', updated_at=?1 WHERE id=?2`).bind(now(), rental.id).run();
         await env.RENTORA_KV.put(`payment-intent:${id}`, JSON.stringify({ userId: user.id, rentalId: rental.id, amount: canonicalAmount, memo, metadata }), { expirationTtl: PAYMENT_INTENT_TTL });
