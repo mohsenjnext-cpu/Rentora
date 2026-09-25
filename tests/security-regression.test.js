@@ -107,6 +107,13 @@ test('incomplete payment reconciliation preserves authoritative completion trans
   assert.doesNotMatch(incomplete, /UPDATE payment_obligations SET status='completed'.*WHERE id=\?3/);
 });
 
+test('renter contact details stay locked until confirmed rental payment', () => {
+  const contact = section("path.startsWith('/api/rentals/') && path.endsWith('/contact')", "path.startsWith('/api/listings/') && path.endsWith('/contact')");
+  assert.match(contact, /row\.payment_status === 'completed'/);
+  assert.match(contact, /\['confirmed', 'active', 'completed'\]\.includes\(row\.rental_status\)/);
+  assert.match(contact, /Contact information is locked until rental payment is confirmed/);
+});
+
 test('owner activation obligations are bound to an activation cycle in D1', () => {
   assert.match(worker, /payment_obligations\(id,rental_id,listing_id,user_id,role,purpose,amount,currency,status,memo,metadata,activation_cycle,expires_at,created_at,updated_at\)/);
   assert.match(worker, /activationCycle: cycle/);
