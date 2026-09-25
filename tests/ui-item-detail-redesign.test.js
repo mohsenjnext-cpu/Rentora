@@ -229,5 +229,5 @@ test('Pi completion transaction persistence uses conflict-safe identity checks b
   const identityCheck = route.indexOf('const existingTransaction');
   const confirm = route.indexOf("UPDATE rentals SET payment_status='completed',status='confirmed'");
   assert.ok(identityCheck >= 0 && confirm > identityCheck);
-  assert.match(route, /INSERT OR IGNORE INTO transactions/);
+  assert.match(route, /INSERT INTO transactions\(/);
 });
