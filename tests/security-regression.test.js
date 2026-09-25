@@ -214,3 +214,23 @@ test('owner activation obligations are bound to an activation cycle in D1', () =
   assert.match(activationMigration, /DROP INDEX IF EXISTS uq_payment_obligations_listing_role_purpose/);
   assert.match(activationMigration, /uq_payment_obligations_listing_role_purpose_cycle/);
 });
+
+
+test('incomplete payment recovery requires the authenticated obligation owner', () => {
+  const incomplete = section("path === '/api/payments/incomplete'", "path.startsWith('/api/listings/')");
+  assert.match(incomplete, /const \{ user \} = await requireUser\(request, env\)/);
+  assert.match(incomplete, /WHERE pi_payment_id=\?1 AND user_id=\?2 LIMIT 1/);
+  assert.match(incomplete, /bind\(paymentId, user\.id\)/);
+});
+
+test('renter completion confirms the rental after the renter half completes', () => {
+  const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
+  assert.match(
+    complete,
+    /const bothCompleted = rental &&\\s+rental\.owner_fee_payment_status === 'completed';/
+  );
+  assert.match(
+    complete,
+    /renter_fee_payment_status='completed', renter_fee_payment_id=\?1, payment_status='completed', status=\$\{bothCompleted \? "'confirmed'" : "status"\}/
+  );
+});
