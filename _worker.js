@@ -1819,7 +1819,7 @@ export default {
           return jsonResponse({ success: true, item: { ...sanitizedItem, pricePerDay: price, deposit } }, 200, env, origin);
         }
         const price = Number(item.pricePerDay); const deposit = Number(item.deposit || 0);
-        if (!Number.isFinite(price) || price < 0 || !Number.isFinite(deposit) || deposit < 0) return errorResponse('Invalid listing price', 400, env, undefined, origin);
+        if (!Number.isFinite(price) || price < 0 || price > 1000000000 || !Number.isFinite(deposit) || deposit < 0 || deposit > 1000000000) return errorResponse('Invalid listing price', 400, env, undefined, origin);
         await env.RENTORA_DB.prepare(`INSERT INTO listings(id,owner_user_id,title,description,category,location,price_per_day,deposit_amount,platform_fee_rate,status,metadata,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,'active',?10,?11,?11)`).bind(listingId, user.id, title, description, category || null, location || null, price, deposit, Number(env.PLATFORM_FEE_RATE || 0.05), JSON.stringify(sanitizedItem), now()).run();
         if (cInfo && typeof cInfo === 'object') {
           const cName = String(cInfo.contactName || cInfo.name || '').trim() || null;
