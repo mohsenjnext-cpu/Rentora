@@ -204,7 +204,7 @@ test('payment intent creation never resets a live Pi payment binding', () => {
   const route = worker.slice(start, end);
   assert.match(route, /existing\.pi_payment_id/);
   assert.match(route, /boundPaymentId/);
-  assert.match(route, /Never reset the binding and orphan that payment/);
+  assert.match(route, /Reconcile the bound payment before deciding whether a new intent is safe/);
 });
 
 test('expired payment intent bindings are reconciled before any replacement intent is created', () => {
