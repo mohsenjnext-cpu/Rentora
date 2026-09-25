@@ -102,6 +102,22 @@ test('frontend auth bridge uses HttpOnly cookie sessions instead of browser-stor
   assert.match(piAuthContext, /localStorage\.removeItem\('rentora_live_v1_session'\)/);
 });
 
+test('server auth session is issued and revoked as an HttpOnly cookie', () => {
+  assert.match(worker, /function getCookie\(request, name\)/);
+  assert.match(worker, /rentora_session=/);
+  assert.match(worker, /HttpOnly; Secure; SameSite=None/);
+  assert.match(worker, /Set-Cookie/);
+  assert.match(worker, /const cookieToken = getCookie\(request, 'rentora_session'\)/);
+  assert.match(worker, /const token = cookieToken \|\| \(header\.startsWith\('Bearer '\)/);
+});
+
+test('sync client sends cookies without reading session tokens from localStorage', () => {
+  const sync = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(sync, /localStorage\.getItem\(STORAGE_USER_KEY\)/);
+  assert.doesNotMatch(sync, /session\.sessionToken/);
+  assert.match(sync, /credentials: 'include'/);
+});
+
 
 test('Pi cancellation converges payment intent and rental state server-side', () => {
   const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
