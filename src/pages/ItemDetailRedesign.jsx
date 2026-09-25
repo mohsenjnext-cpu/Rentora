@@ -38,7 +38,7 @@ export default function ItemDetailRedesign({
 
   if (!item) return null;
 
-  const mine = String(currentUser?.uid || '') && String(item.ownerUid || '') === String(currentUser?.uid || '');
+  const mine = Boolean(currentUser?.uid && item.ownerUid && String(item.ownerUid) === String(currentUser.uid));
   const myName = String(currentUser?.username || '').replace('@', '').trim().toLowerCase();
   const ownerName = String(item.ownerUsername || '').replace('@', '').trim().toLowerCase();
   const isOwner = Boolean(mine || (myName && ownerName && myName === ownerName));
