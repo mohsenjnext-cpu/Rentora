@@ -2732,7 +2732,7 @@ export default {
             listing.deposit_amount,
             body.startDate,
             body.endDate,
-            Number(env.PLATFORM_FEE_RATE || 0.05),
+            Number(listing.platform_fee_rate || env.PLATFORM_FEE_RATE || 0.05),
             0.0001
           );
         } catch (err) {
@@ -2776,6 +2776,8 @@ export default {
           depositAmount: financials.depositAmount,
           platformFee: financials.platformFee,
           platformFeeTotal: financials.platformFeeTotal,
+          platformFeeRate: Number(listing.platform_fee_rate || env.PLATFORM_FEE_RATE || 0.05),
+          platformFeePercentage: Number((Number(listing.platform_fee_rate || env.PLATFORM_FEE_RATE || 0.05) * 100).toFixed(4)),
           ownerPlatformFee: financials.ownerPlatformFee,
           renterPlatformFee: financials.renterPlatformFee,
           totalAmount: financials.totalAmount,
@@ -2840,7 +2842,7 @@ export default {
             listing.deposit_amount,
             startDate,
             endDate,
-            Number(env.PLATFORM_FEE_RATE || 0.05),
+            Number(listing.platform_fee_rate || env.PLATFORM_FEE_RATE || 0.05),
             0.0001
           );
         } catch (err) {
