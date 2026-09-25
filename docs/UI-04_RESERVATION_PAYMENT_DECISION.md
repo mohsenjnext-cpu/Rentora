@@ -28,9 +28,19 @@ Baymard's mobile checkout research emphasizes keeping the final amount visible b
 4. POST /api/payments/approve and POST /api/payments/complete validate the obligation and Pi payment server-side.
 5. UI must not synthesize a fee when the quote is unavailable.
 
-## Product contract still open
+## Owner activation fee contract
 
-The owner activation fee is paid before a rental exists. The current product contract does not yet define the reservation basis from which that pre-rental owner half is calculated. UI-04 therefore does not invent or display an owner activation fee formula. That basis must be defined before production activation of owner-fee economics.
+The owner activation fee is paid before a rental exists, so it cannot depend on a renter-selected rental duration. Rentora therefore defines the pre-rental owner obligation as the owner's 50% share of the platform fee for **one canonical rental day at the listing's authoritative daily price and fee rate**.
+
+Formula:
+- Canonical one-day platform fee = price_per_day × platform_fee_rate, subject to the server minimum fee.
+- Owner activation fee = 50% of that canonical one-day platform fee.
+- The renter pays 50% of the actual reservation platform fee calculated from the selected dates.
+- Rental price and deposit remain direct P2P settlement and are never part of Rentora's Pi fee transaction.
+- The owner activation obligation is listing-level and tied to an activation cycle. It is not recreated for every rental.
+- If the listing's daily price or fee rate changes, a new activation cycle uses the new authoritative values.
+
+The activation API returns the activation cycle, amount, fee rate, and canonical one-day basis so the UI can explain the obligation before Pi payment. This contract intentionally does not claim that the owner and renter payments are equal for every multi-day rental. The 50/50 split applies to the platform-fee calculation at each applicable obligation basis.
 
 ## Validation
 
