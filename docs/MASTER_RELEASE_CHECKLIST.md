@@ -100,7 +100,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [x] Security headers
 - [ ] Input validation
 - [x] Image validation
-- [ ] Rate/abuse protections where required
+- [x] Rate/abuse protections where required
 - [ ] No secrets in client bundle
 - [ ] No stack traces / sensitive errors
 - [x] Legacy routes safely retired
@@ -174,3 +174,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - Failed/cancelled Pi payment convergence: payment intent creation now reconciles the bound Pi payment before reuse; a Pi payment reported as cancelled/failed retires the dead intent binding, returns the rental to pending_payment, clears its KV intent snapshot, and allows a fresh authoritative intent. Incomplete-payment reconciliation applies the same convergence without confirming the rental.
 - R2/media audit: upload validates declared MIME against file magic bytes, enforces a 2MB decoded limit, stores to R2 when available with immutable cache metadata, falls back to KV, and GET /api/images/:id supports R2/KV retrieval with lazy R2 migration and nosniff headers.
 - CI for payment convergence commit 60c6fdea9bc174a023497972e4fbc84186959d64: NOT RUN / no workflow run reported yet.
+
+
+- Abuse/rate-limit hardening: KV-backed request throttles now cover Pi login, payment intent/approve/complete/incomplete, uploads, reports, and message sends. Limits are scoped per short-lived IP bucket and return HTTP 429 with retry metadata. This is a basic edge throttle, not a replacement for durable WAF/bot controls.
+- CI for the latest security-throttle test commit 2d3a82ecf7e7bde827ee284f1b6a6151315bb43f: NOT RUN / no workflow run reported yet.
