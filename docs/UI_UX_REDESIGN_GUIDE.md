@@ -528,3 +528,13 @@ Added additive shared interaction primitives under `src/components/ui/`:
 These components are presentation primitives only. They do not alter existing booking, payment, report, delete, or account business flows.
 
 **Status:** Implemented. Existing legacy modals remain operational; migration and dedicated regression coverage remain pending.
+
+
+## Design System Implementation 05 — Toast, Navigation & Discover Adoption — 2026-09-25
+
+Added:
+- `RentoraToast`: accessible transient-notification presentation primitive with polite/assertive live regions and optional action/close controls.
+- `RentoraNavItem`: shared navigation item primitive with current-page semantics, badge support and focus-visible behavior.
+- Discover now adopts `RentoraInput`, `RentoraButton` and `RentoraModal` for search, filter actions and the filter dialog while preserving the existing filtering/sorting/data contracts.
+
+**Status:** Additive migration completed for the Discover filter/search surface. Full Discover Definition of Done remains pending because loading/real-state regression, mobile/Pi Browser review, accessibility regression coverage and final review are not yet complete.
