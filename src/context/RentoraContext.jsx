@@ -334,8 +334,13 @@ export function RentoraProvider({ children }) {
   }, [currentUser]);
 
   const executePiPaymentForRental = async (rentalId, draftRental) => {
-    if (!draftRental) throw new Error("اطلاعات رزرو نامعتبر است.");
-    const paymentResult = await piService.createPayment({
+    if (!draftRental?.id || draftRental.id !== rentalId) {
+      throw new Error("اطلاعات رزرو برای پرداخت نامعتبر است.");
+    }
+
+    // Pi payment is authoritative only after the server-side intent/approve/complete flow.
+    // Do not synthesize or persist a confirmed rental in browser state.
+    return piService.createPayment({
       paymentData: {
         amount: draftRental.rentoraFee,
         memo: `Rentora Fee #${draftRental.bookingNumber || draftRental.id.substring(0, 10)}`,
@@ -351,23 +356,6 @@ export function RentoraProvider({ children }) {
       },
       paymentIntentId: draftRental.paymentIntentId
     });
-    const txid = paymentResult.txid, paymentId = paymentResult.paymentId;
-    const confirmedRental = {
-      ...draftRental,
-      status: RENTAL_STATES.CONFIRMED,
-      renterCommissionPaid: true,
-      paymentStatus: "paid_confirmed",
-      piPaymentId: paymentId,
-      piTxRef: txid,
-      paidAt: new Date().toISOString()
-    };
-    setRentals(prev => {
-      const updated = [confirmedRental, ...prev.filter(r => r.id !== confirmedRental.id)];
-      cloudSyncService.saveCachedRentals(updated);
-      return updated;
-    });
-    await cloudSyncService.broadcastNewRental(confirmedRental);
-    return paymentResult;
   };
 
   const transitionRentalStatus = async (rentalId, action) => {
