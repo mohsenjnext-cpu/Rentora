@@ -40,6 +40,13 @@ test('payment approval uses an atomic D1 claim for the Pi payment ID', () => {
   assert.match(approve, /concurrently claimed by another payment/);
 });
 
+test('incomplete Pi reconciliation is authenticated and user-bound', () => {
+  const route = section("path === '/api/payments/incomplete'", "path === '/api/sync/item'");
+  assert.match(route, /const \{ user \} = await requireUser\(request, env\)/);
+  assert.match(route, /WHERE pi\.pi_payment_id=\?1 AND pi\.user_id=\?2 LIMIT 1/);
+  assert.match(route, /\.bind\(paymentId, user\.id\)\.first\(\)/);
+});
+
 test('incomplete Pi reconciliation rejects transaction identity collisions before confirming', () => {
   const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
   const start = worker.indexOf("path === '/api/payments/incomplete'");
