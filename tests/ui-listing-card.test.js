@@ -33,6 +33,8 @@ test('listing card exposes a dedicated skeleton variant', () => {
 });
 
 
-test('compact card does not use a nested interactive role', () => {
-  assert.doesNotMatch(card, /variant === 'compact'[\s\S]*?role="button"/);
+test('compact card keeps article non-interactive and exposes a keyboard-accessible view target', () => {
+  assert.doesNotMatch(card, /variant === 'compact'[\s\S]*?<article[\\s\\S]*?role="button"/);
+  assert.match(card, /aria-label=\{l\('مشاهده آگهی'/);
+  assert.match(card, /focus-visible:ring-2/);
 });
