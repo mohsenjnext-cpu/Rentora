@@ -61,10 +61,9 @@ export class CloudSyncService {
       this.saveCachedUsers(updated);
       this.notifySubscribers('USER_SYNC', { users: updated, user: data });
     } else if (type === 'RENTAL_UPDATE' && data) {
-      const rentals = this.getCachedRentals();
-      const updated = [data, ...rentals.filter(r => r.id !== data.id)];
-      this.saveCachedRentals(updated);
-      this.notifySubscribers('RENTAL_SYNC', { rentals: updated, rental: data });
+      // Rental/payment state is never persisted in browser storage.
+      // Broadcast only the fresh server payload; the next sync rehydrates authority from D1.
+      this.notifySubscribers('RENTAL_SYNC', { rentals: [data], rental: data });
     }
   }
 
@@ -242,10 +241,7 @@ export class CloudSyncService {
       if (data.rental) rental = data.rental;
     }
 
-    const cached = this.getCachedRentals();
-    const updated = [rental, ...cached.filter(r => r.id !== rental.id)];
-    this.saveCachedRentals(updated);
-
+    // Do not cache rentals locally. Rental/payment state remains server-authoritative.
     try {
       this.broadcastChannel?.postMessage({ type: 'RENTAL_UPDATE', data: rental });
     } catch (e) {}
@@ -911,33 +907,14 @@ export class CloudSyncService {
   }
 
   getCachedRentals() {
-    try {
-      const saved = localStorage.getItem(STORAGE_RENTALS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const dedupedMap = new Map();
-          parsed.forEach(r => {
-            if (r && r.id) dedupedMap.set(r.id, r);
-          });
-          return Array.from(dedupedMap.values());
-        }
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    // Intentionally empty. Rentals may contain private booking/payment state.
+    // Never restore them from localStorage or use browser storage as authority.
+    return [];
   }
 
-  saveCachedRentals(rentals) {
-    try {
-      const list = Array.isArray(rentals) ? rentals : [];
-      const dedupedMap = new Map();
-      list.forEach(r => {
-        if (r && r.id) dedupedMap.set(r.id, r);
-      });
-      localStorage.setItem(STORAGE_RENTALS_KEY, JSON.stringify(Array.from(dedupedMap.values())));
-    } catch (e) {}
+  saveCachedRentals(_rentals) {
+    // Intentionally a no-op for backward-compatible callers.
+    // Server/D1 remains the only source of rental/payment truth.
   }
 
   clearUserSessionCache() {
