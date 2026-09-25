@@ -92,7 +92,7 @@
 - [x] Unified shared component
 - [x] Replace duplicated mobile implementation
 - [x] Real listing state integration
-- [ ] Loading/placeholder state
+- [x] Loading/placeholder state
 - [x] RTL/mobile/accessibility
 - [x] Regression tests
 - [ ] Final review
@@ -431,9 +431,13 @@ Verified on `main` before implementation work:
 
 **Decision:** Treat ItemCard as the shared listing-card primitive and migrate mobile Home to it progressively. Preserve the existing mobile visual wrapper during migration where necessary, but do not maintain two independent business implementations.
 
-**Status:** Shared `ItemCard` now owns both default and compact/mobile rendering paths. Home mobile no longer defines a second listing-card business implementation. A focused regression test verifies the convergence. Full listing-card completion remains pending for loading/placeholder coverage and final review/migration.
+**Status:** Shared `ItemCard` now owns both default and compact/mobile rendering paths. Home mobile no longer defines a second listing-card business implementation. A focused regression test verifies the convergence. Full listing-card completion remains pending for final review/migration.
 
 
+
+- Home now distinguishes initial empty/loading state via the provider's server-sync lifecycle; cached listings continue to render immediately.
+- Shared ItemCard exposes a skeleton variant used by mobile and desktop Home loading states.
+- Regression coverage now verifies the loading state and skeleton variant.
 ### 2026-09-25 — Listing Card Convergence Implementation
 
 - Home mobile now renders the shared `ItemCard` with `variant="compact"`.
