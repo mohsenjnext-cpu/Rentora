@@ -49,7 +49,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Pi createPayment
 - [x] approve
 - [x] complete
-- [ ] cancellation
+- [x] cancellation
 - [ ] failed/pending states
 - [x] incomplete-payment recovery
 - [x] idempotency / duplicate protection
@@ -104,7 +104,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] No secrets in client bundle
 - [ ] No stack traces / sensitive errors
 - [x] Legacy routes safely retired
-- [ ] Payment tampering resistance
+- [x] Payment tampering resistance
 
 ## 9. Verification
 - [x] Unit/regression tests
@@ -134,7 +134,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Post-merge smoke test
 
 ## Current verified checkpoint
-- Latest verified work commit: a5201e6cb40cebfb485458640a4a5b7e3246c2fd
+- Latest verified work commit: 46f1cf943d4560d47d1fa6624b73055dbc955633
 - Rental/contact/chat audit: rental contact is restricted to authorized participants/admin, renter access requires completed payment plus confirmed/active/completed rental state, and listing contact is owner/admin-only.
 - Conversation authorization: list/create/read/send/archive routes require authenticated participant access; conversation and message payloads derive sender/participants from D1 identities rather than client-supplied roles.
 - Contact filtering: pre-booking messages pass through the server anti-bypass contact filter; post-booking unlock requires completed payment and an allowed rental state.
@@ -142,7 +142,6 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - Rental authority hardening: legacy POST /api/sync/rental returns 410 and directs clients to the authoritative quote -> /api/rentals flow; rental status transitions remain atomically guarded.
 - Regression coverage added for archived-conversation write protection and legacy rental sync retirement.
 - CI on the latest work commit: NOT RUN. The most recent observed GitHub Actions run was on c256532b6321ecf7fdb6c6e0c4b414f20e4051c7 and FAILED in `npm test` with 2 brittle assertions; those failures were diagnosed and the affected tests were corrected in subsequent commits. No Actions run/status is currently reported for 9354e625ddd946aef0845ae12ea74b9c0492f6eb yet.
-- ADMIN_PI_UIDS authoritative-value blocker: BLOCKED until real Pi UIDs are supplied/verified.
 - ADMIN_PI_UIDS authoritative-value blocker: BLOCKED until real Pi UIDs are supplied/verified.
 - Payment approval race hardening: the intent is now atomically bound to the Pi payment before the external Pi approval call. A competing payment ID therefore cannot be approved and later orphaned by losing the D1 claim; transient approval/API failure preserves the same binding for retry.
 - Payment-intent recovery hardening: a live intent already bound to a Pi payment is reused rather than reset, preventing a new intent/payment from orphaning the previously bound Pi payment.
@@ -155,3 +154,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 ### Latest Audit Updates
 - Incomplete Pi reconciliation transaction identity hardening: transaction collisions are rejected before rental confirmation; same-intent duplicate reconciliation is idempotent; reconciliation transaction inserts are strict rather than `INSERT OR IGNORE`.
 - CI run #809: FAIL, 310/311 tests passed; sole failure was a brittle optional-chaining regex assertion in `tests/ui-item-detail-redesign.test.js`, now corrected.
+
+- Pi cancellation convergence: POST /api/payments/cancel now verifies ownership, refuses completed payments, marks the payment intent and still-payable rental cancelled, and clears the short-lived payment-intent KV record. Native Pi onCancel now invokes this server path.
+- Payment tampering resistance checkpoint: approve/complete/incomplete flows bind payment intent, payer, amount, metadata, and Pi transaction identity; transaction uniqueness is enforced with strict inserts plus identity prechecks.
+- CI run #821 on the checklist checkpoint failed because one regression test still expected the old INSERT OR IGNORE transaction persistence; implementation is intentionally strict INSERT. The test was corrected in 46f1cf943d4560d47d1fa6624b73055dbc955633 and requires a fresh green run before verification is marked complete.
