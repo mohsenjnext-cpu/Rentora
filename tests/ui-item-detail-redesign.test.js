@@ -94,3 +94,17 @@ test('context rental compatibility wrapper delegates only to authoritative quote
   assert.doesNotMatch(bookingFn, /Math\.random/);
   assert.doesNotMatch(bookingFn, /pricePerDay|dailyRate|securityDeposit|rentalTotal|rentoraFee/);
 });
+
+
+test('Pi payment wrapper does not synthesize or broadcast a confirmed rental client-side', () => {
+  const context = fs.readFileSync(new URL('../src/context/RentoraContext.jsx', import.meta.url), 'utf8');
+  const start = context.indexOf('const executePiPaymentForRental');
+  const end = context.indexOf('const transitionRentalStatus', start);
+  assert.ok(start >= 0 && end > start);
+  const paymentFn = context.slice(start, end);
+  assert.match(paymentFn, /piService\.createPayment/);
+  assert.doesNotMatch(paymentFn, /const confirmedRental/);
+  assert.doesNotMatch(paymentFn, /setRentals/);
+  assert.doesNotMatch(paymentFn, /broadcastNewRental/);
+  assert.doesNotMatch(paymentFn, /saveCachedRentals/);
+});
