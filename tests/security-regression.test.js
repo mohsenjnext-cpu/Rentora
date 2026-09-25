@@ -201,5 +201,6 @@ test('listing mutations validate bounded fields and enum status', () => {
 
 
 test('frontend authenticated actions use HttpOnly cookie sessions instead of localStorage bearer tokens', () => {
-  assert.doesNotMatch(workerContext, /localStorage\.getItem\(['"]rentora_live_v1_session['"]\)/);
+  const context = fs.readFileSync(new URL('../src/context/RentoraContext.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(context, /localStorage\.getItem\(['"]rentora_live_v1_session['"]\)/);
 });
