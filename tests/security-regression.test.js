@@ -185,6 +185,16 @@ test('renter contact details stay locked until confirmed rental payment', () => 
   assert.match(contact, /Contact information is locked until rental payment is confirmed/);
 });
 
+test('owner activation fee uses the canonical one-day 50/50 basis', () => {
+  const activate = section("path.startsWith('/api/listings/') && path.endsWith('/activate')", "path === '/api/sync/item'");
+  assert.match(activate, /canonicalDailyRate/);
+  assert.match(activate, /canonicalOneDayPlatformFee/);
+  assert.match(activate, /canonicalDays: 1/);
+  assert.match(activate, /ownerActivationFee: ownerFee/);
+  assert.match(activate, /Number\(\(canonicalOneDayPlatformFee \/ 2\)\.toFixed\(4\)\)/);
+  assert.match(activate, /feeRate/);
+});
+
 test('owner activation cycle claim is atomic against concurrent requests', () => {
   const activate = section("path.startsWith('/api/listings/') && path.endsWith('/activate')", "path === '/api/sync/item'");
   assert.match(activate, /UPDATE listings/);
