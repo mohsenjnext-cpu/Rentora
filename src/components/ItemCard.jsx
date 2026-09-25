@@ -13,28 +13,29 @@ import {
   Settings
 } from 'lucide-react';
 
-export default function ItemCard({ item, onSelect, onRentClick, variant = 'default' }) {
-  if (variant === 'skeleton') {
-    return (
-      <article
-        aria-hidden="true"
-        className="overflow-hidden rounded-[14px] border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#151426] animate-pulse"
-      >
-        <div className="aspect-[4/3] bg-slate-200 dark:bg-slate-800" />
-        <div className="p-2.5 space-y-2">
-          <div className="h-2.5 w-16 rounded-full bg-slate-200 dark:bg-slate-800" />
-          <div className="h-3.5 w-4/5 rounded bg-slate-200 dark:bg-slate-800" />
-          <div className="h-3 w-3/5 rounded bg-slate-200 dark:bg-slate-800" />
-          <div className="pt-1 flex items-center justify-between gap-2">
-            <div className="h-3 w-20 rounded bg-slate-200 dark:bg-slate-800" />
-            <div className="h-7 w-14 rounded-lg bg-slate-200 dark:bg-slate-800" />
-          </div>
+function ItemCardSkeleton() {
+  return (
+    <article
+      aria-hidden="true"
+      className="overflow-hidden rounded-[14px] border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#151426] animate-pulse"
+    >
+      <div className="aspect-[4/3] bg-slate-200 dark:bg-slate-800" />
+      <div className="p-2.5 space-y-2">
+        <div className="h-2.5 w-16 rounded-full bg-slate-200 dark:bg-slate-800" />
+        <div className="h-3.5 w-4/5 rounded bg-slate-200 dark:bg-slate-800" />
+        <div className="h-3 w-3/5 rounded bg-slate-200 dark:bg-slate-800" />
+        <div className="pt-1 flex items-center justify-between gap-2">
+          <div className="h-3 w-20 rounded bg-slate-200 dark:bg-slate-800" />
+          <div className="h-7 w-14 rounded-lg bg-slate-200 dark:bg-slate-800" />
         </div>
-      </article>
-    );
-  }
+      </div>
+    </article>
+  );
+}
 
+export default function ItemCard({ item, onSelect, onRentClick, variant = 'default' }) {
   const { lang, dir, t, l } = useLanguage();
+  if (variant === 'skeleton') return <ItemCardSkeleton />;
   const { currentUser } = usePiAuth();
   const { favorites = [], toggleFavorite } = useRentora();
 
