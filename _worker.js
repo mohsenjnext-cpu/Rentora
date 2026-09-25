@@ -1797,11 +1797,13 @@ export default {
 
         const cycle = 'act_' + crypto.randomUUID();
         const feeRate = Number(listing.platform_fee_rate || env.PLATFORM_FEE_RATE || 0.05);
-        const ownerFee = Math.max(0.0001, Number((Number(listing.price_per_day || 0) * feeRate / 2).toFixed(4)));
+        const canonicalDailyRate = Number(Number(listing.price_per_day || 0).toFixed(4));
+        const canonicalOneDayPlatformFee = Math.max(0.0001, Number((canonicalDailyRate * feeRate).toFixed(4)));
+        const ownerFee = Number((canonicalOneDayPlatformFee / 2).toFixed(4));
         const obligationId = 'obl_' + crypto.randomUUID();
         const expires = new Date(Date.now() + PAYMENT_INTENT_TTL * 1000).toISOString();
         const memo = `Rentora Owner Activation Fee #${String(listing.id).slice(-12)}`;
-        const metadata = { paymentIntentId: obligationId, obligationId, rentalId: null, listingId: listing.id, role: 'owner', purpose: 'platform_fee', activationCycle: cycle, expectedAmount: ownerFee, currency: 'PI', memo };
+        const metadata = { paymentIntentId: obligationId, obligationId, rentalId: null, listingId: listing.id, role: 'owner', purpose: 'platform_fee', activationCycle: cycle, expectedAmount: ownerFee, currency: 'PI', memo, feeRate, canonicalDays: 1, canonicalDailyRate, canonicalOneDayPlatformFee };
 
         // Claim the activation cycle atomically. Two concurrent requests may both read the
         // same listing, but only the first request whose expected cycle still matches can
@@ -1828,7 +1830,7 @@ export default {
           "INSERT INTO payment_obligations(id,rental_id,listing_id,user_id,role,purpose,amount,currency,status,memo,metadata,activation_cycle,expires_at,created_at,updated_at) VALUES(?1,NULL,?2,?3,'owner','platform_fee',?4,'PI','created',?5,?6,?7,?8,?9,?9)"
         ).bind(obligationId, listing.id, user.id, ownerFee, memo, JSON.stringify(metadata), cycle, expires, now()).run();
 
-        return jsonResponse({ success: true, active: false, activationCycle: cycle, paymentIntentId: obligationId, obligation: { id: obligationId, amount: ownerFee, role: 'owner', purpose: 'platform_fee', status: 'created', activation_cycle: cycle, metadata } }, 201, env, origin);
+        return jsonResponse({ success: true, active: false, activationCycle: cycle, paymentIntentId: obligationId, feeRate, canonicalDays: 1, canonicalDailyRate, canonicalOneDayPlatformFee, ownerActivationFee: ownerFee, obligation: { id: obligationId, amount: ownerFee, role: 'owner', purpose: 'platform_fee', status: 'created', activation_cycle: cycle, metadata } }, 201, env, origin);
       }
 
       if (method === 'POST' && path === '/api/sync/item') { const { user } = await requireUser(request, env); const item = await readJson(request);
