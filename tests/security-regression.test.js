@@ -17,7 +17,7 @@ test('payment intent amount is server-owned and obligation-bound', () => {
   assert.match(intent, /payment_obligations/);
   assert.match(intent, /obligation\.amount/);
   assert.doesNotMatch(intent, /body\.amount/);
-  assert.match(intent, /body\.paymentIntentId/);
+  assert.match(intent, /body\?\.paymentIntentId/);
 });
 
 test('payment approval route requires an authenticated, obligation-bound payment', () => {
