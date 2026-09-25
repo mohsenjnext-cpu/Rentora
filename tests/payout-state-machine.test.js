@@ -28,7 +28,7 @@ test('0010 defines the complete payout lifecycle and safety states', () => {
 });
 
 test('both gateway copies implement the same durable state-machine contract', () => {
-  assert.equal(gateway, mirror);
+  assert.equal(gateway, mirror, 'Mirrored gateway must stay byte-identical to the production gateway');
   for (const source of [gateway, mirror]) {
     assert.match(source, /PAYOUT_STALE_MS/);
     assert.match(source, /INSERT INTO payout_operations[\s\S]*SELECT[\s\S]*ON CONFLICT\(operation_key\) DO NOTHING/);
