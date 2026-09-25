@@ -156,7 +156,7 @@ test('failed or cancelled Pi payments release the bound intent for a fresh retry
   assert.match(intent, /\['cancelled','failed'\]\.includes\(normalizedPaymentStatus\)/);
   assert.match(intent, /UPDATE payment_intents SET status='cancelled'/);
   assert.match(intent, /UPDATE rentals SET payment_status='pending', status='pending_payment'/);
-  assert.match(intent, /payment-intent:\\$\{existing\.id\}/);
+  assert.match(intent, /`payment-intent:\$\{existing\.id\}`/);
 });
 
 test('incomplete reconciliation converges failed or cancelled Pi payments without confirming the rental', () => {
@@ -190,8 +190,8 @@ test('server error responses do not expose internal exception text', () => {
   assert.match(worker, /else if \(status >= 500\)/);
   assert.match(worker, /خطای داخلی سرور/);
   assert.match(worker, /سرویس موقتاً در دسترس نیست/);
-  assert.match(worker, /errorResponse\('Pi payment approval failed', 502, env, \{ details: approved \}/);
-  assert.match(worker, /errorResponse\('Pi payment completion failed', 502, env, \{ details: completion \}/);
+  assert.match(worker, /errorResponse\('Pi payment approval failed', 502, env, undefined/);
+  assert.match(worker, /errorResponse\('Pi payment completion failed', 502, env, undefined/);
 });
 
 
