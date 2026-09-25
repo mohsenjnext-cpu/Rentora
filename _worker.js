@@ -1606,7 +1606,7 @@ export default {
         if (!approveResponse.ok && !(approveResponse.status === 400 && String(JSON.stringify(approved)).toLowerCase().includes('already'))) {
           // Keep the same Pi payment bound to the intent so a retry can recover from
           // transient Pi/API failures without allowing a different payment to race in.
-          return errorResponse('Pi payment approval failed', 502, env, { details: approved }, origin);
+          return errorResponse('Pi payment approval failed', 502, env, undefined, origin);
         }
 
         const approvedClaim = await env.RENTORA_DB.prepare(`UPDATE payment_intents SET status='approved',updated_at=?1 WHERE id=?2 AND status='created' AND pi_payment_id=?3`).bind(now(), intent.id, body.paymentId).run();
@@ -1673,7 +1673,7 @@ export default {
         });
         const completion = await completionResponse.json().catch(() => ({}));
         if (!completionResponse.ok && !['completed','complete'].includes(status)) {
-          return errorResponse('Pi payment completion failed', 502, env, { details: completion }, origin);
+          return errorResponse('Pi payment completion failed', 502, env, undefined, origin);
         }
 
         await env.RENTORA_DB.batch([
