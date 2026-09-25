@@ -182,6 +182,18 @@ class PiNetworkService {
     return data;
   }
 
+  async cancelPaymentOnServer(paymentId, paymentIntentId) {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
+    const response = await fetch(`${apiBase}/api/payments/cancel`, this.getSessionRequestOptions('POST', { paymentId, paymentIntentId }));
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.cancelled !== true) {
+      const errDetail = data?.error || data?.message || 'لغو وضعیت پرداخت در سرور ناموفق بود.';
+      throw new Error(errDetail);
+    }
+    return data;
+  }
+
   async completePaymentOnServer(paymentId, txid, paymentIntentId) {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('آدرس سرور رنتورا تنظیم نشده است.');
