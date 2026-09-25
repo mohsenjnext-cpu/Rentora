@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
@@ -32,7 +32,6 @@ export default function WalletModal({ isOpen, onClose }) {
     totalPaidOut: 0
   });
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState('');
 
   const loadBalance = async () => {
     if (!isAuthenticated || !currentUser) return;
@@ -99,7 +98,7 @@ export default function WalletModal({ isOpen, onClose }) {
                 <span>{l('کیف پول و درآمدها (Pi A2U Payout)', 'Pi Wallet & Earnings (A2U)', 'محفظة وأرباح باي (A2U)', 'Pi 钱包与收益（A2U）')}</span>
               </h3>
               <p className="text-[10px] text-slate-400">
-                {l('موجودی قابل برداشت، انتقال رسمی به کیف پول پای و سوابق تراکنش‌ها', 'Withdrawable balance, official Pi A2U payout & records', 'الرصيد القابل للسحب، التحويل لمحفظة باي وسجل المعاملات', '可提现收益、Pi 链上自动到账与账本明细')}
+                {l('موجودی تاییدشده و سوابق تراکنش‌ها', 'Verified balance and transaction records', 'الرصيد القابل للسحب، التحويل لمحفظة باي وسجل المعاملات', '可提现收益、Pi 链上自动到账与账本明细')}
               </p>
             </div>
           </div>
@@ -124,7 +123,7 @@ export default function WalletModal({ isOpen, onClose }) {
                 <span>{l('موجودی قابل برداشت شما', 'Your Withdrawable Balance', 'رصيدك القابل للسحب', '您的可提现收益')}</span>
               </div>
               <span className="badge-trust px-1.5 py-0.2 rounded text-[9px] font-bold">
-                {l('تسویه لحظه‌ای A2U', 'Instant A2U', 'تحويل فوري A2U', 'A2U 链上即时结算')}
+                {l('برداشت A2U فعلاً غیرفعال است', 'User A2U withdrawal is currently disabled', 'سحب A2U للمستخدم معطل حالياً', '用户 A2U 提现目前已停用')}
               </span>
             </div>
 
@@ -141,31 +140,6 @@ export default function WalletModal({ isOpen, onClose }) {
               </div>
             </div>
 
-            {withdrawSuccessMsg && (
-              <div className="p-3 rounded-xl badge-trust text-xs font-semibold space-y-1 animate-fadeIn border border-[#0F6E56]/30">
-                <div className="flex items-center gap-1.5 text-[#0F6E56] dark:text-[#48D2A8]">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>{withdrawSuccessMsg}</span>
-                </div>
-                {withdrawTxid && (
-                  <div className="text-[10px] font-mono text-slate-500 dark:text-slate-300 truncate" dir="ltr">
-                    Blockchain TxID: {withdrawTxid}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {withdrawErrorMsg && (
-              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{withdrawErrorMsg}</span>
-              </div>
-            )}
-
-            <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 p-3 text-[10px] text-amber-800 dark:text-amber-300 leading-relaxed">
-              <strong>{l('برداشت مستقیم به کیف پول Pi', 'Direct Pi wallet withdrawal', 'السحب المباشر إلى محفظة Pi', '直接提现到 Pi 钱包')}</strong>
-              <span className="block mt-1">{l('این عملیات تا زمان فعال شدن مسیر A2U اختصاصی کاربر در محیط عملیاتی، عمداً غیرفعال است. موجودی و سوابق فقط از داده‌های تاییدشده سرور نمایش داده می‌شوند.', 'This action is intentionally disabled until the dedicated user A2U payout path is production-ready. Balance and records remain server-authoritative.', 'هذا الإجراء معطل عمداً حتى يصبح مسار A2U المخصص للمستخدم جاهزاً للإنتاج.', '在专用用户 A2U 提现通道正式就绪前，此操作暂时停用。')}</span>
-            </div>
           </div>
 
           {/* Transparent Model Disclaimer (No Escrow for Direct P2P Rentals) */}
