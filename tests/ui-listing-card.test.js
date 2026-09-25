@@ -31,3 +31,8 @@ test('listing card exposes a dedicated skeleton variant', () => {
   assert.match(card, /aria-hidden="true"/);
   assert.match(card, /animate-pulse/);
 });
+
+
+test('compact card does not use a nested interactive role', () => {
+  assert.doesNotMatch(card, /variant === 'compact'[\s\S]*?role="button"/);
+});
