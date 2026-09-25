@@ -169,3 +169,13 @@ test('legacy rental sync endpoint is retired so client payloads cannot bypass qu
   assert.match(block, /410/);
   assert.doesNotMatch(block, /INSERT INTO rentals/);
 });
+
+
+test('archived conversations cannot accept new messages', () => {
+  const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+  const start = worker.indexOf("path.startsWith('/api/conversations/') && path.endsWith('/messages')");
+  assert.ok(start >= 0);
+  const block = worker.slice(start, worker.indexOf("path.startsWith('/api/conversations/') && path.endsWith('/archive')", start));
+  assert.match(block, /conv\.status === 'archived'/);
+  assert.match(block, /Archived conversations are read-only/);
+});
