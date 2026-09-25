@@ -556,3 +556,12 @@ Added:
 - Added regression assertions for these accessibility contracts.
 
 **Status:** Discover primitive convergence and accessibility markup pass completed. Full device review, error-state mapping, automated runtime/browser accessibility coverage, final review and migration remain pending.
+## Design System Implementation 08 — Item Detail Shared Primitive Adoption — 2026-09-25
+
+- Audited the additive Item Detail redesign against the existing real booking, report, review, owner, favorite, chat and P2P settlement flows.
+- Reused the existing BookingModal and ReportModal; no second business implementation was introduced.
+- Converged the review loading, empty and primary booking presentation on shared UI primitives.
+- Preserved listing status gating so inactive listings cannot open the booking flow.
+- Added regression coverage for primitive adoption and preserved real-flow entry points.
+
+**Status:** Item Detail presentation convergence pass completed. Legacy Item Detail remains available. Runtime device review, report-modal migration, booking-modal migration, error-state mapping and final migration remain pending.
