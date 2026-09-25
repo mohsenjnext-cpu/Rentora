@@ -95,7 +95,7 @@
 - [x] Loading/placeholder state
 - [x] RTL/mobile/accessibility
 - [x] Regression tests
-- [ ] Final review
+- [x] Final review
 - [ ] Migration
 
 ### Item Detail
@@ -361,11 +361,36 @@ Risk:
 Status:
 ```
 
+
+
+## Research Decision 04 — Item Detail Architecture — 2026-09-25
+
+**Finding:** The existing Item Detail screen already owns the real marketplace entry points: authoritative listing data supplied by the app state, server-backed listing reviews, the real BookingModal/Pi fee flow, public owner profile navigation, chat, reporting, and owner management. The booking flow obtains an authoritative quote from `/api/rentals/quote` before creating the rental. Private contact data is fetched only after the verified rental/payment flow.
+
+**Options considered:**
+1. Visually restyle the existing monolithic screen in place.
+2. Build an additive Item Detail presentation layer that reuses the existing handlers, BookingModal, ReportModal and server-backed data, then migrate after parity.
+3. Rebuild Item Detail together with routing and booking/payment architecture.
+
+**Decision:** Choose **option 2**. The redesign is a new presentation layer, not a second business implementation. It keeps the existing booking/payment and privacy contracts intact.
+
+**Interaction rules:**
+- The page may display authoritative listing status, but it must not invent date-level availability.
+- Date availability and the payable platform fee are resolved by the existing server quote/booking flow.
+- Rental price and deposit are presented as direct P2P handover amounts; the platform fee is the only Rentora payment through Pi.
+- Private owner contact remains locked until an authorized rental context exists after verified fee completion.
+- Reviews, report creation, chat, public profile, owner edit and Owner Hub continue through existing real handlers/APIs.
+- Image absence uses an explicit empty visual state rather than a fake stock-image fallback.
+
+**Status:** Research and decision complete. Additive UI implementation started; migration remains unchecked until parity, regression and final review are complete.
+
 ## Change Log
 
 | Date | Area | Change | Status |
 |---|---|---|---|
 | 2026-09-25 | Project setup | Created living UI/UX redesign checklist and workflow | ✅ |
+| 2026-09-25 | Listing Card | CI green after compact-card accessibility fix; final review completed | ✅ |
+| 2026-09-25 | Item Detail | Research/decision completed; additive redesign shell added with real booking/report/review contracts | 🚧 |
 
 
 ## Baseline Audit Snapshot — 2026-09-25
