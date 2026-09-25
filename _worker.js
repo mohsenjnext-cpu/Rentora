@@ -3090,6 +3090,10 @@ export default {
       } else if (msg.includes('UNIQUE constraint')) {
         status = 409;
         displayMessage = 'این درخواست قبلاً ثبت شده است.';
+      } else if (status >= 500) {
+        // Never expose internal Pi/D1/Cloudflare error text to the browser.
+        status = status === 503 ? 503 : 500;
+        displayMessage = status === 503 ? 'سرویس موقتاً در دسترس نیست.' : 'خطای داخلی سرور.';
       }
       return errorResponse(displayMessage, status, env, undefined, origin);
     }
