@@ -170,7 +170,7 @@ export default function ItemDetailPage({
             </div>
           )}
 
-          {/* Badges in top corners */
+          {/* Badges in top corners */}
           {item.ownerKYC && (
             <div className="absolute top-3 left-3 rtl:left-auto rtl:right-3 flex items-center gap-1.5">
               <span className="px-2 py-0.5 rounded-md text-[10px] font-bold badge-trust flex items-center gap-1 shadow-sm">
