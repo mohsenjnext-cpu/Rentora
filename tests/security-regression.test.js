@@ -71,7 +71,14 @@ test('payment completion can recover when Pi is already completed but D1 has not
   assert.match(complete, /if \(!completionResponse\.ok && !\['completed','complete'\]\.includes\(status\)\)/);
   assert.match(complete, /UPDATE payment_intents SET pi_payment_id=\?1,pi_txid=\?2,status='completed'/);
   assert.match(complete, /UPDATE rentals SET payment_status='completed',status='confirmed'/);
-  assert.match(complete, /INSERT OR IGNORE INTO transactions/);
+  assert.match(complete, /INSERT INTO transactions\(/);
+});
+
+test('API responses include baseline security headers', () => {
+  assert.match(worker, /Content-Security-Policy/);
+  assert.match(worker, /Strict-Transport-Security/);
+  assert.match(worker, /X-Frame-Options/);
+  assert.match(worker, /X-Content-Type-Options/);
 });
 
 test('server logout revokes the KV session', () => {
