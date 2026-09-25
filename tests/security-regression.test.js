@@ -98,6 +98,15 @@ test('frontend auth bridge uses HttpOnly cookie sessions instead of browser-stor
   assert.match(piAuthContext, /localStorage\.removeItem\('rentora_live_v1_session'\)/);
 });
 
+test('incomplete payment reconciliation preserves authoritative completion transitions', () => {
+  const incomplete = section("path === '/api/payments/incomplete'", "path.startsWith('/api/listings/')");
+  assert.match(incomplete, /validatePiPayment\(payment, obligation, obligationUser\)/);
+  assert.match(incomplete, /owner_fee_payment_status='completed'/);
+  assert.match(incomplete, /renter_fee_payment_status='completed'/);
+  assert.match(incomplete, /INSERT OR IGNORE INTO transactions/);
+  assert.doesNotMatch(incomplete, /UPDATE payment_obligations SET status='completed'.*WHERE id=\?3/);
+});
+
 test('owner activation obligations are bound to an activation cycle in D1', () => {
   assert.match(worker, /payment_obligations\(id,rental_id,listing_id,user_id,role,purpose,amount,currency,status,memo,metadata,activation_cycle,expires_at,created_at,updated_at\)/);
   assert.match(worker, /activationCycle: cycle/);
