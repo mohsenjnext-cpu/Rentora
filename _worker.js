@@ -1531,24 +1531,74 @@ export default {
         const body = await readJson(request);
         const paymentObj = body?.payment || {};
         const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
-        const txid = String(body?.txid || paymentObj?.transaction?.txid || '').trim();
+        const suppliedTxid = String(body?.txid || paymentObj?.transaction?.txid || '').trim();
         if (!paymentId) return jsonResponse({ handled: false, error: 'paymentId is required' }, 400, env, origin);
+
         try {
+          // The SDK callback is not a trusted authority. Re-fetch the payment from Pi,
+          // bind it to an existing Rentora intent, and verify the payer before mutating D1.
           const response = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
           const payment = await response.json().catch(() => ({}));
-          if (response.ok) {
-            const resolvedTxid = txid || payment?.transaction?.txid;
-            if (payment?.status?.developer_completed) {
-              await env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE pi_payment_id=?3").bind(resolvedTxid || null, now(), paymentId).run().catch(() => {});
-            } else if (payment?.status?.transaction_verified && resolvedTxid) {
-              await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, { method: 'POST', body: JSON.stringify({ txid: resolvedTxid }) }).catch(() => {});
-              await env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE pi_payment_id=?3").bind(resolvedTxid, now(), paymentId).run().catch(() => {});
-            } else if (!payment?.status?.developer_approved) {
-              await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, { method: 'POST', body: '{}' }).catch(() => {});
-            }
+          if (!response.ok) return jsonResponse({ handled: false, error: 'Unable to verify incomplete Pi payment' }, 502, env, origin);
+
+          const intent = await env.RENTORA_DB.prepare(
+            `SELECT pi.*, u.pi_uid FROM payment_intents pi JOIN users u ON u.id=pi.user_id WHERE pi.pi_payment_id=?1 LIMIT 1`
+          ).bind(paymentId).first();
+          if (!intent) return jsonResponse({ handled: true, matched: false }, 200, env, origin);
+
+          const payerUid = String(
+            payment?.user?.uid || payment?.from_address?.uid || payment?.user_uid || payment?.uid || ''
+          ).trim();
+          if (!payerUid || payerUid.toLowerCase() !== String(intent.pi_uid || '').trim().toLowerCase()) {
+            return jsonResponse({ handled: false, error: 'Pi payer does not match the payment intent owner' }, 403, env, origin);
           }
-        } catch (_) {}
-        return jsonResponse({ handled: true }, 200, env, origin);
+
+          let paymentMeta = payment?.metadata;
+          if (typeof paymentMeta === 'string') {
+            try { paymentMeta = JSON.parse(paymentMeta); } catch (_) { paymentMeta = null; }
+          }
+          const metadataIntent = paymentMeta?.paymentIntentId || paymentMeta?.intentId || paymentMeta?.id;
+          if (!metadataIntent || String(metadataIntent) !== String(intent.id)) {
+            return jsonResponse({ handled: false, error: 'Pi payment metadata is not bound to the Rentora intent' }, 409, env, origin);
+          }
+          if (paymentMeta?.rentalId && String(paymentMeta.rentalId) !== String(intent.rental_id)) {
+            return jsonResponse({ handled: false, error: 'Pi payment rental binding mismatch' }, 409, env, origin);
+          }
+
+          const payerAmount = toCanonicalDecimal(payment?.amount);
+          const expectedAmount = toCanonicalDecimal(intent.amount);
+          if (Math.abs(payerAmount - expectedAmount) > 0.0001) {
+            return jsonResponse({ handled: false, error: 'Pi payment amount mismatch' }, 409, env, origin);
+          }
+
+          const resolvedTxid = suppliedTxid || payment?.transaction?.txid || '';
+          if (payment?.status?.developer_completed && resolvedTxid) {
+            await env.RENTORA_DB.batch([
+              env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE id=?3").bind(resolvedTxid, now(), intent.id),
+              env.RENTORA_DB.prepare("UPDATE rentals SET payment_status='completed', status='confirmed', updated_at=?1 WHERE id=?2").bind(now(), intent.rental_id),
+              env.RENTORA_DB.prepare("INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)").bind(`tx_${crypto.randomUUID()}`, intent.id, paymentId, resolvedTxid, intent.user_id, intent.amount, now())
+            ]);
+          } else if (payment?.status?.transaction_verified && resolvedTxid) {
+            const completeResponse = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, {
+              method: 'POST',
+              body: JSON.stringify({ txid: resolvedTxid })
+            });
+            const completed = await completeResponse.json().catch(() => ({}));
+            if (completeResponse.ok || completed?.status?.developer_completed) {
+              await env.RENTORA_DB.batch([
+                env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE id=?3").bind(resolvedTxid, now(), intent.id),
+                env.RENTORA_DB.prepare("UPDATE rentals SET payment_status='completed', status='confirmed', updated_at=?1 WHERE id=?2").bind(now(), intent.rental_id),
+                env.RENTORA_DB.prepare("INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)").bind(`tx_${crypto.randomUUID()}`, intent.id, paymentId, resolvedTxid, intent.user_id, intent.amount, now())
+              ]);
+            }
+          } else if (!payment?.status?.developer_approved) {
+            await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, { method: 'POST', body: '{}' }).catch(() => {});
+          }
+
+          return jsonResponse({ handled: true, matched: true }, 200, env, origin);
+        } catch (_) {
+          return jsonResponse({ handled: false, error: 'Incomplete Pi payment reconciliation failed' }, 502, env, origin);
+        }
       }
       if (method === 'POST' && path === '/api/sync/item') { const { user } = await requireUser(request, env); const item = await readJson(request);
         if (!item?.id || !String(item.title || '').trim()) return errorResponse('Invalid listing', 400, env, undefined, origin);
