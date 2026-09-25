@@ -132,3 +132,14 @@ test('Pi payment flow never retries native payment merely because a payment/appr
   assert.match(service, /onReadyForServerCompletion/);
   assert.match(service, /completePaymentOnServer/);
 });
+
+
+test('listing KYC badge cannot be asserted by client-supplied listing metadata', () => {
+  const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+  const listingViewStart = worker.indexOf('function listingView');
+  const rentalViewStart = worker.indexOf('function rentalView', listingViewStart);
+  assert.ok(listingViewStart >= 0 && rentalViewStart > listingViewStart);
+  const listingView = worker.slice(listingViewStart, rentalViewStart);
+  assert.match(listingView, /ownerMeta\.kycStatus === 'verified'/);
+  assert.doesNotMatch(listingView, /meta\.ownerKYC/);
+});
