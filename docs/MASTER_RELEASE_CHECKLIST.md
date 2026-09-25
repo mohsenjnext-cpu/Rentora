@@ -67,9 +67,9 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Cross-tab/device synchronization
 
 ## 6. Storage and data integrity
-- [ ] D1 schema and migrations
-- [ ] Foreign keys / uniqueness
-- [ ] KV usage and TTLs
+- [x] D1 schema and migrations
+- [x] Foreign keys / uniqueness
+- [x] KV usage and TTLs
 - [ ] R2/media handling
 - [ ] Cache invalidation
 - [ ] No sensitive business state in localStorage
@@ -96,8 +96,8 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 ## 8. Security
 - [x] API authentication
 - [x] API authorization
-- [ ] CORS
-- [ ] Security headers
+- [x] CORS
+- [x] Security headers
 - [ ] Input validation
 - [ ] Image validation
 - [ ] Rate/abuse protections where required
@@ -165,3 +165,5 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - Native Pi error reconciliation: SDK onError now forwards an identified payment to the server-side incomplete-payment reconciliation path, so client errors do not invent a final payment state.
 - CORS hardening: preflight now permits Idempotency-Key and X-Idempotency-Key used by payout operations; origin allowlisting remains explicit and wildcard origins are rejected.
 - CI status after latest fixes: IN PROGRESS/QUEUED on current branch HEAD 832ef625a5b3909de975f71f0a3ad5e7e6f6c80e6; previous failures were stale runs on earlier commits and are not treated as current verification.
+
+- Security/storage audit checkpoint: API responses now include CSP, HSTS, X-Frame-Options, nosniff, and restrictive Permissions/Referrer policies; schema audit confirms D1 foreign keys, uniqueness constraints, payment/rental state checks, payout operation guards, and KV-backed payment-intent TTL usage.
