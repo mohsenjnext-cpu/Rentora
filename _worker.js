@@ -1425,9 +1425,39 @@ export default {
         const canonicalAmount = toCanonicalDecimal(rental.platform_fee);
         const existing = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE rental_id=?1 LIMIT 1').bind(rental.id).first();
         const rentalMeta = parseMetadata(rental.metadata);
-        const id = (existing && existing.status !== 'cancelled' && new Date(existing.expires_at) > new Date()) ? existing.id : `pii_${crypto.randomUUID()}`;
         const memo = `Rentora Booking Fee #${String(rental.id).slice(-12)}`;
-        const expires = (existing && existing.status !== 'cancelled' && new Date(existing.expires_at) > new Date()) ? existing.expires_at : new Date(Date.now() + PAYMENT_INTENT_TTL * 1000).toISOString();
+        const existingLiveBinding = existing && existing.status !== 'cancelled' && existing.pi_payment_id;
+        let id = (existing && existing.status !== 'cancelled' && new Date(existing.expires_at) > new Date()) ? existing.id : `pii_${crypto.randomUUID()}`;
+        let expires = (existing && existing.status !== 'cancelled' && new Date(existing.expires_at) > new Date()) ? existing.expires_at : new Date(Date.now() + PAYMENT_INTENT_TTL * 1000).toISOString();
+
+        if (existingLiveBinding) {
+          // Expiry is a Rentora session boundary, not permission to orphan a Pi payment.
+          // Reconcile the bound payment before deciding whether a new intent is safe.
+          const paymentResponse = await piFetch(env, `/payments/${encodeURIComponent(existing.pi_payment_id)}`);
+          const payment = await paymentResponse.json().catch(() => ({}));
+          if (!paymentResponse.ok) {
+            return errorResponse('Bound Pi payment could not be reconciled. Please retry shortly.', 502, env, undefined, origin);
+          }
+          const paymentStatus = validatePiPayment(payment, { ...existing, pi_payment_id: existing.pi_payment_id }, user);
+          if (['completed','complete'].includes(paymentStatus) || payment?.status?.developer_completed) {
+            return jsonResponse({
+              paymentIntentId: existing.id,
+              id: existing.id,
+              amount: canonicalAmount,
+              memo: existing.memo || memo,
+              metadata: { paymentIntentId: existing.id, rentalId: rental.id, quoteId: rentalMeta.quoteId || null, expectedAmount: canonicalAmount, currency: 'PI', memo: existing.memo || memo },
+              expiresAt: existing.expires_at,
+              boundPaymentId: existing.pi_payment_id,
+              paymentStatus: 'completed'
+            }, 200, env, origin);
+          }
+          if (!['cancelled','failed'].includes(String(paymentStatus || '').toLowerCase())) {
+            id = existing.id;
+            expires = new Date(Date.now() + PAYMENT_INTENT_TTL * 1000).toISOString();
+            await env.RENTORA_DB.prepare("UPDATE payment_intents SET amount=?1, memo=?2, expires_at=?3, updated_at=?4 WHERE id=?5 AND pi_payment_id=?6 AND status != 'cancelled'")
+              .bind(canonicalAmount, existing.memo || memo, expires, now(), existing.id, existing.pi_payment_id).run();
+          }
+        }
 
         const metadata = {
           paymentIntentId: id,
@@ -1438,26 +1468,22 @@ export default {
           memo
         };
 
+        if (existing && id === existing.id && existingLiveBinding && !['cancelled','failed'].includes(String(existing.status || '').toLowerCase())) {
+          return jsonResponse({
+            paymentIntentId: existing.id,
+            id: existing.id,
+            amount: canonicalAmount,
+            memo: existing.memo || memo,
+            metadata,
+            expiresAt: expires,
+            boundPaymentId: existing.pi_payment_id
+          }, 200, env, origin);
+        }
+
         if (existing) {
-          // A payment intent that is already bound to a Pi payment must be reusable for
-          // approval/completion recovery. Never reset the binding and orphan that payment.
-          if (existing.pi_payment_id && existing.status !== 'cancelled' && new Date(existing.expires_at) > new Date()) {
-            return jsonResponse({
-              paymentIntentId: existing.id,
-              id: existing.id,
-              amount: canonicalAmount,
-              memo: existing.memo || memo,
-              metadata: {
-                ...metadata,
-                paymentIntentId: existing.id
-              },
-              expiresAt: existing.expires_at,
-              boundPaymentId: existing.pi_payment_id
-            }, 200, env, origin);
-          }
           await env.RENTORA_DB.prepare(`UPDATE payment_intents SET id=?1, amount=?2, memo=?3, status='created', pi_payment_id=NULL, pi_txid=NULL, created_at=?4, expires_at=?5, updated_at=?4 WHERE rental_id=?6`).bind(id, canonicalAmount, memo, now(), expires, rental.id).run();
         } else {
-          await env.RENTORA_DB.prepare(`INSERT INTO payment_intents(id,rental_id,user_id,amount,memo,status,created_at,expires_at,updated_at) VALUES(?1,?2,?3,?4,?5,'created',?6,?7,?6)`).bind(id, rental.id, user.id, canonicalAmount, memo, now(), expires).run();
+          await env.RENTORA_DB.prepare(`INSERT INTO payment_intents(id,rental_id,user_id,amount,memo,status,created_at,expires_at,updated_at) VALUES(?1,?2,?3,?4,?5,'created',?6,?7,?6)`).bind(id, rental.id, user.id, canonicalAmount, memo, now(), expires, rental.id ? rental.id : now()).run();
         }
         await env.RENTORA_DB.prepare(`UPDATE rentals SET payment_status='pending', status='pending_payment', updated_at=?1 WHERE id=?2`).bind(now(), rental.id).run();
         await env.RENTORA_KV.put(`payment-intent:${id}`, JSON.stringify({ userId: user.id, rentalId: rental.id, amount: canonicalAmount, memo, metadata }), { expirationTtl: PAYMENT_INTENT_TTL });
