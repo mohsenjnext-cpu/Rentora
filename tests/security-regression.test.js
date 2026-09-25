@@ -186,3 +186,15 @@ test('server error responses do not expose internal exception text', () => {
   assert.match(worker, /errorResponse\('Pi payment approval failed', 502, env, \{ details: approved \}/);
   assert.match(worker, /errorResponse\('Pi payment completion failed', 502, env, \{ details: completion \}/);
 });
+
+
+test('listing mutations validate bounded fields and enum status', () => {
+  const route = section("path === '/api/sync/item'", "path === '/api/rentals/'");
+  assert.match(route, /listingId\.length > 128/);
+  assert.match(route, /title\.length > 200/);
+  assert.match(route, /description\.length > 5000/);
+  assert.match(route, /category\.length > 100/);
+  assert.match(route, /location\.length > 200/);
+  assert.match(route, /\['draft','active','paused','deleted'\]\.includes\(listingStatus\)/);
+  assert.match(route, /status=\?5/);
+});
