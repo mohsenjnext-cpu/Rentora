@@ -318,109 +318,20 @@ export function RentoraProvider({ children }) {
     return data.contact;
   };
 
-  const createRentalBooking = (arg1, arg2) => {
+  const createRentalBooking = useCallback(async (arg1, arg2) => {
     if (!currentUser) throw new Error("برای ثبت رزرو ابتدا وارد حساب پای خود شوید.");
-    
-    let item, bookingData;
-    if (arg2 && typeof arg2 === 'object') {
-      item = arg1;
-      bookingData = arg2;
-    } else if (arg1 && arg1.item) {
-      item = arg1.item;
-      bookingData = arg1;
-    } else {
-      item = arg1;
-      bookingData = arg1 || {};
+
+    const bookingData = (arg2 && typeof arg2 === 'object')
+      ? arg2
+      : (arg1 && typeof arg1 === 'object' && !arg1.quoteId && arg1.item ? arg1 : arg1);
+
+    const quoteId = bookingData?.quoteId;
+    if (!quoteId) {
+      throw new Error("برای ثبت رزرو باید پیش‌فاکتور معتبر سرور (quoteId) ارائه شود.");
     }
 
-    if (!item) throw new Error("اطلاعات کالای مورد نظر برای رزرو یافت نشد.");
-
-    const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
-    const ownerName = (item?.ownerUsername || item?.owner_username || '').toLowerCase().replace('@', '').trim();
-    if ((myName && ownerName && myName === ownerName) || (item?.ownerUid && currentUser?.uid && item.ownerUid === currentUser.uid)) {
-      throw new Error("شما مالک این کالا هستید و نمی‌توانید آگهی خودتان را اجاره کنید.");
-    }
-
-    const startDate = bookingData.startDate || new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    const endDate = bookingData.endDate || new Date(Date.now() + 86400000 * 4).toISOString().split('T')[0];
-    const deliveryRequired = !!bookingData.deliveryRequired;
-    const deliveryAddress = bookingData.deliveryAddress || '';
-    const rawPrice = item.pricePerDay ?? item.price_per_day ?? item.dailyRate ?? item.price ?? 0;
-    const rawDeposit = item.deposit ?? item.deposit_amount ?? item.securityDeposit ?? 0;
-
-    const financials = calculatePricing({
-      dailyRate: Number(rawPrice) || 0,
-      pricePerDay: Number(rawPrice) || 0,
-      startDate,
-      endDate,
-      daysCount: bookingData.daysCount,
-      securityDeposit: Number(rawDeposit) || 0
-    });
-
-    const bookingNumber = 'RN-' + Math.floor(100000 + Math.random() * 900000);
-    const agreementId = 'AGR-' + Math.floor(100000 + Math.random() * 900000);
-
-    return {
-      id: "rental_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
-      bookingNumber,
-      itemId: item.id,
-      itemTitle: item.title,
-      itemCategory: item.category,
-      itemImage: Array.isArray(item.images) ? item.images[0] : (item.images || item.image),
-      itemLocation: item.location,
-      renterUid: currentUser.uid,
-      renterUsername: currentUser.username,
-      renterAvatar: currentUser.avatar,
-      ownerUid: item.ownerUid || item.owner_uid,
-      ownerUsername: item.ownerUsername || item.owner_username,
-      ownerAvatar: item.ownerAvatar || item.owner_avatar,
-      startDate,
-      endDate,
-      daysCount: financials.daysCount,
-      pricePerDay: financials.dailyRate,
-      rentalTotal: financials.rentalTotal,
-      baseAmount: financials.rentalTotal,
-      deposit: financials.deposit,
-      securityDeposit: financials.deposit,
-      rentoraFee: financials.rentoraFee,
-      totalPlatformFee: financials.rentoraFee,
-      platformFeeRate: financials.platformFeeRate,
-      totalAmount: financials.rentoraFee,
-      paymentDueToRentora: financials.rentoraFee,
-      deliveryRequired: !!deliveryRequired,
-      deliveryAddress: deliveryAddress || '',
-      paymentIntentId: null,
-      piPaymentId: null,
-      piTxRef: null,
-      ownerCommissionShare: 0,
-      renterCommissionShare: 0,
-      renterCommissionPaid: false,
-      status: RENTAL_STATES.PAYMENT_PENDING,
-      paymentStatus: "pending",
-      settlementType: "direct_p2p_with_pi_platform_fee",
-      isEscrowApplied: false,
-      rentalAgreement: {
-        agreementId,
-        itemTitle: item.title,
-        ownerUsername: item.ownerUsername || item.owner_username,
-        renterUsername: currentUser.username,
-        rentalPeriodDays: financials.daysCount,
-        startDate,
-        endDate,
-        rentalTotal: financials.rentalTotal,
-        deposit: financials.deposit,
-        rentoraFee: financials.rentoraFee,
-        piFeePaymentStatus: "Pending Pi Payment",
-        rentalPaymentMethod: "Direct P2P",
-        depositPaymentMethod: "Direct P2P",
-        terms: "Direct P2P settlement — rental fee and deposit are not processed or held by Rentora."
-      },
-      isHandoverConfirmed: false,
-      isReturnConfirmed: false,
-      notes: bookingData.notes || '',
-      createdAt: new Date().toISOString()
-    };
-  };
+    return cloudSyncService.createRental({ quoteId });
+  }, [currentUser]);
 
   const executePiPaymentForRental = async (rentalId, draftRental) => {
     if (!draftRental) throw new Error("اطلاعات رزرو نامعتبر است.");
