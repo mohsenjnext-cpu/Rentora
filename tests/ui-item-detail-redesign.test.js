@@ -108,3 +108,18 @@ test('Pi payment wrapper does not synthesize or broadcast a confirmed rental cli
   assert.doesNotMatch(paymentFn, /broadcastNewRental/);
   assert.doesNotMatch(paymentFn, /saveCachedRentals/);
 });
+
+
+test('incomplete Pi callback cannot mutate a rental without verified intent binding', () => {
+  const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+  const start = worker.indexOf("path === '/api/payments/incomplete'");
+  const end = worker.indexOf("path === '/api/sync/item'", start);
+  assert.ok(start >= 0 && end > start);
+  const route = worker.slice(start, end);
+  assert.match(route, /SELECT pi\.\*, u\.pi_uid FROM payment_intents pi JOIN users u ON u\.id=pi\.user_id/);
+  assert.match(route, /payerUid\.toLowerCase\(\) !== String\(intent\.pi_uid/);
+  assert.match(route, /metadataIntent/);
+  assert.match(route, /Math\.abs\(payerAmount - expectedAmount\)/);
+  assert.match(route, /UPDATE rentals SET payment_status='completed', status='confirmed'/);
+  assert.match(route, /INSERT OR IGNORE INTO transactions/);
+});
