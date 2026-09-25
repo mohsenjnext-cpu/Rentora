@@ -1441,7 +1441,7 @@ export default {
             await env.RENTORA_KV.delete(`session:${hash}`);
           }
         }
-        return jsonResponse({ success: true }, 200, env, origin);
+        return jsonResponse({ success: true }, 200, env, origin, { 'Set-Cookie': 'rentora_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=None' });
       }
       if (method === 'POST' && path === '/api/payments/intent') {
         const paymentLimit = await enforceRateLimit(request, env, 'payment-intent', 20, 60);
