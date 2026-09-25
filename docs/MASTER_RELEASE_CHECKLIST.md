@@ -33,9 +33,9 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] ADMIN_PI_UIDS verified against authoritative Pi UIDs
 
 ## 3. Marketplace authority
-- [ ] Server-authoritative listing ownership
-- [ ] Server-authoritative listing financial fields
-- [ ] Listing lifecycle/status
+- [x] Server-authoritative listing ownership
+- [x] Server-authoritative listing financial fields
+- [x] Listing lifecycle/status
 - [ ] Rental quote authority
 - [ ] Rental creation authority
 - [ ] Rental overlap protection
@@ -134,8 +134,9 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [ ] Post-merge smoke test
 
 ## Current verified checkpoint
-- Latest security-hardening commit: e2109512bcc97f0d512cb280aeee01b2bc29c470
-- GitHub Actions CI: PASS on preceding HEAD 92c1f3fcbc965ac6b381408418f57ab73; new hardening commit requires fresh CI verification
-- Previous regex CI failure: fixed
-- Duplicate native payment retry guard: fixed and covered by CI
-- ADMIN_PI_UIDS authoritative-value blocker: BLOCKED until real Pi UIDs are supplied/verified
+- Latest branch HEAD: 50f66bf1e3ee2ef9879117ecdd72963673e7460c
+- Listing mutation path is server-authorized by authenticated user and existing listing ownership; financial fields are read from D1 on update and server-derived on create.
+- Cloud sync auth hardening: `getAuthHeaders()` now attaches the stored server session token as Bearer authorization for authenticated API calls.
+- Regression coverage added for cloud-sync session authorization.
+- GitHub Actions for current HEAD: NOT RUN / no PR-triggered run returned yet; previous CI results are not treated as current.
+- ADMIN_PI_UIDS authoritative-value blocker: BLOCKED until real Pi UIDs are supplied/verified.
