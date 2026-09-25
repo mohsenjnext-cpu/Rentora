@@ -36,12 +36,12 @@
 
 ## 2. Design System
 
-- [ ] Color tokens
-- [ ] Typography tokens
-- [ ] Spacing tokens
-- [ ] Radius tokens
-- [ ] Shadow/elevation tokens
-- [ ] Breakpoints
+- [x] Color tokens
+- [x] Typography tokens
+- [x] Spacing tokens
+- [x] Radius tokens
+- [x] Shadow/elevation tokens
+- [x] Breakpoints
 - [ ] Icon rules
 - [ ] Button system
 - [ ] Input/select/search system
@@ -405,3 +405,21 @@ Verified on `main` before implementation work:
 **Implementation order:** routing foundation → new shell/navigation → page-by-page migration → remove legacy switcher after parity and regression validation.
 
 **Status:** Research/decision complete. Implementation remains unchecked until built and tested.
+
+
+## Research Decision 02 — Design Tokens & Shared Styling — 2026-09-25
+
+**Finding:** src/index.css is already the shared styling surface and the project uses Tailwind CSS 4.3.x. Tailwind v4 supports CSS-first @theme variables for colors, typography, spacing, radii, shadows, breakpoints and other reusable design tokens.
+
+**Options considered:**
+1. Keep page-specific hard-coded values and introduce tokens only when a component is migrated.
+2. Establish a shared token layer in src/index.css first, while preserving existing semantic variables and legacy visual behavior.
+3. Replace the existing styling system wholesale with a new component library.
+
+**Decision:** Choose option 2.
+
+**Reason:** It creates one source of truth for the redesign without forcing a risky visual rewrite. Existing classes and components can continue working while new UI uses the same token layer. Tailwind's @theme is appropriate because the current project is already on Tailwind v4.
+
+**Implementation:** Added additive Rentora tokens for semantic colors, typography, spacing extensions, radii, elevation, breakpoints and motion easing. Existing :root semantic variables now reference the token layer where safe. No legacy component was removed or behaviorally rewritten.
+
+**Status:** Research/decision/initial token implementation complete. Individual shared components remain incomplete until they are migrated and tested.
