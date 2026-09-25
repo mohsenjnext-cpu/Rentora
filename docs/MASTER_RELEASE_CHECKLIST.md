@@ -102,7 +102,7 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - [x] Image validation
 - [x] Rate/abuse protections where required
 - [x] No secrets in client bundle
-- [ ] No stack traces / sensitive errors
+- [x] No stack traces / sensitive errors
 - [x] Legacy routes safely retired
 - [x] Payment tampering resistance
 
@@ -196,4 +196,5 @@ Status vocabulary: NOT STARTED, IN PROGRESS, IMPLEMENTED, TESTED, RUNTIME VERIFI
 - Legacy/fallback note: `_worker.js` still contains an older A2U implementation, but `wrangler.toml` points production Worker entry to `worker-gateway2.js`. The duplicate legacy implementation should not be treated as the release authority and remains a cleanup/convergence item.
 - A2U configuration blocker remains: `ADMIN_PI_UIDS` in `wrangler.toml` contains `avina60,mohsenjnext`; these values must be verified as authoritative Pi UIDs before admin payout is considered runtime-ready. No UID was invented or substituted during this audit.
 - Input-validation audit checkpoint: high-risk payment/admin mutations enforce required identifiers, enum/status validation, amount bounds against D1 authority, body-size limits, payment identity/amount/metadata/network checks, and wallet-address rejection for direct payout targeting. A broader mutation-by-mutation validation pass remains open.
-- Latest branch HEAD: `2ccbb0685f0eca71f56aa80aea4fa96603c4a1ee`. CI for this HEAD is NOT RUN / NOT REPORTED, so earlier green runs are not treated as verification for current HEAD.
+- Error-leakage hardening: active gateway and legacy worker now suppress internal exception text for 5xx responses, and raw Pi approval/completion payloads are no longer returned to clients. Server logs retain diagnostic details.
+- Latest security-error hardening commit: `2627efe042c7ba9bedd2a62404c86a08f5cb6b90`. CI for this HEAD is NOT RUN / NOT REPORTED.
