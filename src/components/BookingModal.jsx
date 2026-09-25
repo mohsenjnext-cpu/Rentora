@@ -153,22 +153,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
     setIsSubmitting(true);
 
     try {
-      // 1. Authoritative Server Rental Creation (using Quote or Server calculation)
-      let persistedRental;
-      try {
-        if (serverQuote?.quoteId) {
-          persistedRental = await cloudSyncService.createRental({ quoteId: serverQuote.quoteId });
-        } else {
-          persistedRental = await cloudSyncService.createRental({
-            listingId: item.id,
-            startDate: dates.startDate,
-            endDate: dates.endDate
-          });
-        }
-      } catch (createErr) {
-        throw createErr;
-      }
-
+      // 1. Authoritative Server Rental Creation. Only a server quote may create a rental.
       if (!serverQuote?.quoteId) {
         throw new Error(l(
           'پیش‌فاکتور معتبر از سرور دریافت نشده است.',
@@ -177,6 +162,8 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
           '预订前必须先取得有效的服务器报价。'
         ));
       }
+
+      const persistedRental = await cloudSyncService.createRental({ quoteId: serverQuote.quoteId });
 
       if (!persistedRental?.id) throw new Error('ثبت رزرو در سرور ناموفق بود.');
 
