@@ -6,6 +6,7 @@ const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8'
 const piAuthContext = fs.readFileSync(new URL('../src/context/PiAuthContext.jsx', import.meta.url), 'utf8');
 const rentoraContext = fs.readFileSync(new URL('../src/context/RentoraContext.jsx', import.meta.url), 'utf8');
 const cloudSyncService = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
+const piService = fs.readFileSync(new URL('../src/services/piService.js', import.meta.url), 'utf8');
 const activationMigration = fs.readFileSync(new URL('../db/migrations/0013_owner_fee_activation_cycle.sql', import.meta.url), 'utf8');
 
 function section(start, end) {
@@ -98,6 +99,13 @@ test('frontend reservation confirmation is not synthesized from a Pi callback', 
 test('frontend rental sync is cache-only and no longer posts client-owned rental state', () => {
   assert.doesNotMatch(cloudSyncService, /\/api\/sync\/rental/);
   assert.match(cloudSyncService, /Rental persistence is server-authoritative through POST \/api\/rentals/);
+});
+
+test('Pi payment intent requests include an explicit role and owner listing context', () => {
+  assert.match(piService, /role/);
+  assert.match(piService, /listingId/);
+  assert.match(piService, /paymentData\?\.metadata\?\.role/);
+  assert.match(piService, /paymentData\?\.metadata\?\.listingId/);
 });
 
 test('frontend contact and rental transitions use HttpOnly cookie credentials', () => {
