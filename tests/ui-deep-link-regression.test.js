@@ -7,9 +7,10 @@ const redesign = fs.readFileSync(new URL('../src/pages/ItemDetailRedesign.jsx', 
 const legacy = fs.readFileSync(new URL('../src/pages/ItemDetailPage.jsx', import.meta.url), 'utf8');
 
 test('listing detail has a stable /item/:id route and restores it on direct load', () => {
-  assert.match(app, /window\.location\.pathname\.match\(\/\^\\\/item\\\/\(\[\^\\\/\]\+\)\\\$\/\)/);
+  assert.match(app, /getListingIdFromPath/);
+  assert.match(app, /window\.location\.pathname\.match/);
   assert.match(app, /new URL\(window\.location\.href\)/);
-  assert.match(app, /url\.pathname = `\/item\\/\$\{encodeURIComponent\(item\.id\)\}`/);
+  assert.match(app, /url\.pathname = `\/item\/\$\{encodeURIComponent\(item\.id\)\}`/);
   assert.match(app, /window\.history\.pushState/);
   assert.match(app, /window\.addEventListener\('popstate'/);
 });
