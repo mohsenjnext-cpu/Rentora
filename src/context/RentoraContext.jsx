@@ -36,6 +36,18 @@ export function RentoraProvider({ children }) {
   const userIdentifier = currentUser?.uid || currentUser?.id || null;
   const usernameIdentifier = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
 
+  // Hard-clear private client state immediately when the authenticated session disappears.
+  // This prevents a logout/offline transition from leaving another user's rental/payment data visible.
+  useEffect(() => {
+    if (currentUser) return;
+    setRentals([]);
+    setTransactions([]);
+    setReports([]);
+    setConversations([]);
+    knownMsgIdsRef.current.clear();
+    cloudSyncService.clearUserSessionCache();
+  }, [currentUser]);
+
   const getReadTimestampsKey = useCallback(() => {
     return usernameIdentifier || userIdentifier ? `rentora_chat_reads_${usernameIdentifier || userIdentifier}` : null;
   }, [usernameIdentifier, userIdentifier]);
