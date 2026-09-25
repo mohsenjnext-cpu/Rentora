@@ -1687,6 +1687,7 @@ export default {
       if (method === 'POST' && path === '/api/payments/incomplete') {
         const paymentLimit = await enforceRateLimit(request, env, 'payment-incomplete', 20, 60);
         if (!paymentLimit.allowed) return errorResponse('Too many payment reconciliation requests. Please retry shortly.', 429, env, { retryAfter: paymentLimit.retryAfter }, origin);
+        const { user } = await requireUser(request, env);
         const body = await readJson(request);
         const paymentObj = body?.payment || {};
         const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
@@ -1701,8 +1702,8 @@ export default {
           if (!response.ok) return jsonResponse({ handled: false, error: 'Unable to verify incomplete Pi payment' }, 502, env, origin);
 
           const intent = await env.RENTORA_DB.prepare(
-            `SELECT pi.*, u.pi_uid FROM payment_intents pi JOIN users u ON u.id=pi.user_id WHERE pi.pi_payment_id=?1 LIMIT 1`
-          ).bind(paymentId).first();
+            `SELECT pi.*, u.pi_uid FROM payment_intents pi JOIN users u ON u.id=pi.user_id WHERE pi.pi_payment_id=?1 AND pi.user_id=?2 LIMIT 1`
+          ).bind(paymentId, user.id).first();
           if (!intent) return jsonResponse({ handled: true, matched: false }, 200, env, origin);
 
           const payerUid = String(
