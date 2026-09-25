@@ -198,3 +198,8 @@ test('listing mutations validate bounded fields and enum status', () => {
   assert.match(route, /\['draft','active','paused','deleted'\]\.includes\(listingStatus\)/);
   assert.match(route, /status=\?5/);
 });
+
+
+test('frontend authenticated actions use HttpOnly cookie sessions instead of localStorage bearer tokens', () => {
+  assert.doesNotMatch(workerContext, /localStorage\.getItem\(['"]rentora_live_v1_session['"]\)/);
+});
