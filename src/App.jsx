@@ -43,7 +43,7 @@ const getListingIdFromPath = () => {
 function MainApp() {
   const { dir } = useLanguage();
   const { isAdmin, currentUser } = usePiAuth();
-  const { items } = useRentora();
+  const { items, isInitialLoadDone } = useRentora();
   const initialListingId = getListingIdFromPath();
   const [currentTab, setCurrentTab] = useState(initialListingId ? 'item-detail' : 'home');
   const [previousTab, setPreviousTab] = useState('discover');
@@ -194,6 +194,7 @@ function MainApp() {
         {currentTab === 'home' && <HomePage onNavigate={handleNavigate} onSelectItem={handleSelectItem} onRentItem={handleRentItem} />}
         {currentTab === 'discover' && <DiscoverPage initialCategory={discoverInitialCategory} initialQuery={discoverInitialQuery} onSelectItem={handleSelectItem} onRentItem={handleRentItem} />}
         {currentTab === 'item-detail' && selectedItem && (useItemDetailRedesign ? <ItemDetailRedesign item={selectedItem} onBack={handleBackFromItem} onBookingSuccess={() => setCurrentTab('activity')} onNavigateToOwnerHub={() => setCurrentTab('owner-hub')} onEditItem={handleEditItem} onOpenChat={(item) => handleOpenChat(item)} onOpenPublicProfile={handleOpenPublicProfile} /> : <ItemDetailPage item={selectedItem} onBack={handleBackFromItem} onNavigateToActivity={() => setCurrentTab('activity')} onNavigateToOwnerHub={() => setCurrentTab('owner-hub')} onEditItem={handleEditItem} onOpenChat={(item) => handleOpenChat(item)} onOpenPublicProfile={handleOpenPublicProfile} />)}
+        {currentTab === 'item-detail' && !selectedItem && isInitialLoadDone && <div className="py-20 text-center max-w-md mx-auto space-y-3"><h2 className="text-lg font-bold text-slate-900 dark:text-white">آگهی پیدا نشد</h2><p className="text-sm text-slate-500 dark:text-slate-400">این آگهی دیگر در دسترس نیست یا شناسه آن معتبر نیست.</p><button type="button" onClick={() => handleNavigate('home')} className="btn-primary px-4 py-2 text-xs font-bold cursor-pointer">بازگشت به خانه</button></div>}
         {currentTab === 'public-profile' && publicProfileUsername && <PublicProfilePage username={publicProfileUsername} onBack={() => setCurrentTab(previousTab || 'discover')} onSelectItem={handleSelectItem} onRentItem={handleRentItem} onOpenChat={(item) => handleOpenChat(item)} />}
         {currentTab === 'list-item' && <ListItemPage itemToEdit={editingItem} onCancelEdit={() => { setEditingItem(null); setCurrentTab(previousTab || 'owner-hub'); }} onItemCreated={(newItem) => { setSelectedItem(newItem); setEditingItem(null); setCurrentTab('item-detail'); }} onItemUpdated={(updatedItem) => { setSelectedItem(updatedItem); setEditingItem(null); setCurrentTab('item-detail'); }} onNavigate={(page) => { setEditingItem(null); setCurrentTab(page); }} />}
         {currentTab === 'owner-hub' && <OwnerHubPage onNavigate={handleNavigate} onSelectItem={handleSelectItem} onEditItem={handleEditItem} />}
