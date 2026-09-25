@@ -101,27 +101,16 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
 
   if (!isOpen || !item) return null;
 
-  const dailyPrice = serverQuote?.pricePerDay ?? Number(item.pricePerDay ?? item.price_per_day ?? item.dailyRate ?? item.price ?? 0);
-  const depositAmount = serverQuote?.depositAmount ?? Number(item.deposit ?? item.deposit_amount ?? item.securityDeposit ?? 0);
-
-  const fallbackPricing = calculatePricing({
-    pricePerDay: dailyPrice,
-    dailyRate: dailyPrice,
-    startDate: dates.startDate,
-    endDate: dates.endDate,
-    securityDeposit: depositAmount,
-    ownerUsername: item.ownerUsername || item.owner_username
-  });
-
-  const daysCount = serverQuote?.daysCount ?? fallbackPricing.daysCount;
-  const rentoraFee = serverQuote?.platformFee ?? (fallbackPricing.rentoraFee !== undefined ? fallbackPricing.rentoraFee : (fallbackPricing.totalPlatformFee || 0));
-  const rentalTotal = serverQuote?.baseRentalAmount ?? (fallbackPricing.rentalTotal !== undefined ? fallbackPricing.rentalTotal : fallbackPricing.baseRentalAmount);
-  const deposit = serverQuote?.depositAmount ?? (fallbackPricing.deposit !== undefined ? fallbackPricing.deposit : depositAmount);
+  const hasAuthoritativeQuote = Boolean(serverQuote?.quoteId);
+  const dailyPrice = Number(serverQuote?.pricePerDay || 0);
+  const daysCount = Number(serverQuote?.daysCount || 0);
+  const rentoraFee = Number(serverQuote?.platformFee || 0);
+  const rentalTotal = Number(serverQuote?.baseRentalAmount || 0);
+  const deposit = Number(serverQuote?.depositAmount || 0);
   const totalObligation = rentalTotal + deposit;
-  const platformFeePercentage = fallbackPricing.platformFeePercentage || 5;
+  const platformFeePercentage = Number(serverQuote?.platformFeeRate || serverQuote?.platformFeePercentage || 0);
 
   const pricing = {
-    ...fallbackPricing,
     daysCount,
     platformFeePercentage,
     rentoraFee,
@@ -188,7 +177,7 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
       const persistedRental = await cloudSyncService.createRental({ quoteId: serverQuote.quoteId });
       if (!persistedRental?.id) throw new Error('ثبت رزرو در سرور ناموفق بود.');
 
-      // 2. Pay ONLY Rentora Platform Fee via Official Pi SDK.
+      // Pay only the server-authoritative Rentora platform fee via the official Pi SDK.
       const paymentResult = await executePiPaymentForRental(persistedRental.id, persistedRental);
 
       // 3. Fetch verified private contact details after payment settlement.
