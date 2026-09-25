@@ -36,6 +36,18 @@ function requireBindings(env) { if (!env?.RENTORA_DB) throw new Error('RENTORA_D
 async function readJson(request, maxBytes = MAX_BODY_BYTES) { const length = Number(request.headers.get('content-length') || 0); if (length > maxBytes) throw Object.assign(new Error('Request body too large'), { status: 413 }); const text = await request.text(); if (new TextEncoder().encode(text).byteLength > maxBytes) throw Object.assign(new Error('Request body too large'), { status: 413 }); if (!text) return {}; try { return JSON.parse(text); } catch (_) { throw Object.assign(new Error('Invalid JSON'), { status: 400 }); } }
 async function sha256(value) { const bytes = new TextEncoder().encode(value); const digest = await crypto.subtle.digest('SHA-256', bytes); return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join(''); }
 function randomToken(prefix) { return `${prefix}_${crypto.randomUUID()}_${crypto.randomUUID()}`; }
+
+async function enforceRateLimit(request, env, scope, limit = 30, windowSeconds = 60, identity = '') {
+  if (!env?.RENTORA_KV) return { allowed: true };
+  const ip = String(request.headers.get('CF-Connecting-IP') || request.headers.get('X-Real-IP') || 'unknown').trim().slice(0, 80);
+  const actor = String(identity || ip || 'unknown').trim().slice(0, 120);
+  const bucket = Math.floor(Date.now() / (windowSeconds * 1000));
+  const key = `rate:${scope}:${await sha256(`${actor}:${bucket}`)}`;
+  const current = Number(await env.RENTORA_KV.get(key) || 0);
+  if (current >= limit) return { allowed: false, retryAfter: windowSeconds };
+  await env.RENTORA_KV.put(key, String(current + 1), { expirationTtl: windowSeconds + 5 });
+  return { allowed: true };
+}
 function adminUids(env) { return String(env?.ADMIN_PI_UIDS || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean); }
 function isAdmin(uid, env) {
   const allowed = adminUids(env);
@@ -1346,6 +1358,8 @@ export default {
         return jsonResponse({ success: true, listingId, status: newStatus }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/auth/pi-login') {
+        const loginLimit = await enforceRateLimit(request, env, 'pi-login', 12, 60);
+        if (!loginLimit.allowed) return errorResponse('Too many authentication attempts. Please retry shortly.', 429, env, { retryAfter: loginLimit.retryAfter }, origin);
         requireBindings(env);
         const body = await readJson(request);
         const piUser = await verifyPiAccessToken(env, body.accessToken);
@@ -1413,6 +1427,8 @@ export default {
         return jsonResponse({ success: true }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/payments/intent') {
+        const paymentLimit = await enforceRateLimit(request, env, 'payment-intent', 20, 60);
+        if (!paymentLimit.allowed) return errorResponse('Too many payment requests. Please retry shortly.', 429, env, { retryAfter: paymentLimit.retryAfter }, origin);
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
         if (!body.rentalId) return errorResponse('rentalId is required', 400, env, undefined, origin);
@@ -1543,6 +1559,8 @@ export default {
         return jsonResponse({ cancelled: true, paymentIntentId: intent.id, rentalId: intent.rental_id }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/payments/approve') {
+        const paymentLimit = await enforceRateLimit(request, env, 'payment-approve', 20, 60);
+        if (!paymentLimit.allowed) return errorResponse('Too many payment approval requests. Please retry shortly.', 429, env, { retryAfter: paymentLimit.retryAfter }, origin);
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
         if (!body.paymentId || !body.paymentIntentId) return errorResponse('paymentId and paymentIntentId are required', 400, env, undefined, origin);
@@ -1592,6 +1610,8 @@ export default {
         return jsonResponse({ approved: true, paymentId: body.paymentId, data: approved, idempotent: Number(approvedClaim?.meta?.changes || 0) === 0 }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/payments/complete') {
+        const paymentLimit = await enforceRateLimit(request, env, 'payment-complete', 20, 60);
+        if (!paymentLimit.allowed) return errorResponse('Too many payment completion requests. Please retry shortly.', 429, env, { retryAfter: paymentLimit.retryAfter }, origin);
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
         if (!body.paymentId || !body.txid || !body.paymentIntentId) {
@@ -1654,6 +1674,8 @@ export default {
         return jsonResponse({ completed: true, paymentId: body.paymentId, txid: body.txid, data: completion }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/payments/incomplete') {
+        const paymentLimit = await enforceRateLimit(request, env, 'payment-incomplete', 20, 60);
+        if (!paymentLimit.allowed) return errorResponse('Too many payment reconciliation requests. Please retry shortly.', 429, env, { retryAfter: paymentLimit.retryAfter }, origin);
         const body = await readJson(request);
         const paymentObj = body?.payment || {};
         const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
@@ -2158,6 +2180,8 @@ export default {
       }
 
       if (method === 'POST' && path.startsWith('/api/conversations/') && path.endsWith('/messages')) {
+        const messageLimit = await enforceRateLimit(request, env, 'messages', 30, 60);
+        if (!messageLimit.allowed) return errorResponse('Too many messages. Please retry shortly.', 429, env, { retryAfter: messageLimit.retryAfter }, origin);
         const convId = path.slice('/api/conversations/'.length, -'/messages'.length).trim();
         if (!convId) return errorResponse('Missing conversation ID', 400, env, undefined, origin);
         const { user } = await requireUser(request, env);
@@ -2584,6 +2608,8 @@ export default {
       // AUTHORITATIVE DISPUTES & VIOLATION REPORTS
       // =========================================================================
       if (method === 'POST' && path === '/api/reports') {
+        const reportLimit = await enforceRateLimit(request, env, 'reports', 10, 300);
+        if (!reportLimit.allowed) return errorResponse('Too many report submissions. Please retry later.', 429, env, { retryAfter: reportLimit.retryAfter }, origin);
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
 
@@ -2877,6 +2903,8 @@ export default {
         return jsonResponse({ success: true, user: userView(updated, env) }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/upload') {
+        const uploadLimit = await enforceRateLimit(request, env, 'upload', 12, 60);
+        if (!uploadLimit.allowed) return errorResponse('Too many upload requests. Please retry shortly.', 429, env, { retryAfter: uploadLimit.retryAfter }, origin);
         const { user } = await requireUser(request, env);
         const body = await readJson(request, 2 * 1024 * 1024);
         const data = String(body?.data || '').trim();
