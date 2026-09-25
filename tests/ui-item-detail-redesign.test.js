@@ -152,8 +152,8 @@ test('cloud sync requests carry the server session token for authenticated API r
   assert.ok(start >= 0 && end > start);
   const helper = sync.slice(start, end);
   assert.match(helper, /localStorage\.getItem\(STORAGE_USER_KEY\)/);
-  assert.match(helper, /session\\?\\.sessionToken/);
-  assert.match(helper, /headers\\.Authorization =/);
+  assert.match(helper, /session\?\.sessionToken/);
+  assert.match(helper, /headers\.Authorization =/);
   assert.match(helper, /Bearer/);
 });
 
