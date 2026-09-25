@@ -185,6 +185,17 @@ test('renter contact details stay locked until confirmed rental payment', () => 
   assert.match(contact, /Contact information is locked until rental payment is confirmed/);
 });
 
+test('owner activation cycle claim is atomic against concurrent requests', () => {
+  const activate = section("path.startsWith('/api/listings/') && path.endsWith('/activate')", "path === '/api/sync/item'");
+  assert.match(activate, /UPDATE listings/);
+  assert.match(activate, /activation_cycle=\?1/);
+  assert.match(activate, /owner_fee_payment_status!='completed'/);
+  assert.match(activate, /activation_cycle IS NULL AND \?6 IS NULL/);
+  assert.match(activate, /claim\?\.meta\?\.changes/);
+  assert.match(activate, /concurrently changed/);
+  assert.match(activate, /INSERT INTO payment_obligations/);
+});
+
 test('owner activation obligations are bound to an activation cycle in D1', () => {
   assert.match(worker, /payment_obligations\(id,rental_id,listing_id,user_id,role,purpose,amount,currency,status,memo,metadata,activation_cycle,expires_at,created_at,updated_at\)/);
   assert.match(worker, /activationCycle: cycle/);
