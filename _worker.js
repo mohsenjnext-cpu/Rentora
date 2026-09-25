@@ -1566,7 +1566,7 @@ export default {
         await env.RENTORA_DB.batch([
           env.RENTORA_DB.prepare(`UPDATE payment_intents SET pi_payment_id=?1,pi_txid=?2,status='completed',updated_at=?3 WHERE id=?4 AND status IN ('approved','completed')`).bind(body.paymentId, body.txid, now(), intent.id),
           env.RENTORA_DB.prepare(`UPDATE rentals SET payment_status='completed',status='confirmed',updated_at=?1 WHERE id=?2`).bind(now(), intent.rental_id),
-          env.RENTORA_DB.prepare(`INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)`).bind(`tx_${crypto.randomUUID()}`, intent.id, body.paymentId, body.txid, user.id, intent.amount, now())
+          env.RENTORA_DB.prepare(`INSERT INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)`).bind(`tx_${crypto.randomUUID()}`, intent.id, body.paymentId, body.txid, user.id, intent.amount, now())
         ]);
         await env.RENTORA_KV.put(`payment-complete:${intent.id}`, JSON.stringify({ paymentId: body.paymentId, txid: body.txid, at: now() }), { expirationTtl: 60 * 60 * 24 * 30 });
         return jsonResponse({ completed: true, paymentId: body.paymentId, txid: body.txid, data: completion }, 200, env, origin);
@@ -1615,12 +1615,21 @@ export default {
             return jsonResponse({ handled: false, error: 'Pi payment amount mismatch' }, 409, env, origin);
           }
 
-          const resolvedTxid = suppliedTxid || payment?.transaction?.txid || '';
+          const resolvedTxid = String(suppliedTxid || payment?.transaction?.txid || '').trim();
+          const existingTransaction = resolvedTxid ? await env.RENTORA_DB.prepare(
+            'SELECT payment_intent_id, pi_payment_id, pi_txid FROM transactions WHERE pi_payment_id=?1 OR pi_txid=?2 LIMIT 1'
+          ).bind(paymentId, resolvedTxid).first().catch(() => null) : null;
+          if (existingTransaction && String(existingTransaction.payment_intent_id) !== String(intent.id)) {
+            return jsonResponse({ handled: false, error: 'Pi transaction is already bound to another payment intent' }, 409, env, origin);
+          }
+          if (existingTransaction && String(existingTransaction.payment_intent_id) === String(intent.id)) {
+            return jsonResponse({ handled: true, matched: true, idempotent: true }, 200, env, origin);
+          }
           if (payment?.status?.developer_completed && resolvedTxid) {
             await env.RENTORA_DB.batch([
               env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE id=?3").bind(resolvedTxid, now(), intent.id),
               env.RENTORA_DB.prepare("UPDATE rentals SET payment_status='completed', status='confirmed', updated_at=?1 WHERE id=?2").bind(now(), intent.rental_id),
-              env.RENTORA_DB.prepare("INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)").bind(`tx_${crypto.randomUUID()}`, intent.id, paymentId, resolvedTxid, intent.user_id, intent.amount, now())
+              env.RENTORA_DB.prepare("INSERT INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)").bind(`tx_${crypto.randomUUID()}`, intent.id, paymentId, resolvedTxid, intent.user_id, intent.amount, now())
             ]);
           } else if (payment?.status?.transaction_verified && resolvedTxid) {
             const completeResponse = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, {
@@ -1632,7 +1641,7 @@ export default {
               await env.RENTORA_DB.batch([
                 env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE id=?3").bind(resolvedTxid, now(), intent.id),
                 env.RENTORA_DB.prepare("UPDATE rentals SET payment_status='completed', status='confirmed', updated_at=?1 WHERE id=?2").bind(now(), intent.rental_id),
-                env.RENTORA_DB.prepare("INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)").bind(`tx_${crypto.randomUUID()}`, intent.id, paymentId, resolvedTxid, intent.user_id, intent.amount, now())
+                env.RENTORA_DB.prepare("INSERT INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)").bind(`tx_${crypto.randomUUID()}`, intent.id, paymentId, resolvedTxid, intent.user_id, intent.amount, now())
               ]);
             }
           } else if (!payment?.status?.developer_approved) {
