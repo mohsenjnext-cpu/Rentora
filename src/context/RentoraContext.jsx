@@ -81,6 +81,7 @@ export function RentoraProvider({ children }) {
       }
       return c;
     }));
+    cloudSyncService.broadcastConversationRead(convId);
   }, [userIdentifier, getReadTimestampsKey, getReadTimestamps]);
 
   // Load conversations from server when authenticated
@@ -143,6 +144,10 @@ export function RentoraProvider({ children }) {
 
   useEffect(() => {
     const unsubscribe = cloudSyncService.subscribe((event, data) => {
+      if (event === 'CHAT_READ' && data?.conversationId) {
+        setConversations(prev => prev.map(c => c.id === data.conversationId ? { ...c, unreadCount: 0 } : c));
+        return;
+      }
       if (data) {
         if (Array.isArray(data.items)) setItems(prev => JSON.stringify(prev) === JSON.stringify(data.items) ? prev : data.items);
         if (Array.isArray(data.rentals)) setRentals(prev => JSON.stringify(prev) === JSON.stringify(data.rentals) ? prev : data.rentals);
