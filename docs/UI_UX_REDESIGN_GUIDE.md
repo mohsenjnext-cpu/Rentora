@@ -387,3 +387,21 @@ Verified on `main` before implementation work:
 4. Audit server-authoritative financial display paths before touching booking/payment presentation.
 5. Decompose the largest account/admin surfaces only after their workflows and state contracts are mapped.
 
+
+
+## Research Decision 01 — Navigation & Routing — 2026-09-25
+
+**Finding:** The current `src/App.jsx` uses an in-memory `currentTab` state switcher. It already supports the major product surfaces, but it does not provide URL-addressable routes/deep links.
+
+**Options considered:**
+1. Keep the in-memory switcher and only restyle it.
+2. Introduce a client router and make primary screens URL-addressable while preserving existing handlers and APIs.
+3. Rewrite the app shell and navigation together with a new routing architecture.
+
+**Decision:** Choose **option 2 as the migration target**. Introduce URL-addressable primary routes incrementally, while keeping the existing screen switcher operational during the redesign. Do not rewrite backend contracts or business logic for routing.
+
+**Reason:** The redesign needs shareable/deep-linkable screens and isolated screen testing, but a full shell rewrite would unnecessarily couple navigation work to every page migration.
+
+**Implementation order:** routing foundation → new shell/navigation → page-by-page migration → remove legacy switcher after parity and regression validation.
+
+**Status:** Research/decision complete. Implementation remains unchecked until built and tested.
