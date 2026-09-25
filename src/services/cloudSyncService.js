@@ -747,6 +747,19 @@ export class CloudSyncService {
     return data.message;
   }
 
+  broadcastConversationRead(convId) {
+    if (!convId) return false;
+    try {
+      this.broadcastChannel?.postMessage({
+        type: 'CHAT_READ',
+        data: { conversationId: convId }
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   async archiveConversation(conversationId) {
     if (!conversationId) return false;
     const apiBase = getApiBaseUrl();
