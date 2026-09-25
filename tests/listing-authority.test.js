@@ -19,9 +19,9 @@ test('listing updates preserve server-owned price and deposit', () => {
 
 test('new listings bind ownership to the authenticated D1 user', () => {
   assert.match(worker, /INSERT INTO listings\(id,owner_user_id,title,description,category,location,price_per_day,deposit_amount/);
-  assert.match(worker, /\.bind\(item\.id, user\.id, String\(item\.title\)/);
+  assert.match(worker, /\.bind\(listingId, user\.id, title/);
 });
 
 test('listing price and deposit are validated server-side', () => {
-  assert.match(worker, /!Number\.isFinite\(price\) \|\| price < 0 \|\| !Number\.isFinite\(deposit\) \|\| deposit < 0/);
+  assert.match(worker, /!Number\.isFinite\(price\) \|\| price < 0/);\n  assert.match(worker, /!Number\.isFinite\(deposit\) \|\| deposit < 0/);
 });
