@@ -1,16 +1,13 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { useRentora } from '../context/RentoraContext';
-import { usePiAuth } from '../context/PiAuthContext';
 import CategoryBar from '../components/CategoryBar';
 import ItemCard from '../components/ItemCard';
 import EmptyState from '../components/EmptyState';
-import { Search, ShieldCheck, Package, Users, Plus, CheckCircle2, Heart, MapPin, Coins } from 'lucide-react';
+import { Search, ShieldCheck, Package, Users, Plus, CheckCircle2 } from 'lucide-react';
 
 export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
   const { t, l } = useLanguage();
-  const { items = [], favorites = [], toggleFavorite } = useRentora();
-  const { users = [], currentUser } = usePiAuth();
+  const { items = [] } = useRentora();
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleSearchSubmit = (e) => {
@@ -20,45 +17,10 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
 
   const activeItems = (items || []).filter(i => !i.status || i.status === 'active');
   const latestItems = activeItems.slice(0, 10);
+  const { users = [], currentUser } = usePiAuth();
   const totalPioneersCount = Math.max(users.length, currentUser ? 1 : 0);
 
-  const MobileItemCard = ({ item }) => {
-    if (!item) return null;
-    const isFav = favorites.includes(item.id);
-    const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
-    const ownerName = (item.ownerUsername || '').toLowerCase().replace('@', '').trim();
-    const isOwner = Boolean(myName && ownerName && (myName === ownerName || (item.ownerUid && currentUser?.uid && item.ownerUid === currentUser.uid)));
-    const imageUrl = item.images?.[0] || 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80';
 
-    return (
-      <article onClick={() => onSelectItem?.(item)} className="bg-white dark:bg-[#151426] border border-[#E4E4EC] dark:border-slate-800 rounded-2xl p-1.5 overflow-hidden cursor-pointer">
-        <div className="relative h-28 rounded-xl overflow-hidden bg-[#D8D7F5] dark:bg-[#27254A]">
-          <img src={imageUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
-          {item.ownerKYC && (
-            <span className="absolute top-2 left-2 rounded px-1.5 py-0.5 text-[9px] font-bold badge-trust flex items-center gap-0.5 shadow-xs">
-              <ShieldCheck className="w-2.5 h-2.5 stroke-[2.2]" />
-              <span>KYC</span>
-            </span>
-          )}
-          <button type="button" aria-label={t('btnFavorite')} onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }} className="absolute top-2 right-2 w-8 h-8 rounded-full bg-[#26215C]/60 text-white flex items-center justify-center">
-            <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
-          </button>
-        </div>
-        <div className="px-1.5 pt-2 pb-1">
-          <div className="text-[9px] text-[#8A8A9B] flex items-center justify-end gap-0.5 truncate"><span>{item.location || l('ایران', 'Iran', 'إيران', '伊朗')}</span><MapPin className="w-2.5 h-2.5 shrink-0" /></div>
-          <h3 className="mt-1 text-[12px] font-bold text-[#1E1E2F] dark:text-white text-right truncate">{item.title}</h3>
-          <div className="mt-2 flex items-center justify-between gap-1">
-            {isOwner ? (
-              <button type="button" onClick={(e) => { e.stopPropagation(); onSelectItem?.(item); }} className="bg-[#26215C] text-white rounded-lg px-3 py-1.5 text-[10px] font-bold">{l('مدیریت', 'Manage', 'إدارة', '管理')}</button>
-            ) : (
-              <button type="button" onClick={(e) => { e.stopPropagation(); onRentItem?.(item); }} className="bg-[#26215C] text-white rounded-lg px-3 py-1.5 text-[10px] font-bold flex items-center gap-1"><Coins className="w-3 h-3 text-amber-300" />{t('itemBookBtn')}</button>
-            )}
-            <span className="text-[12px] font-black text-[#0F6E56] dark:text-[#48D2A8] whitespace-nowrap">{item.pricePerDay} π <span className="font-normal text-[10px] text-slate-400">/{l('روز', 'd', 'يوم', '天')}</span></span>
-          </div>
-        </div>
-      </article>
-    );
-  };
 
   return (
     <div className="select-none">
@@ -95,7 +57,7 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
 
         <section>
           <div className="flex items-center justify-between mb-2"><button type="button" onClick={() => onNavigate('discover')} className="text-[11px] font-semibold text-[#534AB7] dark:text-[#AFA9EC]">{t('homeViewAll')} ›</button><h2 className="text-[16px] font-bold text-[#1E1E2F] dark:text-white">{t('homeFeaturedTitle')}</h2></div>
-          {latestItems.length === 0 ? <EmptyState type="package" title={t('homeNoItemsTitle')} message={t('homeNoItemsDesc')} actionLabel={t('homePostFirstItem')} onAction={() => onNavigate('list-item')} /> : <div className="grid grid-cols-2 gap-2.5">{latestItems.slice(0, 4).map((item) => <MobileItemCard key={item.id} item={item} />)}</div>}
+          {latestItems.length === 0 ? <EmptyState type="package" title={t('homeNoItemsTitle')} message={t('homeNoItemsDesc')} actionLabel={t('homePostFirstItem')} onAction={() => onNavigate('list-item')} /> : <div className="grid grid-cols-2 gap-2.5">{latestItems.slice(0, 4).map((item) => <ItemCard key={item.id} item={item} variant="compact" onSelect={onSelectItem} onRentClick={onRentItem} />)}</div>}
         </section>
       </div>
 
