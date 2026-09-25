@@ -420,6 +420,8 @@ export function RentoraProvider({ children }) {
 
   const executePiPaymentForRental = async (rentalId, draftRental) => {
     if (!draftRental) throw new Error("اطلاعات رزرو نامعتبر است.");
+    if (!rentalId || rentalId !== draftRental.id) throw new Error("شناسه رزرو با پرداخت منطبق نیست.");
+
     const paymentResult = await piService.createPayment({
       paymentData: {
         amount: draftRental.rentoraFee,
@@ -436,22 +438,10 @@ export function RentoraProvider({ children }) {
       },
       paymentIntentId: draftRental.paymentIntentId
     });
-    const txid = paymentResult.txid, paymentId = paymentResult.paymentId;
-    const confirmedRental = {
-      ...draftRental,
-      status: RENTAL_STATES.CONFIRMED,
-      renterCommissionPaid: true,
-      paymentStatus: "paid_confirmed",
-      piPaymentId: paymentId,
-      piTxRef: txid,
-      paidAt: new Date().toISOString()
-    };
-    setRentals(prev => {
-      const updated = [confirmedRental, ...prev.filter(r => r.id !== confirmedRental.id)];
-      cloudSyncService.saveCachedRentals(updated);
-      return updated;
-    });
-    await cloudSyncService.broadcastNewRental(confirmedRental);
+
+    // The Worker decides whether the rental is confirmed. Never promote it
+    // in the browser based only on a successful Pi SDK callback.
+    await refreshApp();
     return paymentResult;
   };
 
