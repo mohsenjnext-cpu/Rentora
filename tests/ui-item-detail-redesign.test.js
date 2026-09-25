@@ -123,3 +123,12 @@ test('incomplete Pi callback cannot mutate a rental without verified intent bind
   assert.match(route, /UPDATE rentals SET payment_status='completed', status='confirmed'/);
   assert.match(route, /INSERT OR IGNORE INTO transactions/);
 });
+
+
+test('Pi payment flow never retries native payment merely because a payment/approval/completion error contains payment wording', () => {
+  const service = fs.readFileSync(new URL('../src/services/piService.js', import.meta.url), 'utf8');
+  assert.match(service, /errMsg\.includes\('scope'\) \|\| errMsg\.includes\('authenticate'\)/);
+  assert.doesNotMatch(service, /errMsg\.includes\('payment'\)/);
+  assert.match(service, /onReadyForServerCompletion/);
+  assert.match(service, /completePaymentOnServer/);
+});
