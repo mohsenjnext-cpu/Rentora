@@ -177,3 +177,12 @@ test('optional-auth public data routes resolve the HttpOnly session cookie', () 
   assert.match(section("path === '/api/listings'", "path.startsWith\('/api/listings/'\)"), /getOptionalUser\(request, env\)/);
   assert.match(section("path.startsWith('/api/listings/')", "path.startsWith('/api/admin/reconciliation/')"), /getOptionalUser\(request, env\)/);
 });
+
+
+test('server error responses do not expose internal exception text', () => {
+  assert.match(worker, /else if \(status >= 500\)/);
+  assert.match(worker, /خطای داخلی سرور/);
+  assert.match(worker, /سرویس موقتاً در دسترس نیست/);
+  assert.match(worker, /errorResponse\('Pi payment approval failed', 502, env, \{ details: approved \}/);
+  assert.match(worker, /errorResponse\('Pi payment completion failed', 502, env, \{ details: completion \}/);
+});
