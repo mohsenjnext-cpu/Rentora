@@ -482,3 +482,14 @@ Verified on `main` before implementation work:
 
 Next action: continue additive UI/UX audit and implementation while keeping Cloudflare deployment failure and admin UID configuration as explicit release blockers.
 
+## Design System Implementation 01 — Shared UI Primitives — 2026-09-25
+
+Added additive shared primitives under `src/components/ui/`:
+- `RentoraButton`: primary/secondary/ghost/danger variants, consistent sizing, disabled/loading and focus-visible behavior.
+- `RentoraCard`: shared surface primitive with optional interactive elevation treatment.
+- `RentoraBadge`: shared semantic badge tones for neutral/trust/warning/danger/primary states.
+
+These primitives are intentionally additive. Existing pages are not mass-migrated yet, so the legacy UI remains operational while the component system is validated incrementally.
+
+**Status:** Initial Button/Card/Badge primitives implemented. Broader component migration remains pending regression and accessibility validation.
+
