@@ -288,7 +288,7 @@ export function RentoraProvider({ children }) {
     const paymentResult = await piService.createPayment({
       paymentData: {
         amount: Number(data.obligation?.amount || 0),
-        memo: data.obligation?.memo || `Rentora Owner Activation #${String(itemId).slice(-12)}`,
+        memo: data.obligation?.memo || `Rentora Owner Activation Fee · 1-day 50% share #${String(itemId).slice(-12)}`,
         metadata: {
           role: 'owner',
           listingId: itemId,
