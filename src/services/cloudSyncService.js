@@ -69,7 +69,15 @@ export class CloudSyncService {
   }
 
   getAuthHeaders() {
-    return { 'Content-Type': 'application/json' };
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+      const raw = localStorage.getItem(STORAGE_USER_KEY);
+      const session = raw ? JSON.parse(raw) : null;
+      if (session?.sessionToken) {
+        headers.Authorization = `Bearer ${session.sessionToken}`;
+      }
+    } catch (_) {}
+    return headers;
   }
 
   async compressImage(file, maxWidth = 800, quality = 0.7) {
