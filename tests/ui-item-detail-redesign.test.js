@@ -206,3 +206,28 @@ test('payment intent creation never resets a live Pi payment binding', () => {
   assert.match(route, /boundPaymentId/);
   assert.match(route, /Never reset the binding and orphan that payment/);
 });
+
+
+test('Pi completion cannot accept a client txid that conflicts with the verified payment or another transaction', () => {
+  const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+  const start = worker.indexOf("path === '/api/payments/complete'");
+  const end = worker.indexOf("path === '/api/payments/incomplete'", start);
+  assert.ok(start >= 0 && end > start);
+  const route = worker.slice(start, end);
+  assert.match(route, /payment\?\.transaction\?\.txid/);
+  assert.match(route, /Transaction ID does not match the verified Pi payment/);
+  assert.match(route, /SELECT payment_intent_id, pi_payment_id, pi_txid FROM transactions WHERE pi_payment_id=\?1 OR pi_txid=\?2/);
+  assert.match(route, /Transaction is already bound to another payment intent/);
+});
+
+test('Pi completion transaction persistence uses conflict-safe identity checks before confirming the rental', () => {
+  const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+  const start = worker.indexOf("path === '/api/payments/complete'");
+  const end = worker.indexOf("path === '/api/payments/incomplete'", start);
+  assert.ok(start >= 0 && end > start);
+  const route = worker.slice(start, end);
+  const identityCheck = route.indexOf('const existingTransaction');
+  const confirm = route.indexOf("UPDATE rentals SET payment_status='completed',status='confirmed'");
+  assert.ok(identityCheck >= 0 && confirm > identityCheck);
+  assert.match(route, /INSERT OR IGNORE INTO transactions/);
+});
