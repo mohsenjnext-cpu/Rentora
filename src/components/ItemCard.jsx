@@ -57,7 +57,7 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
               </span>
             )}
             {isOwner && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#EEEDFE] dark:bg-[#26215C] text-[#26215C] dark:text-[#EEEDFE] flex items-center gap-0.5 shadow-xs">
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rentora-primary-soft dark:bg-[#26215C] text-rentora-primary dark:text-rentora-primary-soft flex items-center gap-0.5 shadow-xs">
                 {l('آگهی من', 'Mine', 'إعلاني', '我的发布')}
               </span>
             )}
