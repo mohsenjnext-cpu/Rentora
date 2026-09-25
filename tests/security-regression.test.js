@@ -143,3 +143,13 @@ test('incomplete reconciliation converges failed or cancelled Pi payments withou
   assert.match(incomplete, /paymentStatus: 'cancelled'/);
   assert.match(incomplete, /payment_status='pending', status='pending_payment'/);
 });
+
+
+test('sensitive mutation endpoints have KV-backed abuse throttles', () => {
+  assert.match(worker, /async function enforceRateLimit\(request, env, scope/);
+  for (const scope of ['pi-login', 'payment-intent', 'payment-approve', 'payment-complete', 'payment-incomplete', 'upload', 'reports', 'messages']) {
+    assert.match(worker, new RegExp(`enforceRateLimit\\(request, env, '${scope}'`));
+  }
+  assert.match(worker, /return errorResponse\('Too many .*', 429/);
+  assert.match(worker, /expirationTtl: windowSeconds \+ 5/);
+});
