@@ -35,10 +35,10 @@ function ItemCardSkeleton() {
 
 export default function ItemCard({ item, onSelect, onRentClick, variant = 'default' }) {
   const { lang, dir, t, l } = useLanguage();
-  if (variant === 'skeleton') return <ItemCardSkeleton />;
   const { currentUser } = usePiAuth();
   const { favorites = [], toggleFavorite } = useRentora();
 
+  if (variant === 'skeleton') return <ItemCardSkeleton />;
   if (!item) return null;
 
   const isFav = favorites.includes(item.id);
