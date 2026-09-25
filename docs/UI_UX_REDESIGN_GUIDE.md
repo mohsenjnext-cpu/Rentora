@@ -366,3 +366,24 @@ Status:
 | Date | Area | Change | Status |
 |---|---|---|---|
 | 2026-09-25 | Project setup | Created living UI/UX redesign checklist and workflow | ✅ |
+
+
+## Baseline Audit Snapshot — 2026-09-25
+
+Verified on `main` before implementation work:
+
+- `src/App.jsx` exists as the current application-level screen/state switcher.
+- `src/index.css` is the main shared styling/token surface.
+- `src/context/RentoraContext.jsx` remains a major shared state surface.
+- Primary page implementations verified: Home, Discover, Item Detail, Owner Hub, Activity, Profile, Public Profile, Settings, Admin Dashboard.
+- The product-wide migration is **not complete**. This tracker intentionally keeps every page at incomplete status until its full Definition of Done is met.
+- PR #39 remains separate and open; it is not part of the UI replacement and must not be merged automatically.
+
+### First Research Queue
+
+1. Establish the new IA/navigation and route strategy before broad page migration.
+2. Establish design tokens and shared component primitives before duplicating page-specific styling.
+3. Converge listing-card implementations before expanding marketplace surfaces.
+4. Audit server-authoritative financial display paths before touching booking/payment presentation.
+5. Decompose the largest account/admin surfaces only after their workflows and state contracts are mapped.
+
