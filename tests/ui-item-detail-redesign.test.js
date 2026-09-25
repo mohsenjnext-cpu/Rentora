@@ -37,3 +37,13 @@ test('app keeps the legacy item detail and exposes the redesign additively behin
   assert.match(app, /ui.*redesign/);
   assert.match(app, /ItemDetailPage/);
 });
+
+
+test('redesigned item detail converges reviews and primary booking CTA on shared primitives', () => {
+  assert.match(file, /RentoraButton/);
+  assert.match(file, /RentoraCard/);
+  assert.match(file, /RentoraEmptyState/);
+  assert.match(file, /RentoraSkeleton/);
+  assert.match(file, /loadingReviews/);
+  assert.match(file, /totalReviews === 0/);
+});
