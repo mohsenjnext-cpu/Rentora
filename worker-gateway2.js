@@ -556,8 +556,15 @@ async function approvePayment(request, env) {
   const traceId = 'appr_' + crypto.randomUUID().slice(0, 8);
   const user = await requireUser(request, env);
   const body = await readJson(request);
-  if (!paymentId || !paymentIntentId) {
-    return json({ error: 'paymentId and paymentIntentId are required', traceId, stage: 'params_validation' }, 400, request, env);
+  const paymentIdRaw = body?.paymentId;
+  const paymentIntentIdRaw = body?.paymentIntentId;
+  if (typeof paymentIdRaw !== 'string' || typeof paymentIntentIdRaw !== 'string') {
+    return json({ error: 'paymentId and paymentIntentId must be text values', traceId, stage: 'params_validation' }, 400, request, env);
+  }
+  const paymentId = paymentIdRaw.trim();
+  const paymentIntentId = paymentIntentIdRaw.trim();
+  if (!paymentId || !paymentIntentId || paymentId.length > 128 || paymentIntentId.length > 128) {
+    return json({ error: 'payment identifiers are required and bounded', traceId, stage: 'params_validation' }, 400, request, env);
   }
   const intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(paymentIntentId, user.id).first();
   if (!intent) {
