@@ -63,3 +63,11 @@ test('offline sync path uses the memory user cache instead of an undefined varia
   assert.doesNotMatch(cloudSync, /users:\s*localUsers/);
   assert.match(cloudSync, /users: this\.getCachedUsers\(\)/);
 });
+
+
+test('logout clears marketplace memory and private client state', () => {
+  assert.match(rentoraContext, /setItems\(\[\]\);/);
+  assert.match(rentoraContext, /setFavorites\(\[\]\);/);
+  assert.match(rentoraContext, /setRentals\(\[\]\);/);
+  assert.match(rentoraContext, /cloudSyncService\.clearUserSessionCache\(\);/);
+});
