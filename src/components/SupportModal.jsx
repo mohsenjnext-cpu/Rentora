@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
+import { cloudSyncService } from '../services/cloudSyncService';
 import { 
   X, 
   Send, 
@@ -19,24 +20,38 @@ export default function SupportModal({ isOpen, onClose }) {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleClose = () => {
+    if (isSubmitting) return;
+    setIsSubmitted(false);
+    setError('');
+    onClose();
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!message.trim()) return;
-    setIsSubmitted(true);
-    setTimeout(() => {
-      setIsSubmitted(false);
+    if (!currentUser || isSubmitting || !message.trim()) return;
+    setError('');
+    setIsSubmitting(true);
+    try {
+      await cloudSyncService.submitSupportTicket({ subject, message });
+      setIsSubmitted(true);
       setSubject('');
       setMessage('');
-      onClose();
-    }, 2000);
+    } catch (err) {
+      setError(err?.message || l('ارسال درخواست پشتیبانی ناموفق بود.', 'Unable to submit support request.', 'تعذر إرسال طلب الدعم.', '提交客服请求失败'));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div 
-      onClick={onClose}
+      onClick={handleClose}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-fadeIn select-none"
     >
       <div 
@@ -62,15 +77,21 @@ export default function SupportModal({ isOpen, onClose }) {
 
           <button
             type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+            onClick={handleClose}
+            className="min-h-11 min-w-11 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form Body */}
-        {isSubmitted ? (
+        {!currentUser ? (
+          <div className="p-8 text-center space-y-3">
+            <HelpCircle className="w-10 h-10 mx-auto text-slate-400" />
+            <h4 className="font-bold text-sm text-slate-900 dark:text-white">{l('ورود لازم است', 'Sign in required', 'يلزم تسجيل الدخول', '请先登录')}</h4>
+            <p className="text-xs text-slate-500">{l('برای ثبت درخواست پشتیبانی باید وارد حساب Pi خود شوید.', 'Sign in with your Pi account to submit a support request.', 'سجل الدخول بحساب Pi لإرسال طلب دعم.', '请使用您的 Pi 账户登录后提交客服请求。')}</p>
+          </div>
+        ) : isSubmitted ? (
           <div className="p-8 text-center space-y-3 animate-fadeIn">
             <div className="w-12 h-12 mx-auto rounded-full badge-trust text-[#0F6E56] flex items-center justify-center shadow-xs">
               <CheckCircle2 className="w-6 h-6 stroke-[2]" />
@@ -111,13 +132,16 @@ export default function SupportModal({ isOpen, onClose }) {
               />
             </div>
 
+            {error && <div role="alert" className="rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 p-2.5 text-xs text-red-700 dark:text-red-300">{error}</div>}
+
             <div className="pt-2">
               <button
                 type="submit"
-                className="btn-primary w-full py-2.5 text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                disabled={isSubmitting}
+                className="btn-primary min-h-11 disabled:opacity-60 disabled:cursor-not-allowed w-full py-2.5 text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <Send className={`w-3.5 h-3.5 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
-                <span>{l('ارسال پیام به پشتیبانی', 'Send Message to Support', 'إرسال الرسالة إلى الدعم', '提交给技术客服')}</span>
+                <span>{isSubmitting ? l('در حال ارسال...', 'Sending...', 'جارٍ الإرسال...', '正在提交...') : l('ارسال پیام به پشتیبانی', 'Send Message to Support', 'إرسال الرسالة إلى الدعم', '提交给技术客服')}</span>
               </button>
             </div>
           </form>

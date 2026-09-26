@@ -216,7 +216,7 @@ test('TASK 1: KYC 3-state resolution and verified status preservation across log
     display_name: 'Pioneer Verified',
     role: 'user',
     status: 'active',
-    metadata: JSON.stringify({ kycStatus: 'verified', isOfficialSdk: true }),
+    metadata: JSON.stringify({ adminKycStatus: 'verified', isOfficialSdk: true }),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   });
@@ -269,7 +269,7 @@ test('TASK 1: KYC 3-state resolution and verified status preservation across log
       display_name: 'Admin User',
       role: 'admin',
       status: 'active',
-      metadata: JSON.stringify({ kycStatus: 'verified' }),
+      metadata: JSON.stringify({ adminKycStatus: 'verified' }),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     });
@@ -348,6 +348,7 @@ test('TASK 2: Admin Database Purge with strict Foreign Key ordering', async () =
   });
 
   const adminToken = 'admin_purge_token';
+  const adminCookie = `rentora_session=${encodeURIComponent(adminToken)}`;
   const adminHash = await sha256(adminToken);
   await kv.put(`session:${adminHash}`, JSON.stringify({
     id: 'usr_admin',
@@ -361,7 +362,7 @@ test('TASK 2: Admin Database Purge with strict Foreign Key ordering', async () =
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${adminToken}`
+      'Cookie': adminCookie
     }
   });
 
@@ -414,6 +415,7 @@ test('TASK 3: Platform Fee A2U Payout with Horizon Polling for txid', async () =
   });
 
   const adminToken = 'admin_payout_token';
+  const adminCookie = `rentora_session=${encodeURIComponent(adminToken)}`;
   const adminHash = await sha256(adminToken);
   await kv.put(`session:${adminHash}`, JSON.stringify({
     id: 'usr_admin',
@@ -474,7 +476,7 @@ test('TASK 3: Platform Fee A2U Payout with Horizon Polling for txid', async () =
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`,
+        'Cookie': adminCookie,
         'Idempotency-Key': 'phase6_payout_key_1'
       },
       body: JSON.stringify({
@@ -560,15 +562,15 @@ test('FINAL REAL USER FLOW TEST: Complete end-to-end lifecycle', async () => {
     }), env);
     assert.equal(login1Res.status, 200);
     const user1Data = await login1Res.json();
-    const token1 = user1Data.sessionToken;
-    assert.ok(token1);
+    const userCookie = login1Res.headers.get('Set-Cookie')?.split(';')[0];
+    assert.ok(userCookie, 'Pi login must issue the HttpOnly session cookie');
 
     // 2. View / Create Listing
     const createItemRes = await worker.fetch(new Request('http://localhost/api/sync/item', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token1}`
+        'Cookie': userCookie
       },
       body: JSON.stringify({
         id: 'item_camera_pro',
@@ -584,7 +586,7 @@ test('FINAL REAL USER FLOW TEST: Complete end-to-end lifecycle', async () => {
     // 3. User 1 Logout
     const logoutRes = await worker.fetch(new Request('http://localhost/api/auth/logout', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token1}` }
+      headers: { 'Cookie': userCookie }
     }), env);
     assert.equal(logoutRes.status, 200);
 
@@ -610,7 +612,8 @@ test('FINAL REAL USER FLOW TEST: Complete end-to-end lifecycle', async () => {
     }), env);
     assert.equal(adminLoginRes.status, 200);
     const adminData = await adminLoginRes.json();
-    const adminToken = adminData.sessionToken;
+    const adminCookie = adminLoginRes.headers.get('Set-Cookie')?.split(';')[0];
+    assert.ok(adminCookie, 'Admin login must issue the HttpOnly session cookie');
     assert.equal(adminData.user.role, 'admin');
 
     // 5. Admin Database Purge
@@ -618,7 +621,7 @@ test('FINAL REAL USER FLOW TEST: Complete end-to-end lifecycle', async () => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminToken}`
+        'Cookie': adminCookie
       }
     }), env);
     assert.equal(purgeRes.status, 200);
@@ -687,7 +690,7 @@ test('TASK 5: Navigation & Auth Token verification returns stable state', async 
     display_name: 'Pioneer User',
     role: 'user',
     status: 'active',
-    metadata: JSON.stringify({ kycStatus: 'verified' }),
+    metadata: JSON.stringify({ adminKycStatus: 'verified' }),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   });

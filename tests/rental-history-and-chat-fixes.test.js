@@ -24,23 +24,16 @@ class MockLocalStorage {
 
 globalThis.localStorage = new MockLocalStorage();
 
-test('Rental History: Deduplication by authoritative ID', () => {
+test('Rental History: browser storage cannot become rental authority', () => {
   localStorage.clear();
-
   const rawRentals = [
-    { id: 'rent_001', itemId: 'item_1', status: 'completed', rentalTotal: 10, createdAt: '2026-09-01T10:00:00Z' },
-    { id: 'rent_001', itemId: 'item_1', status: 'completed', rentalTotal: 10, createdAt: '2026-09-01T10:00:00Z' }, // Duplicate
-    { id: 'rent_002', itemId: 'item_2', status: 'active', rentalTotal: 25, createdAt: '2026-09-02T10:00:00Z' },
-    { id: 'rent_003', itemId: 'item_3', status: 'cancelled', rentalTotal: 5, createdAt: '2026-09-03T10:00:00Z' },
-    { id: 'rent_002', itemId: 'item_2', status: 'active', rentalTotal: 25, createdAt: '2026-09-02T10:00:00Z' }  // Duplicate
+    { id: 'rent_001', status: 'completed' },
+    { id: 'rent_001', status: 'completed' },
+    { id: 'rent_002', status: 'active' }
   ];
-
   cloudSyncService.saveCachedRentals(rawRentals);
-  const cached = cloudSyncService.getCachedRentals();
-
-  assert.equal(cached.length, 3, 'Duplicate rentals should be deduped to 3 unique items');
-  const ids = cached.map(r => r.id);
-  assert.deepEqual(ids.sort(), ['rent_001', 'rent_002', 'rent_003'].sort());
+  assert.deepEqual(cloudSyncService.getCachedRentals(), []);
+  assert.equal(localStorage.getItem('rentora_live_v1_rentals'), null);
 });
 
 test('Rental History Cleanup: Scoped hide mechanism preserves active rentals and other data', () => {

@@ -396,7 +396,7 @@ export default function ChatModal({
                     setMessages([]);
                     refreshConversations();
                   }}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800 transition cursor-pointer shrink-0"
+                  className="min-h-11 min-w-11 p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800 transition cursor-pointer shrink-0"
                   title={t('btnBack')}
                 >
                   {dir === 'rtl' ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
@@ -443,7 +443,7 @@ export default function ChatModal({
               <button
                 type="button"
                 onClick={handleBookingCTA}
-                className="btn-primary px-3 py-1.5 text-xs font-black flex items-center gap-1 shadow-xs cursor-pointer"
+                className="btn-primary min-h-11 px-3 py-1.5 text-xs font-black flex items-center gap-1 shadow-xs cursor-pointer"
               >
                 <Coins className="w-3.5 h-3.5 text-amber-400" />
                 <span>{t('itemBookBtn')}</span>
@@ -454,7 +454,7 @@ export default function ChatModal({
               <button
                 type="button"
                 onClick={() => setConvToDelete(activeConvId)}
-                className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                className="min-h-11 min-w-11 p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
                 title={t('chatDeleteBtn')}
               >
                 <Trash2 className="w-4 h-4" />
@@ -464,7 +464,7 @@ export default function ChatModal({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              className="min-h-11 min-w-11 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               title={t('btnCancel')}
             >
               <X className="w-5 h-5" />
@@ -507,7 +507,7 @@ export default function ChatModal({
             <button
               type="button"
               onClick={() => setFilterWarningMessage('')}
-              className="text-rose-400 hover:text-rose-700 p-0.5"
+              className="min-h-11 min-w-11 text-rose-400 hover:text-rose-700 p-0.5 flex items-center justify-center"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -676,7 +676,7 @@ export default function ChatModal({
             <button
               type="button"
               onClick={() => setAuthModalOpen(true)}
-              className="btn-primary px-3 py-1.5 text-xs font-bold shrink-0 cursor-pointer flex items-center gap-1"
+              className="btn-primary min-h-11 px-3 py-1.5 text-xs font-bold shrink-0 cursor-pointer flex items-center gap-1"
             >
               <LogIn className="w-3.5 h-3.5" />
               <span>{t('navLogin')}</span>
@@ -694,7 +694,7 @@ export default function ChatModal({
                   key={q.id}
                   type="button"
                   onClick={() => handleQuickQuestionClick(q)}
-                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap bg-slate-100 dark:bg-[#1E1D33] text-slate-700 dark:text-slate-300 hover:bg-[#EEEDFE] dark:hover:bg-[#26215C] hover:text-[#26215C] dark:hover:text-white transition cursor-pointer"
+                  className="min-h-11 px-2.5 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap bg-slate-100 dark:bg-[#1E1D33] text-slate-700 dark:text-slate-300 hover:bg-[#EEEDFE] dark:hover:bg-[#26215C] hover:text-[#26215C] dark:hover:text-white transition cursor-pointer"
                 >
                   {localizedQ}
                 </button>
@@ -730,7 +730,7 @@ export default function ChatModal({
             <button
               type="submit"
               disabled={!isAuthenticated || !messageText.trim() || isSending}
-              className="btn-primary p-2.5 rounded-xl cursor-pointer disabled:opacity-40 shrink-0"
+              className="btn-primary min-h-11 min-w-11 p-2.5 rounded-xl cursor-pointer disabled:opacity-40 shrink-0"
               title={t('chatSendBtn')}
             >
               <Send className={`w-4 h-4 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
@@ -777,7 +777,7 @@ export default function ChatModal({
                       setIsDeleting(false);
                     }
                   }}
-                  className="flex-1 py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-xs"
+                  className="flex-1 min-h-11 py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-xs"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>{isDeleting ? l('در حال حذف...', 'Deleting...', 'جارٍ الحذف...', '正在删除...') : t('btnDelete')}</span>
@@ -786,7 +786,7 @@ export default function ChatModal({
                   type="button"
                   disabled={isDeleting}
                   onClick={() => setConvToDelete(null)}
-                  className="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
+                  className="flex-1 min-h-11 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   {t('btnCancel')}
                 </button>

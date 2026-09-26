@@ -10,10 +10,10 @@ function installSessionFetchBridge(onSessionInvalid) {
   const originalFetch = window.fetch.bind(window);
   const apiBase = getApiBaseUrl();
   window.fetch = async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input?.url || '';
+    const isApiRequest = (apiBase && url.startsWith(apiBase)) || url.startsWith('/api/');
+    const isPiLogin = url.includes('/api/auth/pi-login');
     try {
-      const url = typeof input === 'string' ? input : input?.url || '';
-      const isApiRequest = (apiBase && url.startsWith(apiBase)) || url.startsWith('/api/');
-      const isPiLogin = url.includes('/api/auth/pi-login');
       if (isApiRequest) {
         const headers = new Headers(input instanceof Request ? input.headers : undefined);
         new Headers(init.headers || {}).forEach((value, key) => headers.set(key, value));
@@ -65,7 +65,10 @@ export function PiAuthProvider({ children }) {
     if (!apiBase) return () => {};
     fetch(`${apiBase}/api/auth/me`, { method: 'GET', headers: { 'Cache-Control': 'no-cache' }, credentials: 'include' })
       .then(res => {
-        if (res.status === 401) return null;
+        if (res.status === 401) {
+          if (isMounted) handleSessionInvalid();
+          return null;
+        }
         return res.json().catch(() => null);
       })
       .then(data => {
@@ -165,9 +168,9 @@ export function PiAuthProvider({ children }) {
     return cloudSyncService.setAdminListingStatus(listingId, newStatus);
   };
 
-  const isActuallyAdmin = Boolean(
-    (currentUser?.uid && (isServerVerifiedAdmin || currentUser?.role === 'admin'))
-  );
+  // Admin UI state is only a reflection of a server-verified authorization result.
+  // Never elevate based solely on a client-controlled/stale role field.
+  const isActuallyAdmin = Boolean(currentUser?.uid && isServerVerifiedAdmin);
 
   return (
     <PiAuthContext.Provider value={{

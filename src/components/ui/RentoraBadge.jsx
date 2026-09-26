@@ -1,0 +1,3 @@
+import React from 'react';
+const tones={neutral:'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',trust:'badge-trust',warning:'badge-amber',danger:'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800',primary:'bg-rentora-primary-soft text-rentora-primary border-rentora-primary-accent/30 dark:bg-[#26215C] dark:text-rentora-primary-soft'};
+export default function RentoraBadge({tone='neutral',className='',children,...props}){return <span className={`inline-flex items-center gap-1 rounded-[var(--radius-pill)] border px-2.5 py-1 text-xs font-semibold ${tones[tone]||tones.neutral} ${className}`} {...props}>{children}</span>;}

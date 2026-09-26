@@ -13,16 +13,13 @@ import {
 } from '../services/notificationService';
 
 const RentoraContext = createContext();
-const STORAGE_PREFIX = 'rentora_db_';
-
 export function RentoraProvider({ children }) {
   const { currentUser, isAdmin } = usePiAuth();
-  const [platformConfig, setPlatformConfig] = useState(() => {
-    try { const saved = localStorage.getItem(STORAGE_PREFIX + 'config_v9'); return saved ? JSON.parse(saved) : { platformFeePercentage: 5, minFeePi: 0.0001 }; }
-    catch (e) { return { platformFeePercentage: 5, minFeePi: 0.0001 }; }
-  });
-  const [items, setItems] = useState(() => cloudSyncService.getCachedItems());
-  const [favorites, setFavorites] = useState(() => { try { const saved = localStorage.getItem(STORAGE_PREFIX + 'favorites_v8'); return saved ? JSON.parse(saved) : []; } catch (e) { return []; } });
+  // Financial authority remains on the server. This client value is display/config state only.
+  const [platformConfig, setPlatformConfig] = useState({ platformFeePercentage: 5, minFeePi: 0.0001 });
+  const [items, setItems] = useState([]);
+  // Favorites are session-local UI state. Do not persist another user's preferences across logout/device handoff.
+  const [favorites, setFavorites] = useState([]);
   const [rentals, setRentals] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [reports, setReports] = useState([]);
@@ -30,45 +27,38 @@ export function RentoraProvider({ children }) {
   const [latestNotification, setLatestNotification] = useState(null);
   const knownMsgIdsRef = useRef(new Set());
   const isInitialLoadDoneRef = useRef(false);
+  const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const userIdentifier = currentUser?.uid || currentUser?.id || null;
   const usernameIdentifier = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
 
-  const getReadTimestampsKey = useCallback(() => {
-    return usernameIdentifier || userIdentifier ? `rentora_chat_reads_${usernameIdentifier || userIdentifier}` : null;
-  }, [usernameIdentifier, userIdentifier]);
+  // Hard-clear private client state immediately when the authenticated session disappears.
+  // This prevents a logout/offline transition from leaving another user's rental/payment data visible.
+  useEffect(() => {
+    if (currentUser) return;
+    setItems([]);
+    setFavorites([]);
+    setRentals([]);
+    setTransactions([]);
+    setReports([]);
+    setConversations([]);
+    setLatestNotification(null);
+    knownMsgIdsRef.current.clear();
+    cloudSyncService.clearUserSessionCache();
+  }, [currentUser]);
 
-  const getReadTimestamps = useCallback(() => {
-    const key = getReadTimestampsKey();
-    if (!key) return {};
+  const markConversationAsRead = useCallback(async (convId) => {
+    if (!convId || !userIdentifier) return false;
     try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : {};
+      await cloudSyncService.markConversationAsRead(convId);
+      setConversations(prev => prev.map(c => c.id === convId ? { ...c, unreadCount: 0 } : c));
+      cloudSyncService.broadcastConversationRead(convId);
+      return true;
     } catch (_) {
-      return {};
+      return false;
     }
-  }, [getReadTimestampsKey]);
-
-  const markConversationAsRead = useCallback((convId) => {
-    if (!convId || !userIdentifier) return;
-    const key = getReadTimestampsKey();
-    const nowIso = new Date().toISOString();
-    if (key) {
-      try {
-        const reads = getReadTimestamps();
-        reads[convId] = nowIso;
-        localStorage.setItem(key, JSON.stringify(reads));
-      } catch (_) {}
-    }
-
-    setConversations(prev => prev.map(c => {
-      if (c.id === convId) {
-        return { ...c, unreadCount: 0 };
-      }
-      return c;
-    }));
-  }, [userIdentifier, getReadTimestampsKey, getReadTimestamps]);
+  }, [userIdentifier]);
 
   // Load conversations from server when authenticated
   const refreshConversations = useCallback(async () => {
@@ -78,45 +68,44 @@ export function RentoraProvider({ children }) {
     }
     try {
       const list = await cloudSyncService.fetchConversations();
-      const readMap = getReadTimestamps();
-      const myName = usernameIdentifier;
-
-      const enrichedList = (list || []).map(c => {
-        const lastMsgTime = c.lastMessageAt ? new Date(c.lastMessageAt).getTime() : (c.createdAt ? new Date(c.createdAt).getTime() : 0);
-        const lastReadTime = readMap[c.id] ? new Date(readMap[c.id]).getTime() : 0;
-        const sender = (c.otherUser?.username || '').toLowerCase().replace('@', '').trim();
-        // Unread if message exists, sent by other user, and created after last read timestamp
-        const isUnread = Boolean(
-          c.lastMessageText &&
-          lastMsgTime > 0 &&
-          lastMsgTime > lastReadTime &&
-          sender &&
-          sender !== myName
-        );
-        return {
-          ...c,
-          unreadCount: isUnread ? 1 : 0
-        };
-      });
-
+      const enrichedList = (list || []).map(c => ({
+        ...c,
+        unreadCount: Number(c.unreadCount || 0)
+      }));
       setConversations(enrichedList);
       return enrichedList;
     } catch (e) {
       return [];
     }
-  }, [userIdentifier, usernameIdentifier, getReadTimestamps]);
+  }, [userIdentifier]);
 
   useEffect(() => {
-    refreshConversations().finally(() => {
-      setTimeout(() => { isInitialLoadDoneRef.current = true; }, 1200);
-    });
+    let cancelled = false;
+    const loadInitialData = async () => {
+      try {
+        await Promise.all([
+          cloudSyncService.fetchSharedData(true),
+          refreshConversations()
+        ]);
+      } finally {
+        if (!cancelled) {
+          isInitialLoadDoneRef.current = true;
+          setIsInitialLoadDone(true);
+        }
+      }
+    };
+    loadInitialData().catch(() => {});
+    return () => { cancelled = true; };
   }, [refreshConversations]);
 
-  useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'config_v9', JSON.stringify(platformConfig)); } catch (e) {} }, [platformConfig]);
-  useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'favorites_v8', JSON.stringify(favorites)); } catch (e) {} }, [favorites]);
+  // Do not persist platform config or user-specific favorites in browser storage.
 
   useEffect(() => {
     const unsubscribe = cloudSyncService.subscribe((event, data) => {
+      if (event === 'CHAT_READ' && data?.conversationId) {
+        setConversations(prev => prev.map(c => c.id === data.conversationId ? { ...c, unreadCount: 0 } : c));
+        return;
+      }
       if (data) {
         if (Array.isArray(data.items)) setItems(prev => JSON.stringify(prev) === JSON.stringify(data.items) ? prev : data.items);
         if (Array.isArray(data.rentals)) setRentals(prev => JSON.stringify(prev) === JSON.stringify(data.rentals) ? prev : data.rentals);
@@ -126,16 +115,6 @@ export function RentoraProvider({ children }) {
     });
     return () => unsubscribe();
   }, []);
-
-  useEffect(() => {
-    if (!userIdentifier) {
-      setRentals([]);
-      setTransactions([]);
-      setReports([]);
-      setConversations([]);
-    }
-    cloudSyncService.fetchSharedData(true).catch(() => {});
-  }, [userIdentifier]);
 
   // Background polling for conversations and marketplace data
   useEffect(() => {
@@ -201,16 +180,9 @@ export function RentoraProvider({ children }) {
 
   const addItem = async (itemData) => {
     if (!currentUser) throw new Error("برای ثبت آگهی ابتدا وارد حساب پای خود شوید.");
-    const defaultImages = {
-      tools: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80",
-      cameras: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900&auto=format&fit=crop&q=80",
-      camping: "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=900&auto=format&fit=crop&q=80",
-      sports: "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?w=900&auto=format&fit=crop&q=80",
-      vehicles: "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=900&auto=format&fit=crop&q=80",
-      events: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=900&auto=format&fit=crop&q=80",
-      home: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=900&auto=format&fit=crop&q=80"
-    };
-    const finalImage = itemData.images?.length ? itemData.images : [defaultImages[itemData.category] || defaultImages.tools];
+    // Never invent or fetch third-party placeholder media for a new listing.
+    // An image is optional; the server remains authoritative over persisted listing data.
+    const finalImage = Array.isArray(itemData.images) ? itemData.images.filter(Boolean) : [];
     const newItem = {
       id: "item_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
       title: itemData.title.trim(),
@@ -223,8 +195,8 @@ export function RentoraProvider({ children }) {
       images: Array.isArray(finalImage) ? finalImage : [finalImage],
       ownerUid: currentUser.uid,
       ownerUsername: currentUser.username,
-      ownerAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}`,
-      ownerBio: currentUser.bio || 'کاربر شبکه پای در رنتورا',
+      ownerAvatar: currentUser.avatar || null,
+      ownerBio: currentUser.bio || '',
       ownerKYC: currentUser?.kycStatus === 'verified' && !!currentUser?.isOfficialSdk,
       ownerReputation: null,
       rating: null,
@@ -281,15 +253,10 @@ export function RentoraProvider({ children }) {
   const fetchRentalContact = async (rentalId) => {
     if (!rentalId) throw new Error('شناسه رزرو برای دریافت اطلاعات تماس الزامی است.');
     const apiBase = getApiBaseUrl();
-    const headers = { 'Content-Type': 'application/json' };
-    try {
-      const raw = localStorage.getItem('rentora_live_v1_session');
-      const session = raw ? JSON.parse(raw) : null;
-      if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
-    } catch (_) {}
     const res = await fetch(`${apiBase}/api/rentals/${encodeURIComponent(rentalId)}/contact`, {
       method: 'GET',
-      headers
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error || 'دسترسی به اطلاعات تماس امکان‌پذیر نیست.');
@@ -299,128 +266,39 @@ export function RentoraProvider({ children }) {
   const fetchListingContact = async (listingId) => {
     if (!listingId) throw new Error('شناسه آگهی برای دریافت اطلاعات تماس الزامی است.');
     const apiBase = getApiBaseUrl();
-    const headers = { 'Content-Type': 'application/json' };
-    try {
-      const raw = localStorage.getItem('rentora_live_v1_session');
-      const session = raw ? JSON.parse(raw) : null;
-      if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
-    } catch (_) {}
     const res = await fetch(`${apiBase}/api/listings/${encodeURIComponent(listingId)}/contact`, {
       method: 'GET',
-      headers
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error || 'دسترسی به اطلاعات تماس آگهی امکان‌پذیر نیست.');
     return data.contact;
   };
 
-  const createRentalBooking = (arg1, arg2) => {
+  const createRentalBooking = useCallback(async (arg1, arg2) => {
     if (!currentUser) throw new Error("برای ثبت رزرو ابتدا وارد حساب پای خود شوید.");
-    
-    let item, bookingData;
-    if (arg2 && typeof arg2 === 'object') {
-      item = arg1;
-      bookingData = arg2;
-    } else if (arg1 && arg1.item) {
-      item = arg1.item;
-      bookingData = arg1;
-    } else {
-      item = arg1;
-      bookingData = arg1 || {};
+
+    const bookingData = (arg2 && typeof arg2 === 'object')
+      ? arg2
+      : (arg1 && typeof arg1 === 'object' && !arg1.quoteId && arg1.item ? arg1 : arg1);
+
+    const quoteId = bookingData?.quoteId;
+    if (!quoteId) {
+      throw new Error("برای ثبت رزرو باید پیش‌فاکتور معتبر سرور (quoteId) ارائه شود.");
     }
 
-    if (!item) throw new Error("اطلاعات کالای مورد نظر برای رزرو یافت نشد.");
-
-    const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
-    const ownerName = (item?.ownerUsername || item?.owner_username || '').toLowerCase().replace('@', '').trim();
-    if ((myName && ownerName && myName === ownerName) || (item?.ownerUid && currentUser?.uid && item.ownerUid === currentUser.uid)) {
-      throw new Error("شما مالک این کالا هستید و نمی‌توانید آگهی خودتان را اجاره کنید.");
-    }
-
-    const startDate = bookingData.startDate || new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    const endDate = bookingData.endDate || new Date(Date.now() + 86400000 * 4).toISOString().split('T')[0];
-    const deliveryRequired = !!bookingData.deliveryRequired;
-    const deliveryAddress = bookingData.deliveryAddress || '';
-    const rawPrice = item.pricePerDay ?? item.price_per_day ?? item.dailyRate ?? item.price ?? 0;
-    const rawDeposit = item.deposit ?? item.deposit_amount ?? item.securityDeposit ?? 0;
-
-    const financials = calculatePricing({
-      dailyRate: Number(rawPrice) || 0,
-      pricePerDay: Number(rawPrice) || 0,
-      startDate,
-      endDate,
-      daysCount: bookingData.daysCount,
-      securityDeposit: Number(rawDeposit) || 0
-    });
-
-    const bookingNumber = 'RN-' + Math.floor(100000 + Math.random() * 900000);
-    const agreementId = 'AGR-' + Math.floor(100000 + Math.random() * 900000);
-
-    return {
-      id: "rental_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
-      bookingNumber,
-      itemId: item.id,
-      itemTitle: item.title,
-      itemCategory: item.category,
-      itemImage: Array.isArray(item.images) ? item.images[0] : (item.images || item.image),
-      itemLocation: item.location,
-      renterUid: currentUser.uid,
-      renterUsername: currentUser.username,
-      renterAvatar: currentUser.avatar,
-      ownerUid: item.ownerUid || item.owner_uid,
-      ownerUsername: item.ownerUsername || item.owner_username,
-      ownerAvatar: item.ownerAvatar || item.owner_avatar,
-      startDate,
-      endDate,
-      daysCount: financials.daysCount,
-      pricePerDay: financials.dailyRate,
-      rentalTotal: financials.rentalTotal,
-      baseAmount: financials.rentalTotal,
-      deposit: financials.deposit,
-      securityDeposit: financials.deposit,
-      rentoraFee: financials.rentoraFee,
-      totalPlatformFee: financials.rentoraFee,
-      platformFeeRate: financials.platformFeeRate,
-      totalAmount: financials.rentoraFee,
-      paymentDueToRentora: financials.rentoraFee,
-      deliveryRequired: !!deliveryRequired,
-      deliveryAddress: deliveryAddress || '',
-      paymentIntentId: null,
-      piPaymentId: null,
-      piTxRef: null,
-      ownerCommissionShare: 0,
-      renterCommissionShare: 0,
-      renterCommissionPaid: false,
-      status: RENTAL_STATES.PAYMENT_PENDING,
-      paymentStatus: "pending",
-      settlementType: "direct_p2p_with_pi_platform_fee",
-      isEscrowApplied: false,
-      rentalAgreement: {
-        agreementId,
-        itemTitle: item.title,
-        ownerUsername: item.ownerUsername || item.owner_username,
-        renterUsername: currentUser.username,
-        rentalPeriodDays: financials.daysCount,
-        startDate,
-        endDate,
-        rentalTotal: financials.rentalTotal,
-        deposit: financials.deposit,
-        rentoraFee: financials.rentoraFee,
-        piFeePaymentStatus: "Pending Pi Payment",
-        rentalPaymentMethod: "Direct P2P",
-        depositPaymentMethod: "Direct P2P",
-        terms: "Direct P2P settlement — rental fee and deposit are not processed or held by Rentora."
-      },
-      isHandoverConfirmed: false,
-      isReturnConfirmed: false,
-      notes: bookingData.notes || '',
-      createdAt: new Date().toISOString()
-    };
-  };
+    return cloudSyncService.createRental({ quoteId });
+  }, [currentUser]);
 
   const executePiPaymentForRental = async (rentalId, draftRental) => {
-    if (!draftRental) throw new Error("اطلاعات رزرو نامعتبر است.");
-    const paymentResult = await piService.createPayment({
+    if (!draftRental?.id || draftRental.id !== rentalId) {
+      throw new Error("اطلاعات رزرو برای پرداخت نامعتبر است.");
+    }
+
+    // Pi payment is authoritative only after the server-side intent/approve/complete flow.
+    // Do not synthesize or persist a confirmed rental in browser state.
+    return piService.createPayment({
       paymentData: {
         amount: draftRental.rentoraFee,
         memo: `Rentora Fee #${draftRental.bookingNumber || draftRental.id.substring(0, 10)}`,
@@ -434,38 +312,21 @@ export function RentoraProvider({ children }) {
           feeAmount: draftRental.rentoraFee
         }
       },
-      paymentIntentId: draftRental.paymentIntentId
+      paymentIntentId: draftRental.paymentIntentId,
+      callbacks: {
+        onCancel: async (paymentId) => {
+          await piService.cancelPaymentOnServer(paymentId, draftRental.paymentIntentId);
+        }
+      }
     });
-    const txid = paymentResult.txid, paymentId = paymentResult.paymentId;
-    const confirmedRental = {
-      ...draftRental,
-      status: RENTAL_STATES.CONFIRMED,
-      renterCommissionPaid: true,
-      paymentStatus: "paid_confirmed",
-      piPaymentId: paymentId,
-      piTxRef: txid,
-      paidAt: new Date().toISOString()
-    };
-    setRentals(prev => {
-      const updated = [confirmedRental, ...prev.filter(r => r.id !== confirmedRental.id)];
-      cloudSyncService.saveCachedRentals(updated);
-      return updated;
-    });
-    await cloudSyncService.broadcastNewRental(confirmedRental);
-    return paymentResult;
   };
 
   const transitionRentalStatus = async (rentalId, action) => {
     const apiBase = getApiBaseUrl();
-    const headers = { 'Content-Type': 'application/json' };
-    try {
-      const raw = localStorage.getItem('rentora_live_v1_session');
-      const session = raw ? JSON.parse(raw) : null;
-      if (session?.sessionToken) headers.Authorization = `Bearer ${session.sessionToken}`;
-    } catch (_) {}
     const response = await fetch(`${apiBase}/api/sync/rental/status`, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ rentalId, action })
     });
     const data = await response.json().catch(() => ({}));
@@ -610,6 +471,7 @@ export function RentoraProvider({ children }) {
       clearLatestNotification: () => setLatestNotification(null),
       platformConfig,
       isRefreshing,
+      isInitialLoadDone,
       refreshApp,
       purgeDatabase,
       toggleFavorite,

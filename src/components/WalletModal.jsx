@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
@@ -13,8 +13,6 @@ import {
   Info,
   Check,
   Receipt,
-  ArrowUpRight,
-  Loader2,
   AlertCircle,
   Wallet
 } from 'lucide-react';
@@ -34,22 +32,6 @@ export default function WalletModal({ isOpen, onClose }) {
     totalPaidOut: 0
   });
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [isSubmittingWithdrawal, setIsSubmittingWithdrawal] = useState(false);
-  const [withdrawSuccessMsg, setWithdrawSuccessMsg] = useState('');
-  const [withdrawErrorMsg, setWithdrawErrorMsg] = useState('');
-  const [withdrawTxid, setWithdrawTxid] = useState('');
-
-  // Persistent Idempotency-Key across retries for the active withdrawal operation
-  const activeWithdrawalKeyRef = useRef(null);
-  const getOrCreateWithdrawalKey = useCallback(() => {
-    if (!activeWithdrawalKeyRef.current) {
-      activeWithdrawalKeyRef.current = (typeof crypto !== 'undefined' && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : `user_withdraw_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-    }
-    return activeWithdrawalKeyRef.current;
-  }, []);
 
   const loadBalance = async () => {
     if (!isAuthenticated || !currentUser) return;
@@ -58,9 +40,6 @@ export default function WalletModal({ isOpen, onClose }) {
       const data = await cloudSyncService.fetchWalletBalance();
       if (data) {
         setBalanceData(data);
-        if (data.withdrawable > 0) {
-          setWithdrawAmount(String(data.withdrawable));
-        }
       }
     } catch (_) {}
     finally {
@@ -70,9 +49,6 @@ export default function WalletModal({ isOpen, onClose }) {
 
   useEffect(() => {
     if (show) {
-      setWithdrawSuccessMsg('');
-      setWithdrawErrorMsg('');
-      setWithdrawTxid('');
       loadBalance();
     }
   }, [show, isAuthenticated, currentUser?.uid]);
@@ -82,42 +58,6 @@ export default function WalletModal({ isOpen, onClose }) {
   const myUsername = (currentUser?.username || '').toLowerCase().replace('@', '');
   const myUid = currentUser?.uid || currentUser?.piUid;
 
-  const handleWithdrawalSubmit = async (e) => {
-    if (e && typeof e.preventDefault === 'function') e.preventDefault();
-    setWithdrawErrorMsg('');
-    setWithdrawSuccessMsg('');
-    setWithdrawTxid('');
-
-    const amount = Number(withdrawAmount);
-    if (!amount || isNaN(amount) || amount <= 0) {
-      setWithdrawErrorMsg(l('لطفاً مبلغ معتبری برای انتقال وارد کنید.', 'Please enter a valid amount.', 'يرجى إدخال مبلغ صحيح.', '请输入有效的金额。'));
-      return;
-    }
-
-    if (amount > balanceData.withdrawable) {
-      setWithdrawErrorMsg(l('مبلغ درخواستی بیشتر از موجودی قابل برداشت شماست.', 'Requested amount exceeds withdrawable balance.', 'المبلغ المطلوب يتجاوز رصيدك المتاح.', '提取金额超出可用余额。'));
-      return;
-    }
-
-    const currentKey = getOrCreateWithdrawalKey();
-    setIsSubmittingWithdrawal(true);
-    try {
-      const res = await cloudSyncService.requestUserWithdrawal(amount, undefined, currentKey);
-      if (res?.success) {
-        setWithdrawSuccessMsg(res.message || l(`مبلغ ${amount} π با موفقیت به کیف پول پای شما واریز شد.`, `Successfully transferred ${amount} π to your Pi wallet.`, `تم التحويل بنجاح.`, `已成功转账至您的 Pi 钱包。`));
-        if (res.txid) {
-          setWithdrawTxid(res.txid);
-        }
-        activeWithdrawalKeyRef.current = null;
-        await loadBalance();
-      }
-    } catch (err) {
-      // Retain activeWithdrawalKeyRef.current on failure so retrying sends the same Idempotency-Key
-      setWithdrawErrorMsg(err?.message || l('خطا در انتقال وجه به کیف پول پای.', 'Withdrawal failed.', 'فشل التحويل.', '提现失败。'));
-    } finally {
-      setIsSubmittingWithdrawal(false);
-    }
-  };
 
   // Filter verified Pi payments associated with current user
   const myVerifiedPiPayments = (transactions || []).filter(tx => 
@@ -155,7 +95,7 @@ export default function WalletModal({ isOpen, onClose }) {
                 <span>{l('کیف پول و درآمدها (Pi A2U Payout)', 'Pi Wallet & Earnings (A2U)', 'محفظة وأرباح باي (A2U)', 'Pi 钱包与收益（A2U）')}</span>
               </h3>
               <p className="text-[10px] text-slate-400">
-                {l('موجودی قابل برداشت، انتقال رسمی به کیف پول پای و سوابق تراکنش‌ها', 'Withdrawable balance, official Pi A2U payout & records', 'الرصيد القابل للسحب، التحويل لمحفظة باي وسجل المعاملات', '可提现收益、Pi 链上自动到账与账本明细')}
+                {l('موجودی تاییدشده و سوابق تراکنش‌ها', 'Verified balance and transaction records', 'الرصيد المؤكد وسجل المعاملات', '已确认余额与账本明细')}
               </p>
             </div>
           </div>
@@ -163,7 +103,7 @@ export default function WalletModal({ isOpen, onClose }) {
           <button
             type="button"
             onClick={handleClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+            className="min-h-11 min-w-11 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer flex items-center justify-center"
           >
             <X className="w-5 h-5" />
           </button>
@@ -172,21 +112,21 @@ export default function WalletModal({ isOpen, onClose }) {
         {/* Content Body */}
         <div className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
           
-          {/* Section 0: Authoritative Withdrawable Balance & A2U Withdrawal Form */}
+          {/* Section 0: Authoritative Confirmed Balance & A2U Status */}
           <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-gradient-to-b from-[#EEEDFE]/40 to-white dark:from-[#26215C]/20 dark:to-[#151426] space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white text-xs">
                 <Wallet className="w-4 h-4 text-[#534AB7]" />
-                <span>{l('موجودی قابل برداشت شما', 'Your Withdrawable Balance', 'رصيدك القابل للسحب', '您的可提现收益')}</span>
+                <span>{l('موجودی تاییدشده شما', 'Your Confirmed Balance', 'رصيدك المؤكد', '您的已确认余额')}</span>
               </div>
               <span className="badge-trust px-1.5 py-0.2 rounded text-[9px] font-bold">
-                {l('تسویه لحظه‌ای A2U', 'Instant A2U', 'تحويل فوري A2U', 'A2U 链上即时结算')}
+                {l('برداشت A2U فعلاً غیرفعال است', 'User A2U withdrawal is currently disabled', 'سحب A2U للمستخدم معطل حالياً', '用户 A2U 提现目前已停用')}
               </span>
             </div>
 
             <div className="flex items-baseline justify-between p-3 rounded-xl bg-white dark:bg-[#18172E] border border-slate-200 dark:border-slate-700">
               <div>
-                <span className="text-[10px] text-slate-400 block">{l('موجودی خالص تاییدشده:', 'Net Confirmed Balance:', 'الرصيد المؤكد:', '已确认净余额：')}</span>
+                <span className="text-[10px] text-slate-400 block">{l('موجودی تاییدشده:', 'Confirmed Balance:', 'الرصيد المؤكد:', '已确认余额：')}</span>
                 <span className="text-xl sm:text-2xl font-black font-mono text-[#0F6E56] dark:text-[#48D2A8]">
                   {isLoadingBalance ? '...' : `${balanceData.withdrawable} π`}
                 </span>
@@ -197,75 +137,6 @@ export default function WalletModal({ isOpen, onClose }) {
               </div>
             </div>
 
-            {withdrawSuccessMsg && (
-              <div className="p-3 rounded-xl badge-trust text-xs font-semibold space-y-1 animate-fadeIn border border-[#0F6E56]/30">
-                <div className="flex items-center gap-1.5 text-[#0F6E56] dark:text-[#48D2A8]">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>{withdrawSuccessMsg}</span>
-                </div>
-                {withdrawTxid && (
-                  <div className="text-[10px] font-mono text-slate-500 dark:text-slate-300 truncate" dir="ltr">
-                    Blockchain TxID: {withdrawTxid}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {withdrawErrorMsg && (
-              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{withdrawErrorMsg}</span>
-              </div>
-            )}
-
-            {/* Withdrawal Action Form */}
-            <form onSubmit={handleWithdrawalSubmit} className="space-y-2 pt-1">
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                  {l('مبلغ جهت انتقال به کیف پول پای (π):', 'Amount to transfer to Pi Wallet (π):', 'المبلغ للتحويل لمحفظة باي (π):', '提现至 Pi 钱包金额（π）：')}
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.0001"
-                    min="0.0001"
-                    max={balanceData.withdrawable}
-                    placeholder="0.00"
-                    value={withdrawAmount}
-                    onChange={(e) => setWithdrawAmount(e.target.value)}
-                    disabled={isSubmittingWithdrawal || balanceData.withdrawable <= 0}
-                    className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#18172E] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#534AB7] disabled:opacity-50"
-                  />
-                  {balanceData.withdrawable > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setWithdrawAmount(String(balanceData.withdrawable))}
-                      className="absolute left-2 rtl:left-2 rtl:right-auto top-2 px-2 py-0.5 rounded bg-[#EEEDFE] dark:bg-[#26215C] text-[#26215C] dark:text-[#EEEDFE] text-[10px] font-bold cursor-pointer"
-                    >
-                      {l('حداکثر', 'Max', 'الكل', '全部')}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmittingWithdrawal || balanceData.withdrawable <= 0}
-                className="w-full py-2.5 rounded-xl btn-primary text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition"
-              >
-                {isSubmittingWithdrawal ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{l('در حال صدور تراکنش واریز در شبکه پای (A2U)...', 'Processing Pi A2U Payout...', 'جارٍ التحويل إلى محفظة باي...', '正在向 Pi 钱包转账...')}</span>
-                  </>
-                ) : (
-                  <>
-                    <ArrowUpRight className="w-4 h-4" />
-                    <span>{l(`انتقال به کیف پول Pi (@${currentUser?.username || 'pioneer'})`, `Transfer to Pi Wallet (@${currentUser?.username || 'pioneer'})`, `تحويل إلى محفظة باي (@${currentUser?.username || 'pioneer'})`, `转入 Pi 个人钱包 (@${currentUser?.username || 'pioneer'})`)}</span>
-                  </>
-                )}
-              </button>
-            </form>
           </div>
 
           {/* Transparent Model Disclaimer (No Escrow for Direct P2P Rentals) */}

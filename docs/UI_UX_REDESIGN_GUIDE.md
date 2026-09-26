@@ -1,0 +1,594 @@
+# Rentora UI/UX Redesign Guide & Living Checklist
+
+> مرجع زنده بازطراحی UI/UX Rentora. UI جدید کنار UI قدیمی ساخته می‌شود و فقط پس از تکمیل، اتصال به سرویس‌های واقعی، تست و تأیید جایگزین UI اصلی خواهد شد.
+
+## اصول اجرایی
+
+1. **Research first:** برای هر تصمیم مهم، ابتدا مسئله و گزینه‌های موجود بررسی می‌شوند.
+2. **Decision before build:** تصمیم طراحی/تجربه کاربری قبل از پیاده‌سازی ثبت می‌شود.
+3. **Real capability only:** UI جدید باید به API و business logic واقعی فعلی متصل شود. Mock و simulated production مجاز نیست.
+4. **Legacy stays:** UI قدیمی تا پایان migration حذف یا غیرفعال نمی‌شود.
+5. **Complete means tested:** صرف ساخته‌شدن ظاهر به معنی Complete نیست.
+6. **Server authority:** قیمت، fee، payment state و داده‌های حساس همچنان server-authoritative هستند.
+7. **Mobile/Pi Browser first:** تجربه موبایل، Pi Browser، RTL و فارسی جزو معیارهای اصلی هستند.
+8. **One shared system:** کامپوننت‌ها، tokenها، state patternها و navigation تا حد ممکن مشترک و قابل استفاده مجدد باشند.
+9. **No silent product decisions:** تصمیم‌های مهمی که نیازمند انتخاب محصولی یا trade-off واقعی هستند در Decision Log ثبت و در صورت نیاز از مالک محصول پرسیده می‌شوند.
+
+## Definition of Done
+
+هر صفحه/قابلیت زمانی **Complete** است که این زنجیره طی شده باشد:
+
+**Research → Decision → UI Build → Real Backend Integration → Loading/Empty/Error/Success/Disabled/Unauthorized States → RTL/Persian → Mobile/Pi Browser → Accessibility → Regression Tests → Final Review → Migration**
+
+---
+
+## 1. Discovery & Product Architecture
+
+- [ ] Audit کامل UI فعلی
+- [ ] Inventory کامل صفحات، modalها، drawerها و shared components
+- [ ] Matrix قابلیت‌ها در برابر APIهای واقعی
+- [ ] تعریف Information Architecture جدید
+- [ ] تعریف navigation برای Mobile/Pi Browser
+- [ ] تعریف navigation برای Desktop
+- [ ] تعریف مسیرهای قابل share/deep-link و routing strategy
+- [ ] تعریف مرزهای User Workspace و Admin Workspace
+- [ ] ثبت تصمیم‌های product/UX در Decision Log
+
+## 2. Design System
+
+- [x] Color tokens
+- [x] Typography tokens
+- [x] Spacing tokens
+- [x] Radius tokens
+- [x] Shadow/elevation tokens
+- [x] Breakpoints
+- [ ] Icon rules
+- [x] Button system
+- [x] Input/select/search system
+- [x] Card system
+- [ ] Avatar system
+- [x] Badge/status system
+- [x] Tabs
+- [ ] Modal/drawer
+- [ ] Toast/notification
+- [x] Skeleton/loading
+- [x] Empty states
+- [x] Error states
+- [ ] Confirmation/destructive actions
+- [ ] Navigation components
+- [ ] Motion rules
+- [ ] Accessibility rules
+- [ ] RTL/direction primitives
+- [ ] Localization/Persian text strategy
+
+## 3. Core Marketplace
+
+### Home
+- [ ] Research
+- [ ] Decision
+- [ ] New UI
+- [ ] Real data integration
+- [ ] Loading/empty/error states
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression tests
+- [x] Final review
+- [ ] Migration
+
+### Discover
+- [ ] Research
+- [ ] Decision
+- [ ] New UI
+- [ ] Real data integration
+- [ ] Filters/search/sort states
+- [ ] Loading/empty/error states
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression tests
+- [ ] Final review
+- [ ] Migration
+
+### Listing Card
+- [ ] Research
+- [ ] Decision
+- [x] Unified shared component
+- [x] Replace duplicated mobile implementation
+- [x] Real listing state integration
+- [x] Loading/placeholder state
+- [x] RTL/mobile/accessibility
+- [x] Regression tests
+- [x] Final review
+- [ ] Migration
+
+### Item Detail
+- [ ] Research
+- [ ] Decision
+- [ ] New UI
+- [ ] Authoritative listing/owner data
+- [ ] Availability state
+- [ ] Booking entry
+- [ ] Contact privacy/unlock state
+- [ ] Report/review entry points
+- [ ] Loading/empty/error states
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression tests
+- [ ] Final review
+- [ ] Migration
+
+### Booking & Payment
+- [ ] Research
+- [ ] Decision
+- [ ] Server quote as source of truth
+- [ ] Rental creation flow
+- [ ] Owner fee obligation state
+- [ ] Renter fee obligation state
+- [ ] Pi createPayment
+- [ ] Approve
+- [ ] Complete
+- [ ] Incomplete payment recovery
+- [ ] Pending/cancelled/failed states
+- [ ] Payment metadata display
+- [ ] Contact unlock after verified completion
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression/E2E tests
+- [ ] Final review
+- [ ] Migration
+
+## 4. Listing & Owner Management
+
+### List Item
+- [ ] Research
+- [ ] Decision
+- [ ] New UI
+- [ ] Create listing integration
+- [ ] Edit listing integration
+- [ ] Image upload validation states
+- [ ] KYC/owner state
+- [ ] Activation fee state
+- [ ] Paused/active state
+- [ ] Validation/error states
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression tests
+- [ ] Final review
+- [ ] Migration
+
+### Owner Hub
+- [ ] Research
+- [ ] Decision
+- [ ] New UI
+- [ ] Listing management
+- [ ] Rental management
+- [ ] Activation/payment obligations
+- [ ] Revenue terminology separated from Rentora treasury revenue
+- [ ] Pending/active/completed states
+- [ ] Loading/empty/error states
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression tests
+- [ ] Final review
+- [ ] Migration
+
+## 5. Account & Communication
+
+### Activity / Rentals
+- [ ] Research
+- [ ] Decision
+- [ ] New UI
+- [ ] Renter rental list
+- [ ] Owner rental list
+- [ ] Rental lifecycle/status actions
+- [ ] Payment state
+- [ ] Contact unlock
+- [ ] Loading/empty/error states
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression tests
+- [ ] Final review
+- [ ] Migration
+
+### Profile
+- [ ] Research
+- [ ] Decision
+- [ ] New UI
+- [ ] Authoritative user data
+- [ ] KYC/profile state
+- [ ] Preferences
+- [ ] Loading/error states
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression tests
+- [ ] Final review
+- [ ] Migration
+
+### Public Profile
+- [ ] Research
+- [ ] Decision
+- [ ] New UI
+- [ ] Authoritative public user endpoint
+- [ ] Dynamic item-owner KYC synchronization
+- [ ] Listings/reputation presentation
+- [ ] Privacy boundaries
+- [ ] Loading/empty/error states
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression tests
+- [ ] Final review
+- [ ] Migration
+
+### Messages / Conversations
+- [ ] Research
+- [ ] Decision
+- [ ] New UI
+- [ ] Conversations API
+- [ ] Messages API
+- [ ] Archive/unarchive states
+- [ ] Unread/read state
+- [ ] Rental context
+- [ ] Report/block safety affordances where supported
+- [ ] Loading/empty/error states
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression tests
+- [ ] Final review
+- [ ] Migration
+
+### Reviews
+- [ ] Research
+- [ ] Decision
+- [ ] New UI
+- [ ] Rental-linked review flow
+- [ ] Review display
+- [ ] Validation/error states
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression tests
+- [ ] Final review
+- [ ] Migration
+
+### Reports
+- [ ] Research
+- [ ] Decision
+- [ ] New UI
+- [ ] Report creation
+- [ ] Status display
+- [ ] Privacy/permission states
+- [ ] Loading/empty/error states
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression tests
+- [ ] Final review
+- [ ] Migration
+
+### Settings
+- [ ] Research
+- [ ] Decision
+- [ ] New UI
+- [ ] Preferences
+- [ ] Language/direction
+- [ ] Theme
+- [ ] Help/security/support
+- [ ] Session/logout behavior
+- [ ] Remove UI dependence on legacy localStorage session data
+- [ ] Loading/error states
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression tests
+- [ ] Final review
+- [ ] Migration
+
+### Wallet / Finance
+- [ ] Research
+- [ ] Decision
+- [ ] Balance presentation
+- [ ] Platform-fee obligation presentation
+- [ ] Transaction history
+- [ ] Admin payout visibility where authorized
+- [ ] Ensure retired /api/wallet/withdraw is not presented as active
+- [ ] Clear separation of user P2P rental money vs Rentora platform-fee money
+- [ ] Loading/error/permission states
+- [ ] RTL/mobile/Pi Browser
+- [ ] Regression tests
+- [ ] Final review
+- [ ] Migration
+
+## 6. Admin Workspace
+
+### Admin Dashboard
+- [ ] Research
+- [ ] Decision
+- [ ] New IA
+- [ ] Decompose monolithic AdminDashboardPage
+- [ ] Overview
+- [ ] Users/KYC
+- [ ] Listings
+- [ ] Rentals
+- [ ] Reports
+- [ ] Transactions
+- [ ] Treasury
+- [ ] Payouts
+- [ ] Operational states
+- [ ] Permission/unauthorized states
+- [ ] RTL/localization
+- [ ] Responsive admin behavior
+- [ ] Regression tests
+- [ ] Final review
+- [ ] Migration
+
+### Admin Settings / Platform Configuration
+- [ ] Research
+- [ ] Identify authoritative backend capabilities
+- [ ] Decide whether platform fee configuration needs an admin write endpoint
+- [ ] Do not create a UI-only editable fee setting
+- [ ] Build only after backend contract is authoritative
+- [ ] Audit permission/authorization
+- [ ] Tests
+- [ ] Final review
+- [ ] Migration
+
+## 7. Cross-Product Quality
+
+- [ ] No sensitive business state in localStorage
+- [ ] Remove new UI dependency on legacy session storage
+- [ ] Server-authoritative financial display
+- [ ] Consistent payment state handling
+- [ ] Consistent authorization handling
+- [ ] Consistent API error mapping
+- [ ] Consistent loading states
+- [ ] Consistent empty states
+- [ ] Consistent destructive confirmations
+- [ ] Accessibility keyboard/focus review
+- [ ] Touch target review
+- [ ] RTL visual review
+- [ ] Persian localization review
+- [ ] Pi Browser real-device review
+- [ ] Performance review
+- [ ] Responsive breakpoint review
+- [ ] Motion/reduced-motion review
+- [ ] Security/privacy UI review
+- [ ] Full regression suite
+- [ ] Production build
+- [ ] Final legacy-vs-new feature parity audit
+- [ ] Final migration plan
+- [ ] Legacy UI removal/deactivation
+- [ ] Main branch CI green
+- [ ] Production deployment verification
+
+## Decision Log
+
+Use this template for every non-trivial decision:
+
+```
+### [DATE] Feature / Decision
+
+Problem:
+Research:
+Options considered:
+Decision:
+Reason:
+Backend impact:
+UI impact:
+Risk:
+Status:
+```
+
+
+
+## Research Decision 04 — Item Detail Architecture — 2026-09-25
+
+**Finding:** The existing Item Detail screen already owns the real marketplace entry points: authoritative listing data supplied by the app state, server-backed listing reviews, the real BookingModal/Pi fee flow, public owner profile navigation, chat, reporting, and owner management. The booking flow obtains an authoritative quote from `/api/rentals/quote` before creating the rental. Private contact data is fetched only after the verified rental/payment flow.
+
+**Options considered:**
+1. Visually restyle the existing monolithic screen in place.
+2. Build an additive Item Detail presentation layer that reuses the existing handlers, BookingModal, ReportModal and server-backed data, then migrate after parity.
+3. Rebuild Item Detail together with routing and booking/payment architecture.
+
+**Decision:** Choose **option 2**. The redesign is a new presentation layer, not a second business implementation. It keeps the existing booking/payment and privacy contracts intact.
+
+**Interaction rules:**
+- The page may display authoritative listing status, but it must not invent date-level availability.
+- Date availability and the payable platform fee are resolved by the existing server quote/booking flow.
+- Rental price and deposit are presented as direct P2P handover amounts; the platform fee is the only Rentora payment through Pi.
+- Private owner contact remains locked until an authorized rental context exists after verified fee completion.
+- Reviews, report creation, chat, public profile, owner edit and Owner Hub continue through existing real handlers/APIs.
+- Image absence uses an explicit empty visual state rather than a fake stock-image fallback.
+
+**Status:** Research and decision complete. Additive UI implementation started; migration remains unchecked until parity, regression and final review are complete.
+
+## Change Log
+
+| Date | Area | Change | Status |
+|---|---|---|---|
+| 2026-09-25 | Project setup | Created living UI/UX redesign checklist and workflow | ✅ |
+| 2026-09-25 | Listing Card | CI green after compact-card accessibility fix; final review completed | ✅ |
+| 2026-09-25 | Item Detail | Research/decision completed; additive redesign shell added with real booking/report/review contracts | 🚧 |
+
+
+## Baseline Audit Snapshot — 2026-09-25
+
+Verified on `main` before implementation work:
+
+- `src/App.jsx` exists as the current application-level screen/state switcher.
+- `src/index.css` is the main shared styling/token surface.
+- `src/context/RentoraContext.jsx` remains a major shared state surface.
+- Primary page implementations verified: Home, Discover, Item Detail, Owner Hub, Activity, Profile, Public Profile, Settings, Admin Dashboard.
+- The product-wide migration is **not complete**. This tracker intentionally keeps every page at incomplete status until its full Definition of Done is met.
+- PR #39 remains separate and open; it is not part of the UI replacement and must not be merged automatically.
+
+### First Research Queue
+
+1. Establish the new IA/navigation and route strategy before broad page migration.
+2. Establish design tokens and shared component primitives before duplicating page-specific styling.
+3. Converge listing-card implementations before expanding marketplace surfaces.
+4. Audit server-authoritative financial display paths before touching booking/payment presentation.
+5. Decompose the largest account/admin surfaces only after their workflows and state contracts are mapped.
+
+
+
+## Research Decision 01 — Navigation & Routing — 2026-09-25
+
+**Finding:** The current `src/App.jsx` uses an in-memory `currentTab` state switcher. It already supports the major product surfaces, but it does not provide URL-addressable routes/deep links.
+
+**Options considered:**
+1. Keep the in-memory switcher and only restyle it.
+2. Introduce a client router and make primary screens URL-addressable while preserving existing handlers and APIs.
+3. Rewrite the app shell and navigation together with a new routing architecture.
+
+**Decision:** Choose **option 2 as the migration target**. Introduce URL-addressable primary routes incrementally, while keeping the existing screen switcher operational during the redesign. Do not rewrite backend contracts or business logic for routing.
+
+**Reason:** The redesign needs shareable/deep-linkable screens and isolated screen testing, but a full shell rewrite would unnecessarily couple navigation work to every page migration.
+
+**Implementation order:** routing foundation → new shell/navigation → page-by-page migration → remove legacy switcher after parity and regression validation.
+
+**Status:** Research/decision complete. Implementation remains unchecked until built and tested.
+
+
+## Research Decision 02 — Design Tokens & Shared Styling — 2026-09-25
+
+**Finding:** src/index.css is already the shared styling surface and the project uses Tailwind CSS 4.3.x. Tailwind v4 supports CSS-first @theme variables for colors, typography, spacing, radii, shadows, breakpoints and other reusable design tokens.
+
+**Options considered:**
+1. Keep page-specific hard-coded values and introduce tokens only when a component is migrated.
+2. Establish a shared token layer in src/index.css first, while preserving existing semantic variables and legacy visual behavior.
+3. Replace the existing styling system wholesale with a new component library.
+
+**Decision:** Choose option 2.
+
+**Reason:** It creates one source of truth for the redesign without forcing a risky visual rewrite. Existing classes and components can continue working while new UI uses the same token layer. Tailwind's @theme is appropriate because the current project is already on Tailwind v4.
+
+**Implementation:** Added additive Rentora tokens for semantic colors, typography, spacing extensions, radii, elevation, breakpoints and motion easing. Existing :root semantic variables now reference the token layer where safe. No legacy component was removed or behaviorally rewritten.
+
+**Status:** Research/decision/initial token implementation complete. Individual shared components remain incomplete until they are migrated and tested.
+
+
+## Research Decision 03 — Listing Card Convergence — 2026-09-25
+
+**Finding:** HomePage had a separate mobile-only listing card implementation while ItemCard already served the desktop/grid path. This duplicated ownership logic, favorite behavior, imagery, actions and financial display.
+
+**Decision:** Treat ItemCard as the shared listing-card primitive and migrate mobile Home to it progressively. Preserve the existing mobile visual wrapper during migration where necessary, but do not maintain two independent business implementations.
+
+**Status:** Shared `ItemCard` now owns both default and compact/mobile rendering paths. Home mobile no longer defines a second listing-card business implementation. A focused regression test verifies the convergence. Full listing-card completion remains pending for migration.
+
+
+
+- Home now distinguishes initial empty/loading state via the provider's server-sync lifecycle; cached listings continue to render immediately.
+- Shared ItemCard exposes a skeleton variant used by mobile and desktop Home loading states.
+- Regression coverage now verifies the loading state and skeleton variant.
+### 2026-09-25 — Listing Card Convergence Implementation
+
+- Home mobile now renders the shared `ItemCard` with `variant="compact"`.
+- Favorite, owner detection, KYC, rating, image fallback, pricing and rent/manage actions remain inside the shared component.
+- Added a focused Node regression test covering the absence of the old `MobileItemCard` and preservation of shared behavior.
+- CI verification is pending for the new PR because GitHub has not yet reported a workflow run/status for the new head commit.
+
+- Hook-safety review found a conditional-hook hazard and it was corrected by keeping all ItemCard hooks unconditional before the skeleton branch.
+- Compact-card accessibility review found that an interactive card wrapper containing nested buttons is not a sound semantic pattern. The wrapper's interactive role and keyboard handler were removed; the full keyboard/focus pattern remains pending before final review.
+
+## Audit Finding 05 — Deployment/Configuration Verification — 2026-09-25
+
+- PR #40 remains draft and unmerged. GitHub CI is green on the latest head commit 26bca45.
+- The separate Cloudflare Pages integration reported Build failed for 26bca45. Therefore GitHub CI success is not being treated as deployment verification.
+- wrangler.toml on the UI branch currently declares ADMIN_PI_UIDS = "avina60,mohsenjnext", while Worker authorization compares users.pi_uid against that list. The project audit requires Pi UIDs, not usernames. This configuration mismatch is a release-verification blocker and must not be silently changed without authoritative values.
+- No merge or deployment was performed.
+
+Next action: continue additive UI/UX audit and implementation while keeping Cloudflare deployment failure and admin UID configuration as explicit release blockers.
+
+## Design System Implementation 01 — Shared UI Primitives — 2026-09-25
+
+Added additive shared primitives under `src/components/ui/`:
+- `RentoraButton`: primary/secondary/ghost/danger variants, consistent sizing, disabled/loading and focus-visible behavior.
+- `RentoraCard`: shared surface primitive with optional interactive elevation treatment.
+- `RentoraBadge`: shared semantic badge tones for neutral/trust/warning/danger/primary states.
+
+These primitives are intentionally additive. Existing pages are not mass-migrated yet, so the legacy UI remains operational while the component system is validated incrementally.
+
+**Status:** Initial Button/Card/Badge/Input/Tabs primitives implemented. Button/Card/Badge/Input/Tabs migration and dedicated regression coverage remain pending; no page-wide migration has been performed.
+
+
+
+## Design System Implementation 02 — Form & Navigation Primitives — 2026-09-25
+
+Added additive shared primitives under `src/components/ui/`:
+- `RentoraInput`: label, required, hint, error, disabled and accessible description wiring.
+- `RentoraTabs`: horizontal, keyboard-focusable tab controls with selected/disabled semantics and mobile overflow handling.
+
+The primitives remain presentation-only and do not introduce new business state or API contracts.
+
+**Status:** Implemented. Dedicated component tests and broad page migration remain pending.
+
+
+## Design System Implementation 03 — Feedback & Loading Primitives — 2026-09-25
+
+Added additive shared primitives under `src/components/ui/`:
+- `RentoraSkeleton`: reusable loading placeholder with dark-mode support.
+- `RentoraEmptyState`: accessible empty result state with optional icon, description and action slot.
+- `RentoraAlert`: semantic info/success/warning/error feedback surface with appropriate status/alert roles.
+
+These components contain no business logic and are safe to introduce incrementally around existing real data flows.
+
+**Status:** Implemented. Page migration, dedicated regression coverage and final accessibility review remain pending.
+
+
+## Design System Implementation 04 — Dialog, Drawer & Confirmation — 2026-09-25
+
+Added additive shared interaction primitives under `src/components/ui/`:
+- `RentoraModal`: modal dialog semantics, labelled/described content, Escape handling, backdrop close, focus containment and focus restoration.
+- `RentoraDrawer`: side-panel dialog semantics, Escape handling, focus containment and focus restoration.
+- `RentoraConfirm`: reusable confirmation/destructive-action composition using the shared Modal and Button primitives, with loading protection against accidental dismissal.
+
+These components are presentation primitives only. They do not alter existing booking, payment, report, delete, or account business flows.
+
+**Status:** Implemented. Existing legacy modals remain operational; migration and dedicated regression coverage remain pending.
+
+
+## Design System Implementation 05 — Toast, Navigation & Discover Adoption — 2026-09-25
+
+Added:
+- `RentoraToast`: accessible transient-notification presentation primitive with polite/assertive live regions and optional action/close controls.
+- `RentoraNavItem`: shared navigation item primitive with current-page semantics, badge support and focus-visible behavior.
+- Discover now adopts `RentoraInput`, `RentoraButton` and `RentoraModal` for search, filter actions and the filter dialog while preserving the existing filtering/sorting/data contracts.
+
+**Status:** Additive migration completed for the Discover filter/search surface. Full Discover Definition of Done remains pending because loading/real-state regression, mobile/Pi Browser review, accessibility regression coverage and final review are not yet complete.
+
+## Design System Implementation 06 — Discover State & Primitive Hardening — 2026-09-25
+
+- Hardened `RentoraInput` with a generated accessible id when neither `id` nor `name` is supplied.
+- Added reusable leading/trailing adornment slots to `RentoraInput`; Discover uses them to restore search/clear affordances without duplicating input styling.
+- Discover now uses `RentoraEmptyState` for the zero-result state and keeps the real ItemCard/filter/search business behavior intact.
+- Discover loading now reflects the provider's actual `isInitialLoadDone` server-sync lifecycle rather than a timer or fabricated delay.
+- Added `tests/ui-discover-primitives.test.js` covering primitive convergence, preserved filtering integration, and input hardening.
+
+**Status:** Discover additive state/primitive adoption completed. Loading and empty presentation are now wired to real client state. Error-state presentation, mobile/Pi Browser device review, full accessibility regression and final migration remain pending.
+## Design System Implementation 07 — Discover Accessibility Convergence — 2026-09-25
+
+- Replaced the remaining Discover page-specific filter trigger with RentoraButton.
+- Added an explicit accessible label/id relationship for the sort control.
+- Added a labelled group semantics for category filter buttons while retaining aria-pressed state.
+- Added regression assertions for these accessibility contracts.
+
+**Status:** Discover primitive convergence and accessibility markup pass completed. Full device review, error-state mapping, automated runtime/browser accessibility coverage, final review and migration remain pending.
+## Design System Implementation 08 — Item Detail Shared Primitive Adoption — 2026-09-25
+
+- Audited the additive Item Detail redesign against the existing real booking, report, review, owner, favorite, chat and P2P settlement flows.
+- Reused the existing BookingModal and ReportModal; no second business implementation was introduced.
+- Converged the review loading, empty and primary booking presentation on shared UI primitives.
+- Preserved listing status gating so inactive listings cannot open the booking flow.
+- Added regression coverage for primitive adoption and preserved real-flow entry points.
+
+**Status:** Item Detail presentation convergence pass completed. Legacy Item Detail remains available. Runtime device review, report-modal migration, booking-modal migration, error-state mapping and final migration remain pending.
+
+## Design System Implementation 09 — Booking & Report Modal Convergence — 2026-09-25
+
+- Migrated BookingModal presentation to the shared `RentoraModal`, `RentoraButton`, `RentoraInput` and `RentoraAlert` primitives.
+- Preserved the real server quote → rental creation → Pi fee payment → verified contact unlock flow.
+- Removed the BookingModal offline/compatibility fallback that could broadcast a client-created rental when the authoritative server creation failed.
+- Financial display in BookingModal now uses the authoritative server quote only; booking submission stays disabled until a valid quote is available.
+- Migrated ReportModal to `RentoraModal`, `RentoraButton`, `RentoraAlert` and `RentoraEmptyState`, preserving the existing `submitReport` contract and success/error states.
+- Added focused regression assertions for primitive convergence and prevention of the removed offline booking fallback.
+
+**Status:** Booking and Report modal presentation migration completed. Automated workflow verification and runtime Pi Browser/device review remain pending. Final Booking & Payment Definition of Done remains incomplete until incomplete-payment, pending/cancelled/failed-state presentation, E2E coverage and final review are verified.
+
+
+## Design System Implementation 10 — Authoritative Rental & Payment State Convergence — 2026-09-25
+
+### Decision
+The booking/payment UI must have one business path: server quote → server rental → Pi payment intent/approve/complete → server-confirmed rental state. Browser code must not synthesize rental IDs, booking numbers, financial totals, confirmed rental records, or fallback rental payloads.
+
+### Implementation
+- Removed the client-side financial/rental construction from the createRentalBooking compatibility wrapper. It now requires quoteId and delegates to cloudSyncService.createRental({ quoteId }).
+- Removed the remaining listingId + startDate + endDate fallback from BookingModal.
+- Removed client-side confirmedRental synthesis, cache writes, and broadcastNewRental from executePiPaymentForRental; Pi completion is now treated as authoritative only through the server payment flow.
+- Hardened /api/payments/incomplete so the SDK callback is not trusted directly: the server re-fetches the Pi payment, binds it to a D1 payment intent, verifies payer identity, metadata/rental binding, and amount before mutating payment/rental/transaction state.
+- Added regression assertions covering the authoritative rental contract, absence of client-side financial synthesis, and incomplete-payment intent binding.
+
+### Verification status
+Implementation pass completed. Automated workflow execution for the latest branch head still needs to be checked, and runtime Pi Browser/device verification remains pending. Payment DoD is not marked complete until those verification layers are observed.

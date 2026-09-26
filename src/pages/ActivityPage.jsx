@@ -54,15 +54,10 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
   const [isClearHistoryModalOpen, setIsClearHistoryModalOpen] = useState(false);
   const [clearSuccessNotice, setClearSuccessNotice] = useState(false);
 
-  const clearedKey = currentUser ? `rentora_cleared_history_${currentUser.username || currentUser.uid}` : null;
-  const [clearedHistoryTime, setClearedHistoryTime] = useState(() => {
-    if (!clearedKey) return 0;
-    try {
-      return Number(localStorage.getItem(clearedKey)) || 0;
-    } catch (_) {
-      return 0;
-    }
-  });
+  // History clearing is a local presentation preference only. Keep it in memory so
+  // private/business records never get persisted in browser storage.
+  const [clearedHistoryTime, setClearedHistoryTime] = useState(0);
+
 
   const handleOpenContactModal = async (rental) => {
     setSelectedContactRental(rental);
@@ -145,11 +140,6 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
 
   const handleClearHistory = () => {
     const nowTime = Date.now();
-    if (clearedKey) {
-      try {
-        localStorage.setItem(clearedKey, String(nowTime));
-      } catch (_) {}
-    }
     setClearedHistoryTime(nowTime);
     setIsClearHistoryModalOpen(false);
     setClearSuccessNotice(true);

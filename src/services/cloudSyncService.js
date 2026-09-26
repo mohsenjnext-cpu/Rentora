@@ -15,6 +15,10 @@ export class CloudSyncService {
     this.pollInterval = null;
     this.broadcastChannel = null;
     this.lastSyncedHash = '';
+    // Public marketplace/user data is memory-only. Browser storage must not become
+    // a stale secondary authority or retain another user's profile after logout.
+    this.memoryItems = [];
+    this.memoryUsers = [];
 
     // Initialize cross-tab BroadcastChannel
     if (typeof window !== 'undefined') {
@@ -50,25 +54,30 @@ export class CloudSyncService {
 
   handleIncomingBroadcast(payload) {
     const { type, data } = payload;
-    if (type === 'NEW_ITEM' && data) {
-      const items = this.getCachedItems();
-      const updated = [data, ...items.filter(i => i.id !== data.id)];
-      this.saveCachedItems(updated);
-      this.notifySubscribers('ITEM_ADDED', { items: updated, item: data });
-    } else if (type === 'USER_PROFILE' && data) {
-      const users = this.getCachedUsers();
-      const updated = [data, ...users.filter(u => u.username?.toLowerCase() !== data.username?.toLowerCase())];
-      this.saveCachedUsers(updated);
-      this.notifySubscribers('USER_SYNC', { users: updated, user: data });
-    } else if (type === 'RENTAL_UPDATE' && data) {
-      const rentals = this.getCachedRentals();
-      const updated = [data, ...rentals.filter(r => r.id !== data.id)];
-      this.saveCachedRentals(updated);
-      this.notifySubscribers('RENTAL_SYNC', { rentals: updated, rental: data });
+
+    // BroadcastChannel is a notification bus, not a trust boundary. Never hydrate
+    // application state from a peer tab's client-supplied object. Re-fetch authoritative
+    // state from the API/D1 instead, then let the normal sync pipeline update React.
+    if (type === 'NEW_ITEM' && data?.id) {
+      this.fetchSharedData(true).catch(() => {});
+      return;
+    }
+
+    if (type === 'USER_PROFILE' && data?.username) {
+      this.fetchSharedData(true).catch(() => {});
+      return;
+    }
+
+    if (type === 'RENTAL_UPDATE' && data?.id) {
+      // Rental/payment state is never persisted in browser storage and is never
+      // accepted from BroadcastChannel as authority.
+      this.fetchSharedData(true).catch(() => {});
     }
   }
 
   getAuthHeaders() {
+    // Authentication is carried by the server-issued HttpOnly session cookie.
+    // Never read or persist bearer session tokens in browser storage.
     return { 'Content-Type': 'application/json' };
   }
 
@@ -110,6 +119,7 @@ export class CloudSyncService {
     if (apiBase) {
       try {
         const res = await fetch(`${apiBase}/api/upload`, {
+          credentials: 'include',
           method: 'POST',
           headers: this.getAuthHeaders(),
           body: JSON.stringify({ data: dataUrl, mimeType: 'image/jpeg' })
@@ -129,6 +139,7 @@ export class CloudSyncService {
     const apiBase = getApiBaseUrl();
     if (apiBase) {
       const res = await fetch(`${apiBase}/api/sync/user`, {
+        credentials: 'include',
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(userObj)
@@ -157,6 +168,7 @@ export class CloudSyncService {
     const apiBase = getApiBaseUrl();
     if (apiBase) {
       const res = await fetch(`${apiBase}/api/sync/item`, {
+        credentials: 'include',
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(item)
@@ -186,6 +198,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/rentals/quote`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ listingId, startDate, endDate })
@@ -198,12 +211,14 @@ export class CloudSyncService {
     return data.quote;
   }
 
-  async createRental({ quoteId, listingId, startDate, endDate }) {
+  async createRental({ quoteId }) {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('API Base URL is not configured');
 
-    const body = quoteId ? { quoteId } : { listingId, startDate, endDate };
+    if (!quoteId) throw new Error('quoteId is required');
+    const body = { quoteId };
     const res = await fetch(`${apiBase}/api/rentals`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(body)
@@ -222,6 +237,7 @@ export class CloudSyncService {
     const apiBase = getApiBaseUrl();
     if (apiBase) {
       const res = await fetch(`${apiBase}/api/sync/rental`, {
+        credentials: 'include',
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(rental)
@@ -233,10 +249,7 @@ export class CloudSyncService {
       if (data.rental) rental = data.rental;
     }
 
-    const cached = this.getCachedRentals();
-    const updated = [rental, ...cached.filter(r => r.id !== rental.id)];
-    this.saveCachedRentals(updated);
-
+    // Do not cache rentals locally. Rental/payment state remains server-authoritative.
     try {
       this.broadcastChannel?.postMessage({ type: 'RENTAL_UPDATE', data: rental });
     } catch (e) {}
@@ -257,6 +270,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/admin/overview?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         ...this.getAuthHeaders(),
@@ -275,11 +289,30 @@ export class CloudSyncService {
     return data.overview;
   }
 
+  async submitSupportTicket({ subject = '', message = '' } = {}) {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+    const res = await fetch(`${apiBase}/api/support/tickets`, {
+      credentials: 'include',
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({ subject: String(subject || '').trim(), message: String(message || '').trim() })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success !== true) {
+      const err = new Error(data?.error || 'ارسال درخواست پشتیبانی ناموفق بود.');
+      err.status = res.status;
+      throw err;
+    }
+    return data.ticket;
+  }
+
   async fetchWalletBalance() {
     const apiBase = getApiBaseUrl();
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/wallet/balance?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         ...this.getAuthHeaders(),
@@ -305,6 +338,7 @@ export class CloudSyncService {
     const key = idempotencyKey || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `user_payout_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
 
     const res = await fetch(`${apiBase}/api/wallet/withdraw`, {
+      credentials: 'include',
       method: 'POST',
       headers: {
         ...this.getAuthHeaders(),
@@ -335,6 +369,7 @@ export class CloudSyncService {
     const key = idempotencyKey || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `admin_payout_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
 
     const res = await fetch(`${apiBase}/api/admin/payout`, {
+      credentials: 'include',
       method: 'POST',
       headers: {
         ...this.getAuthHeaders(),
@@ -364,6 +399,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/admin/users?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         ...this.getAuthHeaders(),
@@ -388,6 +424,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/admin/users/${encodeURIComponent(userId)}/status`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ status })
@@ -408,6 +445,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/admin/users/${encodeURIComponent(userId)}/kyc`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ kycStatus })
@@ -428,6 +466,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/admin/listings/${encodeURIComponent(listingId)}/status`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ status })
@@ -452,6 +491,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/reports`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(reportData)
@@ -472,6 +512,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/reports/${encodeURIComponent(reportId)}/resolve`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ status })
@@ -491,6 +532,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/admin/cleanup`, {
+      credentials: 'include',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -513,6 +555,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/sync/purge`, {
+      credentials: 'include',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -553,6 +596,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/rentals/${encodeURIComponent(rentalId)}/review-status?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         ...this.getAuthHeaders(),
@@ -577,6 +621,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/rentals/${encodeURIComponent(rentalId)}/reviews`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ rating, reviewText })
@@ -597,6 +642,7 @@ export class CloudSyncService {
     if (!apiBase) return { stats: { totalReviews: 0, averageRating: null, isNew: true }, reviews: [] };
 
     const res = await fetch(`${apiBase}/api/users/${encodeURIComponent(userId)}/reviews?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -614,12 +660,33 @@ export class CloudSyncService {
     return data;
   }
 
+  async fetchListingById(listingId) {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+    const id = String(listingId || '').trim();
+    if (!id) throw new Error('listingId is required');
+    const res = await fetch(`${apiBase}/api/listings/${encodeURIComponent(id)}?_t=${Date.now()}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { ...this.getAuthHeaders(), 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+      cache: 'no-store'
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.item) {
+      const err = new Error(data?.error || 'آگهی موردنظر پیدا نشد.');
+      err.status = res.status;
+      throw err;
+    }
+    return data.item;
+  }
+
   async fetchListingReviews(listingId) {
     if (!listingId) throw new Error('listingId is required');
     const apiBase = getApiBaseUrl();
     if (!apiBase) return { stats: { totalReviews: 0, averageRating: null, isNew: true }, reviews: [] };
 
     const res = await fetch(`${apiBase}/api/listings/${encodeURIComponent(listingId)}/reviews?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -646,6 +713,7 @@ export class CloudSyncService {
     if (!apiBase) return [];
 
     const res = await fetch(`${apiBase}/api/conversations?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         ...this.getAuthHeaders(),
@@ -667,6 +735,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/conversations`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ listingId, rentalId })
@@ -685,6 +754,7 @@ export class CloudSyncService {
     if (!apiBase) return { messages: [] };
 
     const res = await fetch(`${apiBase}/api/conversations/${encodeURIComponent(conversationId)}/messages?_t=${Date.now()}`, {
+      credentials: 'include',
       method: 'GET',
       headers: {
         ...this.getAuthHeaders(),
@@ -707,6 +777,7 @@ export class CloudSyncService {
     if (!apiBase) throw new Error('API Base URL is not configured');
 
     const res = await fetch(`${apiBase}/api/conversations/${encodeURIComponent(conversationId)}/messages`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ text, messageType })
@@ -722,12 +793,45 @@ export class CloudSyncService {
     return data.message;
   }
 
+  async markConversationAsRead(conversationId) {
+    if (!conversationId) throw new Error('conversationId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) return false;
+    const res = await fetch(`${apiBase}/api/conversations/${encodeURIComponent(conversationId)}/read`, {
+      credentials: 'include',
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({})
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در ثبت وضعیت خوانده‌شدن گفتگو');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  broadcastConversationRead(convId) {
+    if (!convId) return false;
+    try {
+      this.broadcastChannel?.postMessage({
+        type: 'CHAT_READ',
+        data: { conversationId: convId }
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   async archiveConversation(conversationId) {
     if (!conversationId) return false;
     const apiBase = getApiBaseUrl();
     if (!apiBase) return false;
 
     const res = await fetch(`${apiBase}/api/conversations/${encodeURIComponent(conversationId)}/archive`, {
+      credentials: 'include',
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({})
@@ -750,14 +854,13 @@ export class CloudSyncService {
   async _doFetchSharedData(forceNotify = false) {
     const localItems = this.getCachedItems();
     const localRentals = this.getCachedRentals();
-    const localUsers = this.getCachedUsers();
 
     const apiBase = getApiBaseUrl();
     if (!apiBase) {
       return {
         items: localItems,
         rentals: localRentals,
-        users: localUsers,
+        users: this.getCachedUsers(),
         reviews: [],
         transactions: []
       };
@@ -766,6 +869,7 @@ export class CloudSyncService {
     try {
       const url = `${apiBase}/api/sync/all?_t=${Date.now()}`;
       const res = await fetch(url, {
+        credentials: 'include',
         method: 'GET',
         headers: {
           ...this.getAuthHeaders(),
@@ -787,19 +891,8 @@ export class CloudSyncService {
         const remoteRentals = Array.isArray(data.rentals) ? data.rentals : [];
         this.saveCachedRentals(remoteRentals);
 
-        // 3. Merge users
-        const remoteUsers = Array.isArray(data.users) ? data.users : [];
-        const mergedUsersMap = new Map();
-        localUsers.forEach(u => {
-          if (u.username) mergedUsersMap.set(u.username.toLowerCase(), u);
-        });
-        remoteUsers.forEach(u => {
-          if (u.username) {
-            const existing = mergedUsersMap.get(u.username.toLowerCase());
-            mergedUsersMap.set(u.username.toLowerCase(), { ...existing, ...u });
-          }
-        });
-        const mergedUsers = Array.from(mergedUsersMap.values());
+        // 3. Users are also server-authoritative and memory-only.
+        const mergedUsers = Array.isArray(data.users) ? data.users : [];
         this.saveCachedUsers(mergedUsers);
 
         const remoteTransactions = Array.isArray(data.transactions) ? data.transactions : [];
@@ -836,7 +929,7 @@ export class CloudSyncService {
     return {
       items: localItems,
       rentals: localRentals,
-      users: localUsers,
+      users: this.getCachedUsers(),
       reviews: [],
       transactions: []
     };
@@ -861,89 +954,49 @@ export class CloudSyncService {
   }
 
   getCachedItems() {
-    try {
-      const saved = localStorage.getItem(STORAGE_ITEMS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    return Array.isArray(this.memoryItems) ? this.memoryItems : [];
   }
 
   saveCachedItems(items) {
-    try {
-      localStorage.setItem(STORAGE_ITEMS_KEY, JSON.stringify(items || []));
-    } catch (e) {}
+    this.memoryItems = Array.isArray(items) ? items : [];
   }
 
   getCachedRentals() {
-    try {
-      const saved = localStorage.getItem(STORAGE_RENTALS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const dedupedMap = new Map();
-          parsed.forEach(r => {
-            if (r && r.id) dedupedMap.set(r.id, r);
-          });
-          return Array.from(dedupedMap.values());
-        }
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    // Intentionally empty. Rentals may contain private booking/payment state.
+    return [];
   }
 
-  saveCachedRentals(rentals) {
-    try {
-      const list = Array.isArray(rentals) ? rentals : [];
-      const dedupedMap = new Map();
-      list.forEach(r => {
-        if (r && r.id) dedupedMap.set(r.id, r);
-      });
-      localStorage.setItem(STORAGE_RENTALS_KEY, JSON.stringify(Array.from(dedupedMap.values())));
-    } catch (e) {}
+  saveCachedRentals(_rentals) {
+    // Server/D1 remains the only source of rental/payment truth.
   }
 
   clearUserSessionCache() {
+    // Remove legacy browser-stored state left by older builds. Current app state is
+    // held in React/service memory and the authenticated HttpOnly session cookie.
     try {
       if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem(STORAGE_USER_KEY);
-        localStorage.removeItem(STORAGE_RENTALS_KEY);
-        localStorage.removeItem('rentora_db_transactions_v8');
-        localStorage.removeItem('rentora_db_reports_v8');
-        localStorage.removeItem('rentora_live_v1_session');
+        [
+          STORAGE_USER_KEY,
+          STORAGE_ITEMS_KEY,
+          STORAGE_RENTALS_KEY,
+          STORAGE_USERS_KEY,
+          'rentora_live_v1_session',
+          'rentora_db_transactions_v8',
+          'rentora_db_reports_v8'
+        ].forEach((key) => localStorage.removeItem(key));
       }
     } catch (_) {}
+    this.memoryItems = [];
+    this.memoryUsers = [];
     this.lastSyncedHash = '';
   }
 
   getCachedUsers() {
-    try {
-      const saved = localStorage.getItem(STORAGE_USERS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    return Array.isArray(this.memoryUsers) ? this.memoryUsers : [];
   }
 
   saveCachedUsers(users) {
-    try {
-      const safeUsers = (Array.isArray(users) ? users : []).map((user) => {
-        if (!user || typeof user !== 'object') return user;
-        const { sessionToken, accessToken, ...safeUser } = user;
-        return safeUser;
-      });
-      localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(safeUsers));
-    } catch (e) {}
+    this.memoryUsers = Array.isArray(users) ? users : [];
   }
 
   subscribe(callback) {

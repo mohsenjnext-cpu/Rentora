@@ -2,7 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useRentora } from '../context/RentoraContext';
 import ItemCard from '../components/ItemCard';
-import EmptyState from '../components/EmptyState';
+import RentoraEmptyState from '../components/ui/RentoraEmptyState';
+import RentoraSkeleton from '../components/ui/RentoraSkeleton';
+import RentoraInput from '../components/ui/RentoraInput';
+import RentoraButton from '../components/ui/RentoraButton';
+import RentoraModal from '../components/ui/RentoraModal';
 import { 
   Search, 
   SlidersHorizontal, 
@@ -20,7 +24,7 @@ import {
 
 export default function DiscoverPage({ initialCategory = 'all', initialQuery = '', onSelectItem, onRentItem }) {
   const { lang, dir, t, l } = useLanguage();
-  const { items = [] } = useRentora();
+  const { items = [], isInitialLoadDone } = useRentora();
 
   const [query, setQuery] = useState(initialQuery);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
@@ -91,41 +95,35 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
 
         <div className="flex items-center gap-2 w-full">
           {/* Live Search Bar with inline filter icon */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute top-2.5 left-3 rtl:left-auto rtl:right-3 stroke-[2]" />
-            <input
-              type="text"
+          <div className="flex-1">
+            <RentoraInput
+              id="discover-search"
+              type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t('discoverSearchPlaceholder')}
-              className="w-full pl-9 pr-9 rtl:pr-9 rtl:pl-9 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#534AB7]"
+              leadingAdornment={<Search className="h-4 w-4" strokeWidth={2} />}
+              trailingAdornment={query ? (
+                <button type="button" onClick={() => setQuery('')} aria-label={t('discoverClearSearch')}
+                  className="rounded p-1 text-slate-400 transition hover:text-slate-600 focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus)] dark:hover:text-slate-200">
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              ) : null}
+              aria-label={t('discoverSearchPlaceholder')}
             />
-            {query && (
-              <button
-                type="button"
-                onClick={() => setQuery('')}
-                className="absolute top-2 right-2.5 rtl:right-auto rtl:left-2.5 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
 
           {/* Inline Filter Button (Opens filter sheet) */}
-          <button
+          <RentoraButton
             type="button"
+            variant={isFiltered ? 'primary' : 'secondary'}
+            size="sm"
             onClick={() => setFilterSheetOpen(true)}
-            className={`p-2 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-              isFiltered
-                ? 'bg-[#26215C] text-white border-[#26215C] dark:bg-[#534AB7]'
-                : 'rentora-card text-slate-700 dark:text-slate-200 hover:border-[#534AB7]'
-            }`}
-            title={t('discoverFilterBtn')}
+            aria-label={t('discoverFilterBtn')}
           >
-            <SlidersHorizontal className="w-4 h-4 stroke-[1.8]" />
+            <SlidersHorizontal className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
             <span className="hidden sm:inline">{l('فیلترها', 'Filters', 'الفلاتر', '筛选')}</span>
-          </button>
-        </div>
+          </RentoraButton>        </div>
       </div>
 
       {/* 2. Row showing Result Count + Sort Control */}
@@ -135,8 +133,9 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
         </span>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px]">{t('discoverSortBy')}:</span>
+          <label htmlFor="discover-sort" className="text-[11px]">{t('discoverSortBy')}:</label>
           <select
+            id="discover-sort"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
             className="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-semibold text-xs cursor-pointer focus:outline-none"
@@ -150,13 +149,27 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
       </div>
 
       {/* 3. Items Grid / Consistent Empty State */}
-      {filteredItems.length === 0 ? (
-        <EmptyState
-          type="search"
+      {!isInitialLoadDone && filteredItems.length === 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5" role="status" aria-label={l('در حال بارگذاری کالاها...', 'Loading items...', 'جار تحميل العناصر...', '正在加载物品...')}>
+          {Array.from({ length: 8 }).map((_, index) => (
+            <div key={index} className="space-y-2 rounded-[var(--radius-card)] border border-slate-200 bg-white p-2.5 dark:border-white/10 dark:bg-[#16152B]">
+              <RentoraSkeleton className="aspect-square w-full" rounded="rounded-[var(--radius-control)]" />
+              <RentoraSkeleton className="h-3 w-3/4" />
+              <RentoraSkeleton className="h-3 w-1/2" />
+            </div>
+          ))}
+        </div>
+      ) : filteredItems.length === 0 ? (
+        <RentoraEmptyState
+          icon={<Search className="h-6 w-6" />}
           title={t('discoverEmptyTitle')}
-          message={t('discoverEmptyDesc')}
-          actionLabel={isFiltered ? t('discoverClearFilters') : undefined}
-          onAction={isFiltered ? clearFilters : undefined}
+          description={t('discoverEmptyDesc')}
+          action={isFiltered ? (
+            <RentoraButton variant="secondary" size="sm" onClick={clearFilters}>
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('discoverClearFilters')}
+            </RentoraButton>
+          ) : null}
         />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
@@ -172,119 +185,69 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
       )}
 
       {/* 4. Filter Sheet Modal */}
-      {filterSheetOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-4 sm:p-5 space-y-4 max-h-[90vh] overflow-y-auto"
-          >
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-              <span className="text-xs font-bold text-slate-900 dark:text-white">
-                {t('discoverFilterBtn')}
-              </span>
-              <button
-                type="button"
-                onClick={() => setFilterSheetOpen(false)}
-                className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Category Filter Inside Sheet (with icons) */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                {t('discoverFilterCategory')}:
-              </label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {filterCategories.map(cat => {
-                  const Icon = cat.icon;
-                  const isSel = selectedCategory === cat.id;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => setSelectedCategory(cat.id)}
-                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
-                        isSel
-                          ? 'bg-[#26215C] text-white dark:bg-[#534AB7]'
-                          : 'bg-slate-50 dark:bg-[#1E1D33] text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                      }`}
-                    >
-                      <Icon className="w-3.5 h-3.5 stroke-[1.8]" />
-                      <span>{cat.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Price Slider */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
-                <span>{t('discoverFilterMaxPrice')}:</span>
-                <span className="text-[#0F6E56] font-mono font-black">{maxPrice} π</span>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max="100"
-                step="1"
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(Number(e.target.value))}
-                className="w-full accent-[#534AB7] cursor-pointer"
-              />
-            </div>
-
-            {/* Condition Dropdown */}
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('itemCondition')}:</label>
-              <select
-                value={selectedCondition}
-                onChange={(e) => setSelectedCondition(e.target.value)}
-                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#1E1D33] text-slate-900 dark:text-white text-xs"
-              >
-                <option value="all">{t('catAll')}</option>
-                <option value="like_new">{t('condLikeNew')}</option>
-                <option value="good">{t('condGood')}</option>
-                <option value="fair">{t('condFair')}</option>
-              </select>
-            </div>
-
-            {/* City */}
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('discoverFilterLocation')}:</label>
-              <input
-                type="text"
-                value={selectedCity}
-                onChange={(e) => setSelectedCity(e.target.value)}
-                placeholder={l('مثال: تهران، مشهد...', 'e.g. Tehran, Saadat Abad', 'مثال: الرياض، دبي...', '例如：北京市朝阳区')}
-                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#1E1D33] text-slate-900 dark:text-white text-xs"
-              />
-            </div>
-
-            {/* Actions */}
-            <div className="pt-2 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="text-xs text-[#534AB7] dark:text-[#AFA9EC] font-semibold hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                <RotateCcw className="w-3 h-3 stroke-[2]" />
-                <span>{t('btnReset')}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFilterSheetOpen(false)}
-                className="btn-primary px-4 py-1.5 text-xs font-bold cursor-pointer"
-              >
-                {t('btnApply')}
-              </button>
+      <RentoraModal
+        open={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        title={t('discoverFilterBtn')}
+        size="md"
+        footer={
+          <div className="flex items-center justify-between gap-2">
+            <RentoraButton variant="ghost" onClick={clearFilters}>
+              <RotateCcw className="h-3 w-3" aria-hidden="true" />
+              {t('btnReset')}
+            </RentoraButton>
+            <RentoraButton onClick={() => setFilterSheetOpen(false)}>
+              {t('btnApply')}
+            </RentoraButton>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <span id="discover-category-label" className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('discoverFilterCategory')}</span>
+            <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby="discover-category-label">
+              {filterCategories.map(cat => {
+                const Icon = cat.icon;
+                const isSel = selectedCategory === cat.id;
+                return (
+                  <button key={cat.id} type="button" onClick={() => setSelectedCategory(cat.id)}
+                    aria-pressed={isSel}
+                    className={`min-h-10 rounded-[var(--radius-control)] px-2.5 text-xs font-semibold flex items-center gap-1.5 transition focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus)] ${isSel ? 'bg-[var(--color-rentora-primary)] text-white dark:bg-[var(--color-rentora-primary-mid)]' : 'bg-slate-50 dark:bg-[#1E1D33] text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'}`}>
+                    <Icon className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>{cat.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+              <span>{t('discoverFilterMaxPrice')}</span>
+              <span className="font-mono">{maxPrice} π</span>
+            </div>
+            <input type="range" min="1" max="100" step="1" value={maxPrice} onChange={(e) => setMaxPrice(Number(e.target.value))}
+              aria-label={t('discoverFilterMaxPrice')} className="w-full accent-[#534AB7] cursor-pointer" />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="discover-condition" className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('itemCondition')}</label>
+            <select id="discover-condition" value={selectedCondition} onChange={(e) => setSelectedCondition(e.target.value)}
+              className="w-full min-h-10 px-3 rounded-[var(--radius-control)] border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151426] text-slate-900 dark:text-white text-xs focus:outline-none focus-visible:shadow-[var(--shadow-focus)]">
+              <option value="all">{t('catAll')}</option>
+              <option value="like_new">{t('condLikeNew')}</option>
+              <option value="good">{t('condGood')}</option>
+              <option value="fair">{t('condFair')}</option>
+            </select>
+          </div>
+          <RentoraInput
+            id="discover-city"
+            label={t('discoverFilterLocation')}
+            type="text"
+            value={selectedCity}
+            onChange={(e) => setSelectedCity(e.target.value)}
+            placeholder={l('مثال: تهران، مشهد...', 'e.g. Tehran, Saadat Abad', 'مثال: الرياض، دبي...', '例如：北京市朝阳区')}
+          />
         </div>
-      )}
+      </RentoraModal>
 
     </div>
   );

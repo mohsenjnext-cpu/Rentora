@@ -1,19 +1,64 @@
 @import "tailwindcss";
+/* Shared Rentora design tokens. Tailwind v4 @theme tokens are intentionally additive. */
+@theme {
+  --font-sans: 'Vazirmatn', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --color-rentora-ink: #1E1E2F;
+  --color-rentora-canvas: #FAFAFC;
+  --color-rentora-surface: #FFFFFF;
+  --color-rentora-primary: #26215C;
+  --color-rentora-primary-hover: #1B1742;
+  --color-rentora-primary-mid: #534AB7;
+  --color-rentora-primary-soft: #EEEDFE;
+  --color-rentora-primary-accent: #7F77DD;
+  --color-rentora-success: #0F6E56;
+  --color-rentora-success-soft: #E1F5EE;
+  --color-rentora-warning: #854F0B;
+  --color-rentora-warning-soft: #FAEEDA;
+  --color-rentora-warning-border: #FAC775;
+  --color-rentora-danger: #B42318;
+  --color-rentora-danger-soft: #FEF3F2;
+  --color-rentora-border: rgba(148, 163, 184, 0.28);
+  --text-display: 1.75rem;
+  --text-display--line-height: 1.25;
+  --text-title: 1.25rem;
+  --text-title--line-height: 1.4;
+  --text-body: 1rem;
+  --text-body--line-height: 1.65;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.5;
+  --spacing-18: 4.5rem;
+  --spacing-22: 5.5rem;
+  --spacing-26: 6.5rem;
+  --radius-card: 0.875rem;
+  --radius-control: 0.625rem;
+  --radius-panel: 1rem;
+  --radius-pill: 999px;
+  --shadow-card: 0 4px 15px rgba(30, 30, 47, 0.04);
+  --shadow-card-hover: 0 10px 28px rgba(30, 30, 47, 0.08);
+  --shadow-panel: 0 12px 30px rgba(38, 33, 92, 0.08);
+  --shadow-focus: 0 0 0 3px rgba(127, 119, 221, 0.28);
+  --breakpoint-phone: 30rem;
+  --breakpoint-tablet: 48rem;
+  --breakpoint-laptop: 64rem;
+  --breakpoint-desktop: 80rem;
+  --ease-rentora: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 
 @layer base {
   :root {
-    --primary-dark: #26215C;
-    --primary-mid: #534AB7;
-    --purple-tint: #EEEDFE;
-    --purple-accent: #7F77DD;
-    --trust-text: #0F6E56;
-    --trust-bg: #E1F5EE;
-    --amber-text: #854F0B;
-    --amber-bg: #FAEEDA;
-    --amber-border: #FAC775;
-    --card-radius: 14px;
-    --btn-radius: 10px;
-    --border-subtle: 0.5px solid rgba(148, 163, 184, 0.28);
+    --primary-dark: var(--color-rentora-primary);
+    --primary-mid: var(--color-rentora-primary-mid);
+    --purple-tint: var(--color-rentora-primary-soft);
+    --purple-accent: var(--color-rentora-primary-accent);
+    --trust-text: var(--color-rentora-success);
+    --trust-bg: var(--color-rentora-success-soft);
+    --amber-text: var(--color-rentora-warning);
+    --amber-bg: var(--color-rentora-warning-soft);
+    --amber-border: var(--color-rentora-warning-border);
+    --card-radius: var(--radius-card);
+    --btn-radius: var(--radius-control);
+    --border-subtle: 0.5px solid var(--color-rentora-border);
   }
 
   .dark {
@@ -30,11 +75,11 @@
   }
 
   body {
-    font-family: 'Vazirmatn', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: var(--font-sans);
     line-height: 1.65;
     letter-spacing: normal;
-    background-color: #FAFAFC;
-    color: #1E1E2F;
+    background-color: var(--color-rentora-canvas);
+    color: var(--color-rentora-ink);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
@@ -47,7 +92,7 @@
 }
 
 .rentora-card {
-  background-color: #FFFFFF;
+  background-color: var(--color-rentora-surface);
   border-radius: var(--card-radius);
   border: 0.5px solid rgba(203, 213, 225, 0.7);
 }

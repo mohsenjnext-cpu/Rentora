@@ -107,7 +107,7 @@ test('Phase 3: LocalStorage scan verifies no sensitive business pricing is store
     'rentora_language',
     'rentora_db_config_v9',
     'rentora_db_favorites_v8',
-    'rentora_items_cache_v5' // Public items cache for fast rendering
+    // Public marketplace data is memory-only to prevent stale cross-account browser state.
   ]);
 
   // Sensitive business keys that MUST NOT be authoritative in localStorage
@@ -148,4 +148,46 @@ test('Phase 3: Rental data and payment state are derived strictly from server AP
   assert.equal(clientRentals[0].status, 'confirmed');
   assert.equal(clientRentals[0].paymentStatus, 'completed');
   assert.equal(clientTransactions[0].piTxRef, '0xabc123');
+});
+
+
+test('Public item/user caches are memory-only and legacy browser state is purged', async () => {
+  const fs = await import('node:fs');
+  const source = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
+  assert.match(source, /getCachedItems\(\)\s*\{[\s\S]*?memoryItems/);
+  assert.match(source, /getCachedUsers\(\)\s*\{[\s\S]*?memoryUsers/);
+  assert.doesNotMatch(source, /localStorage\.getItem\(STORAGE_ITEMS_KEY\)/);
+  assert.doesNotMatch(source, /localStorage\.setItem\(STORAGE_ITEMS_KEY/);
+  assert.doesNotMatch(source, /localStorage\.getItem\(STORAGE_USER_KEY\)/);
+  assert.doesNotMatch(source, /localStorage\.setItem\(STORAGE_USERS_KEY/);
+});
+
+test('Auth bootstrap clears stale client identity when server session expires', async () => {
+  const fs = await import('node:fs');
+  const source = fs.readFileSync(new URL('../src/context/PiAuthContext.jsx', import.meta.url), 'utf8');
+  assert.match(source, /res\.status === 401/);
+  assert.match(source, /handleSessionInvalid\(\)/);
+});
+
+test('Rental and payment state is not persisted in localStorage', async () => {
+  const fs = await import('node:fs');
+  const source = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
+  assert.match(source, /getCachedRentals\(\)\s*\{[\s\S]*?return \[\];/);
+  assert.match(source, /saveCachedRentals\(_rentals\)\s*\{/);
+  assert.doesNotMatch(source, /localStorage\.getItem\(STORAGE_RENTALS_KEY\)/);
+  assert.doesNotMatch(source, /localStorage\.setItem\(STORAGE_RENTALS_KEY/);
+});
+
+
+test('Phase 3: Logout clears private Rentora context state immediately', async () => {
+  const fs = await import('node:fs');
+  const source = fs.readFileSync(new URL('../src/context/RentoraContext.jsx', import.meta.url), 'utf8');
+
+  assert.match(source, /if \(currentUser\) return;/);
+  assert.match(source, /setRentals\(\[\]\)/);
+  assert.match(source, /setTransactions\(\[\]\)/);
+  assert.match(source, /setReports\(\[\]\)/);
+  assert.match(source, /setConversations\(\[\]\)/);
+  assert.match(source, /knownMsgIdsRef\.current\.clear\(\)/);
+  assert.match(source, /cloudSyncService\.clearUserSessionCache\(\)/);
 });
