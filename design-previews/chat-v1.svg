@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="920" viewBox="0 0 1440 920">
+<rect width="1440" height="920" fill="#f8f8fc"/>
+<rect x="0" y="0" width="1440" height="72" fill="#ffffff" stroke="#e7e7ef"/>
+<rect x="0" y="72" width="248" height="848" fill="#ffffff" stroke="#e7e7ef"/>
+<text x="32" y="42" font-family="Arial" font-size="24" font-weight="700" fill="#26215C">Rentora</text>
+<text x="284" y="44" font-family="Arial" font-size="22" font-weight="700" fill="#17172b">Messages</text>
+<circle cx="1360" cy="36" r="20" fill="#EEEDFE"/><text x="1352" y="43" font-family="Arial" font-size="16" fill="#534AB7">M</text>
+<text x="28" y="124" font-family="Arial" font-size="13" font-weight="700" fill="#777">NAVIGATION</text>
+<text x="30" y="168" font-family="Arial" font-size="15" fill="#333">⌂  Home</text>
+<rect x="18" y="188" width="212" height="44" rx="10" fill="#EEEDFE"/><text x="30" y="216" font-family="Arial" font-size="15" font-weight="700" fill="#534AB7">▣  Messages</text>
+<text x="28" y="270" font-family="Arial" font-size="15" fill="#333">◷  Activity</text>
+<text x="28" y="314" font-family="Arial" font-size="15" fill="#333">♙  Profile</text>
+<text x="28" y="358" font-family="Arial" font-size="15" fill="#333">⚙  Settings</text>
+<rect x="248" y="72" width="430" height="848" fill="#fbfbfe" stroke="#e7e7ef"/>
+<text x="278" y="120" font-family="Arial" font-size="20" font-weight="700" fill="#17172b">Conversations</text>
+<rect x="278" y="140" width="370" height="42" rx="12" fill="#f0f0f7"/><text x="296" y="167" font-family="Arial" font-size="13" fill="#999">Search conversations</text>
+<rect x="268" y="198" width="390" height="82" rx="12" fill="#EEEDFE"/>
+<circle cx="302" cy="239" r="23" fill="#d7d4fb"/><text x="294" y="245" font-family="Arial" font-size="13" fill="#534AB7">AS</text>
+<text x="338" y="226" font-family="Arial" font-size="14" font-weight="700" fill="#17172b">@alex_renter</text><text x="590" y="226" font-family="Arial" font-size="11" fill="#888">2m</text>
+<text x="338" y="249" font-family="Arial" font-size="12" fill="#555">Is the camera available this weekend?</text><rect x="610" y="254" width="8" height="8" rx="4" fill="#534AB7"/>
+<rect x="268" y="292" width="390" height="82" rx="12" fill="#fff"/>
+<circle cx="302" cy="333" r="23" fill="#e7e7ef"/><text x="294" y="339" font-family="Arial" font-size="13" fill="#777">RN</text>
+<text x="338" y="320" font-family="Arial" font-size="14" font-weight="700" fill="#17172b">@rental_ninja</text><text x="590" y="320" font-family="Arial" font-size="11" fill="#888">1h</text>
+<text x="338" y="343" font-family="Arial" font-size="12" fill="#777">Pickup time confirmed.</text>
+<rect x="268" y="386" width="390" height="82" rx="12" fill="#fff"/>
+<circle cx="302" cy="427" r="23" fill="#e7e7ef"/><text x="294" y="433" font-family="Arial" font-size="13" fill="#777">KM</text>
+<text x="338" y="414" font-family="Arial" font-size="14" font-weight="700" fill="#17172b">@km_owner</text><text x="590" y="414" font-family="Arial" font-size="11" fill="#888">Yesterday</text>
+<text x="338" y="437" font-family="Arial" font-size="12" fill="#777">Thanks for the update.</text>
+<rect x="678" y="72" width="762" height="848" fill="#ffffff"/>
+<rect x="708" y="94" width="702" height="72" rx="14" fill="#fafafd" stroke="#e7e7ef"/>
+<circle cx="750" cy="130" r="22" fill="#d7d4fb"/><text x="742" y="136" font-family="Arial" font-size="12" fill="#534AB7">AS</text>
+<text x="786" y="123" font-family="Arial" font-size="15" font-weight="700" fill="#17172b">@alex_renter</text>
+<text x="786" y="145" font-family="Arial" font-size="11" fill="#777">Camera • Pre-booking</text>
+<rect x="1288" y="112" width="96" height="34" rx="9" fill="#EEEDFE"/><text x="1308" y="134" font-family="Arial" font-size="11" font-weight="700" fill="#534AB7">View item</text>
+<rect x="760" y="202" width="430" height="54" rx="16" fill="#f1f1f6"/><text x="782" y="235" font-family="Arial" font-size="13" fill="#444">Is the camera available this weekend?</text>
+<text x="1198" y="238" font-family="Arial" font-size="10" fill="#aaa">14:32</text>
+<rect x="930" y="278" width="430" height="54" rx="16" fill="#534AB7"/><text x="952" y="311" font-family="Arial" font-size="13" fill="#fff">Yes, it is available. You can request a rental quote here.</text>
+<text x="1362" y="314" font-family="Arial" font-size="10" fill="#aaa">14:34</text>
+<rect x="760" y="354" width="430" height="54" rx="16" fill="#f1f1f6"/><text x="782" y="387" font-family="Arial" font-size="13" fill="#444">What is the condition of the lens?</text>
+<rect x="708" y="438" width="702" height="48" rx="10" fill="#fff7df" stroke="#f0dca0"/><text x="730" y="468" font-family="Arial" font-size="11" fill="#7b5d00">Pre-booking chat: contact details and off-platform payment are restricted for safety.</text>
+<rect x="708" y="806" width="702" height="76" rx="14" fill="#fafafd" stroke="#e7e7ef"/>
+<rect x="728" y="821" width="548" height="46" rx="12" fill="#f0f0f7"/><text x="748" y="849" font-family="Arial" font-size="13" fill="#999">Write a message…</text>
+<rect x="1288" y="821" width="102" height="46" rx="12" fill="#534AB7"/><text x="1318" y="849" font-family="Arial" font-size="13" font-weight="700" fill="#fff">Send</text>
+<text x="710" y="905" font-family="Arial" font-size="11" fill="#888">Post-booking coordination unlocks location and handoff details.</text>
+</svg>
