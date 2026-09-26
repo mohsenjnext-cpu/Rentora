@@ -45,5 +45,5 @@ test('single listing visibility denies non-active listings to unrelated authenti
   assert.match(block, /const isOwner = user && \(row\.owner_user_id === user\.id\)/);
   assert.match(block, /if \(row\.status !== 'active' && !isOwner && !isAdminUser\)/);
   assert.match(block, /'Listing is not publicly available'/);
-  assert.match(block, /status: 403/);
+  assert.match(block, /errorResponse\('Listing is not publicly available', 403/);
 });
