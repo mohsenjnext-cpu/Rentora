@@ -181,6 +181,31 @@ export class CloudSyncService {
     return item;
   }
 
+  async fetchListingById(listingId) {
+    if (!listingId) throw new Error('listingId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/listings/${encodeURIComponent(listingId)}?_t=${Date.now()}`, {
+      method: 'GET',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      },
+      cache: 'no-store'
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success !== true || !data?.item) {
+      const err = new Error(data?.error || 'خطا در دریافت آگهی');
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
+    return data.item;
+  }
+
   async createRentalQuote({ listingId, startDate, endDate }) {
     if (!listingId || !startDate || !endDate) throw new Error('listingId, startDate, and endDate are required');
 
