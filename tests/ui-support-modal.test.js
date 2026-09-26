@@ -15,7 +15,7 @@ if (!worker.includes('INSERT INTO support_tickets')) throw new Error('Support en
 if (!migration.includes('CREATE TABLE IF NOT EXISTS support_tickets')) throw new Error('Support tickets migration is missing');
 console.log('support ticket production regression checks passed');
 
-if (!worker.includes("PATCH") || !worker.includes("/api/admin/support/")) throw new Error('Admin support status endpoint is missing');
+if (!worker.includes("method === 'PATCH'") || !worker.includes("admin\/support\/[^/]+")) throw new Error('Admin support status endpoint is missing');
 if (!worker.includes('requireAdmin(request, env)')) throw new Error('Admin support status update must require admin authorization');
 if (!worker.includes("supportTickets")) throw new Error('Admin console must expose support tickets');
 const admin = fs.readFileSync('src/pages/AdminDashboardRedesign.jsx', 'utf8');
