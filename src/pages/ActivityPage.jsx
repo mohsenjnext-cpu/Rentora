@@ -275,12 +275,12 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4 pb-16 select-none animate-fadeIn">
+    <div className="max-w-2xl mx-auto space-y-4 pb-16 select-none animate-fadeIn" aria-labelledby="activity-page-title">
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+          <h1 id="activity-page-title" className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
             {t('activityTitle')}
           </h1>
           <p className="text-[11px] text-slate-400">
@@ -315,9 +315,9 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
           </div>
           <span className="text-[10px] font-mono text-slate-400">{filteredActivity.length}</span>
         </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist">
+        <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label={l('فیلتر فعالیت', 'Activity filters', 'فلاتر النشاط', '活动筛选')}>
           {activityFilters.map(([key, label]) => (
-            <button key={key} type="button" onClick={() => setActivityFilter(key)}
+            <button key={key} type="button" role="tab" aria-selected={activityFilter === key} onClick={() => setActivityFilter(key)}
               className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border transition cursor-pointer ${
                 activityFilter === key
                   ? 'bg-[#534AB7] text-white border-[#534AB7]'
@@ -359,7 +359,7 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
         <button
           type="button"
           onClick={() => setActiveTab('active')}
-          className={`flex-1 py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
+          role="tab" aria-selected={activeTab === 'active'} aria-controls="activity-rentals-panel" role="tab" aria-selected={activeTab === 'history'} aria-controls="activity-rental-history-panel" className={`flex-1 py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
             activeTab === 'active'
               ? 'bg-white dark:bg-[#26215C] text-[#26215C] dark:text-white shadow-xs'
               : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
