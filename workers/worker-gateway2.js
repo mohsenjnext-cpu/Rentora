@@ -1154,7 +1154,7 @@ export default {
     try {
       if (request.method === 'OPTIONS') {
         const origin = request.headers.get('Origin');
-        const headers = { 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS', 'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers') || 'Content-Type, Authorization, X-Rentora-Client', 'Access-Control-Allow-Credentials': 'true', 'Access-Control-Max-Age': '86400' };
+        const headers = { 'Access-Control-Allow-Methods': 'GET,POST,PATCH,OPTIONS', 'Access-Control-Allow-Headers': request.headers.get('Access-Control-Request-Headers') || 'Content-Type, Authorization, X-Rentora-Client', 'Access-Control-Allow-Credentials': 'true', 'Access-Control-Max-Age': '86400' };
         if (origin && isOriginAllowed(origin, env)) {
           headers['Access-Control-Allow-Origin'] = origin;
         }
