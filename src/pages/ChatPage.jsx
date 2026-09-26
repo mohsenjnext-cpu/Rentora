@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import { inspectMessageSafety } from '../services/contactFilterService';
+import ReportModal from '../components/ReportModal';
 
 export default function ChatPage({ onNavigate }) {
   const { lang, dir, l } = useLanguage();
@@ -24,6 +25,7 @@ export default function ChatPage({ onNavigate }) {
   const [loadingList, setLoadingList] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
   const scrollRef = useRef(null);
 
   const selected = conversations.find(c => c.id === selectedId) || null;
@@ -135,7 +137,7 @@ export default function ChatPage({ onNavigate }) {
           <button type="button" onClick={()=>setSelectedId(null)} className="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"><ArrowLeft className="w-5 h-5" /></button>
           <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center"><User className="w-5 h-5 text-slate-400"/></div>
           <div className="min-w-0 flex-1"><div className="font-bold text-sm text-slate-900 dark:text-white" dir="ltr">@{getOther(selected).username || 'pioneer'}</div><div className="text-[11px] text-slate-500 truncate">{selected.listing?.title || selected.item?.title || l('گفتگوی امن رنتورا','Rentora Secure Chat','محادثة رنتورا الآمنة','Rentora 安全聊天')}</div></div>
-          <span className="text-[10px] px-2 py-1 rounded-full bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 flex items-center gap-1"><Lock className="w-3 h-3"/>{l('پیش از رزرو','Pre-booking','قبل الحجز','预订前')}</span>
+          <span className="text-[10px] px-2 py-1 rounded-full bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 flex items-center gap-1"><Lock className="w-3 h-3"/>{l('پیش از رزرو','Pre-booking','قبل الحجز','预订前')}</span><button type="button" onClick={() => setIsReportOpen(true)} className="p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30" aria-label={l('گزارش گفتگو','Report conversation','الإبلاغ عن المحادثة','举报会话')} title={l('گزارش گفتگو','Report conversation','الإبلاغ عن المحادثة','举报会话')}><AlertTriangle className="w-4 h-4" /></button>
         </header>
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3">
           {loadingMessages ? <div className="text-center py-10 text-xs text-slate-400">{l('در حال بارگذاری پیام‌ها...','Loading messages...','جار تحميل الرسائل...','正在加载消息...')}</div> :
@@ -150,4 +152,5 @@ export default function ChatPage({ onNavigate }) {
       </section>
     </div>
   </div>;
+  {selected && <ReportModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} type="conversation" target={{ id: selected.id, username: getOther(selected).username, title: selected.listing?.title || selected.item?.title || l('گفتگو','Conversation','محادثة','会话') }} />}
 }
