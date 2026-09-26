@@ -144,3 +144,12 @@ test('rental quote rejects non-text listing IDs and invalid date values before f
   assert.match(worker, /requireString\(body\?\.endDate, 'endDate', 64, \{ required: true \}\)/);
   assert.match(worker, /Number\.isNaN\(Date\.parse\(startDate\)\)/);
 });
+
+
+test('payout and quote identifiers reject coercive or malformed sensitive inputs', () => {
+  assert.match(worker, /typeof key !== 'string'/);
+  assert.match(worker, /Invalid payout amount/);
+  assert.match(worker, /Invalid payout memo/);
+  assert.match(worker, /Invalid quoteId/);
+  assert.match(worker, /qt_\[A-Za-z0-9_-\]/);
+});
