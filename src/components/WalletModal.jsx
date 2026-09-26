@@ -117,7 +117,7 @@ export default function WalletModal({ isOpen, onClose }) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white text-xs">
                 <Wallet className="w-4 h-4 text-[#534AB7]" />
-                <span>{l('موجودی قابل برداشت شما', 'Your Withdrawable Balance', 'رصيدك القابل للسحب', '您的可提现收益')}</span>
+                <span>{l('موجودی تاییدشده شما', 'Your Confirmed Balance', 'رصيدك المؤكد', '您的已确认余额')}</span>
               </div>
               <span className="badge-trust px-1.5 py-0.2 rounded text-[9px] font-bold">
                 {l('برداشت A2U فعلاً غیرفعال است', 'User A2U withdrawal is currently disabled', 'سحب A2U للمستخدم معطل حالياً', '用户 A2U 提现目前已停用')}
@@ -126,7 +126,7 @@ export default function WalletModal({ isOpen, onClose }) {
 
             <div className="flex items-baseline justify-between p-3 rounded-xl bg-white dark:bg-[#18172E] border border-slate-200 dark:border-slate-700">
               <div>
-                <span className="text-[10px] text-slate-400 block">{l('موجودی خالص تاییدشده:', 'Net Confirmed Balance:', 'الرصيد المؤكد:', '已确认净余额：')}</span>
+                <span className="text-[10px] text-slate-400 block">{l('موجودی تاییدشده:', 'Confirmed Balance:', 'الرصيد المؤكد:', '已确认余额：')}</span>
                 <span className="text-xl sm:text-2xl font-black font-mono text-[#0F6E56] dark:text-[#48D2A8]">
                   {isLoadingBalance ? '...' : `${balanceData.withdrawable} π`}
                 </span>
