@@ -65,7 +65,10 @@ export function PiAuthProvider({ children }) {
     if (!apiBase) return () => {};
     fetch(`${apiBase}/api/auth/me`, { method: 'GET', headers: { 'Cache-Control': 'no-cache' }, credentials: 'include' })
       .then(res => {
-        if (res.status === 401) return null;
+        if (res.status === 401) {
+          if (isMounted) handleSessionInvalid();
+          return null;
+        }
         return res.json().catch(() => null);
       })
       .then(data => {
