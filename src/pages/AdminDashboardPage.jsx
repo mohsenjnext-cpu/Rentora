@@ -246,7 +246,7 @@ export default function AdminDashboardPage({ onNavigate }) {
         {renderTable([['ID','id'],['Type',r=>statusLabel(r.type)],['Amount',r=>money(r.amount)],['Status',r=><Status s={r.status}/>],['Pi Payment','pi_payment_id'],['TXID','pi_txid'],['Date',r=>date(r.created_at)]],rows,'تراکنشی برای این بخش وجود ندارد.')}
       </div>;
     }
-    if(section==='audit') return renderTable([['Time',r=>date(r.timestamp)],['Admin',r=>r.adminUsername],['Action',r=>r.action],['Details',r=>JSON.stringify(r.details||{})]],filtered(audit,['adminUsername','action']));
+    if(section==='audit') return <AuditView audit={filtered(audit,['adminUsername','action'])}/>;
     if(section.startsWith('system')) return <SystemView system={system} section={section} onCleanup={async()=>{try{await cloudSyncService.cleanupDatabase();await load();}catch(e){setError(e.message)}}} feeRatePercent={feeRatePercent} setFeeRatePercent={setFeeRatePercent} feeSaving={feeSaving} feeMessage={feeMessage} saveFeeRate={saveFeeRate}/>;
     return null;
   };
@@ -385,6 +385,18 @@ function ReportsView({rows,busyId,updateReport,renderTable}) {
     ],rows,'گزارشی در این وضعیت وجود ندارد.')}
   </div>;
 }
+function AuditView({audit}) {
+  const actions = audit.reduce((m, r) => { const k = r.action || 'unknown'; m[k] = (m[k] || 0) + 1; return m; }, {});
+  const recent = audit.slice(0, 8);
+  return <div className="space-y-3">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      {[['Total Events',audit.length],['Admins',new Set(audit.map(r=>r.adminUsername).filter(Boolean)).size],['Action Types',Object.keys(actions).length],['Recent',recent.length]].map(([l,v])=><div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
+    </div>
+    <div className="p-3 rounded-xl bg-[#EEEDFE] dark:bg-[#211E45] text-xs">Audit Logs برای مشاهده رویدادهای مدیریتی است. این نما داده‌های ثبت‌شده را فقط نمایش می‌دهد و هیچ رکورد یا وضعیت عملیاتی را تغییر نمی‌دهد.</div>
+    <div className="rentora-card overflow-x-auto"><table className="w-full min-w-[760px] text-xs"><thead><tr className="border-b"><th className="p-3 text-right">Time</th><th className="p-3 text-right">Admin</th><th className="p-3 text-right">Action</th><th className="p-3 text-right">Details</th></tr></thead><tbody>{audit.length?audit.map((r,i)=><tr key={r.id||i} className="border-b last:border-0"><td className="p-3">{date(r.timestamp||r.created_at)}</td><td className="p-3">@{r.adminUsername||'—'}</td><td className="p-3 font-bold">{r.action||'—'}</td><td className="p-3 max-w-[420px] truncate">{JSON.stringify(r.details||{})}</td></tr>):<tr><td colSpan="4" className="p-8 text-center text-slate-400">رویداد مدیریتی ثبت نشده است.</td></tr>}</tbody></table></div>
+  </div>;
+}
+
 function SystemView({system,section,onCleanup,feeRatePercent,setFeeRatePercent,feeSaving,feeMessage,saveFeeRate}) {
   if(section==='system-db') return <div className="rentora-card p-5"><div className="flex items-center gap-2 font-bold"><Database className="w-4 h-4"/> Database Maintenance</div><p className="text-xs text-slate-500 mt-2">پاکسازی فقط رکوردهای stale تعریف‌شده در backend را هدف می‌گیرد.</p><button onClick={onCleanup} className="btn-primary px-4 py-2 text-xs mt-4">Run Cleanup</button></div>;
   if(section==='system-fee') return <div className="space-y-3">
