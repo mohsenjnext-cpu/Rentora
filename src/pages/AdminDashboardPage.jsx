@@ -50,6 +50,9 @@ export default function AdminDashboardPage({ onNavigate }) {
   const [payoutMemo, setPayoutMemo] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
   const [payoutMessage, setPayoutMessage] = useState('');
+  const [feeRatePercent, setFeeRatePercent] = useState('5');
+  const [feeSaving, setFeeSaving] = useState(false);
+  const [feeMessage, setFeeMessage] = useState('');
   const payoutKey = useRef(null);
 
   const api = getApiBaseUrl();
@@ -69,7 +72,18 @@ export default function AdminDashboardPage({ onNavigate }) {
     finally { setLoading(false); }
   }, [api, headers, isAdmin]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    if (isAdmin && api) {
+      fetch(api + '/api/admin/platform-fee?_t=' + Date.now(), { headers: headers(), cache: 'no-store' })
+        .then(async (res) => {
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok || !json.success) throw new Error(json.error || 'دریافت نرخ کارمزد ناموفق بود.');
+          setFeeRatePercent(String(json.ratePercent));
+        })
+        .catch((e) => setFeeMessage(e.message || 'دریافت نرخ کارمزد ناموفق بود.'));
+    }
+  }, [load, isAdmin, api, headers]);
 
   const go = (id) => {
     setSection(id);
@@ -124,6 +138,28 @@ export default function AdminDashboardPage({ onNavigate }) {
       await load();
     } catch (e) { setError(e.message || 'تطبیق پرداخت ناموفق بود.'); }
     finally { setBusyId(''); }
+  };
+
+  const saveFeeRate = async (e) => {
+    e.preventDefault();
+    const value = Number(feeRatePercent);
+    if (!Number.isFinite(value) || value < 1 || value > 5) {
+      setFeeMessage('نرخ کارمزد باید بین ۱٪ تا ۵٪ باشد.');
+      return;
+    }
+    setFeeSaving(true); setFeeMessage('');
+    try {
+      const res = await fetch(api + '/api/admin/platform-fee', {
+        method: 'POST', headers: headers(), body: JSON.stringify({ ratePercent: value })
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.success) throw new Error(json.error || 'ذخیره نرخ کارمزد ناموفق بود.');
+      setFeeRatePercent(String(json.ratePercent));
+      setFeeMessage('نرخ کارمزد با موفقیت ذخیره شد.');
+      await load();
+    } catch (e) {
+      setFeeMessage(e.message || 'ذخیره نرخ کارمزد ناموفق بود.');
+    } finally { setFeeSaving(false); }
   };
 
   const submitPayout = async (e) => {
@@ -201,7 +237,7 @@ export default function AdminDashboardPage({ onNavigate }) {
       return renderTable([['ID','id'],['Type',r=>statusLabel(r.type)],['Amount',r=>money(r.amount)],['Status',r=>statusLabel(r.status)],['Pi Payment','pi_payment_id'],['TXID','pi_txid'],['Date',r=>date(r.created_at)]],rows);
     }
     if(section==='audit') return renderTable([['Time',r=>date(r.timestamp)],['Admin',r=>r.adminUsername],['Action',r=>r.action],['Details',r=>JSON.stringify(r.details||{})]],filtered(audit,['adminUsername','action']));
-    if(section.startsWith('system')) return <SystemView system={system} section={section} onCleanup={async()=>{try{await cloudSyncService.cleanupDatabase();await load();}catch(e){setError(e.message)}}}/>;
+    if(section.startsWith('system')) return <SystemView system={system} section={section} onCleanup={async()=>{try{await cloudSyncService.cleanupDatabase();await load();}catch(e){setError(e.message)}}} feeRatePercent={feeRatePercent} setFeeRatePercent={setFeeRatePercent} feeSaving={feeSaving} feeMessage={feeMessage} saveFeeRate={saveFeeRate}/>;
     return null;
   };
 
@@ -261,5 +297,23 @@ function UserDetails({user,onBack}) {
 }
 function ListingsView({rows,busyId,updateListing,renderTable}) { return renderTable([['Title','title'],['Owner',r=>`@${r.owner_username||'—'}`],['Price',r=>money(r.price_per_day)],['Status',r=><Status s={r.status}/>],['Updated',r=>date(r.updated_at)],['Action',r=><button disabled={busyId===r.id} onClick={()=>updateListing(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'Pause':'Activate'}</button>]],rows); }
 function ReportsView({rows,busyId,updateReport,renderTable}) { return renderTable([['Reporter',r=>`@${r.reporter_username||'—'}`],['Target',r=>`${r.target_type} / ${r.target_id}`],['Reason','reason'],['Status',r=><Status s={r.status}/>],['Date',r=>date(r.created_at)],['Action',r=><div className="flex gap-1">{r.status==='open'&&<button disabled={busyId===r.id} onClick={()=>updateReport(r,'reviewing')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Review</button>}{r.status==='reviewing'&&<button disabled={busyId===r.id} onClick={()=>updateReport(r,'resolved')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Resolve</button>}</div>]],rows); }
-function SystemView({system,section,onCleanup}) { if(section==='system-db') return <div className="rentora-card p-5"><div className="flex items-center gap-2 font-bold"><Database className="w-4 h-4"/> Database Maintenance</div><p className="text-xs text-slate-500 mt-2">پاکسازی فقط رکوردهای stale تعریف‌شده در backend را هدف می‌گیرد.</p><button onClick={onCleanup} className="btn-primary px-4 py-2 text-xs mt-4">Run Cleanup</button></div>; return <div className="grid md:grid-cols-2 gap-3">{[['Platform Fee',`${(Number(system.platformFeeRate||0)*100).toFixed(2)}%`],['D1',system.d1Configured?'Ready':'Missing'],['KV',system.kvConfigured?'Ready':'Missing'],['R2',system.r2Configured?'Ready':'Optional'],['Pi API',system.piApiConfigured?'Configured':'Missing']].map(([l,v])=><div key={l} className="rentora-card p-4"><div className="text-[10px] text-slate-500">{l}</div><div className="font-bold mt-1">{v}</div></div>)}</div>; }
+function SystemView({system,section,onCleanup,feeRatePercent,setFeeRatePercent,feeSaving,feeMessage,saveFeeRate}) {
+  if(section==='system-db') return <div className="rentora-card p-5"><div className="flex items-center gap-2 font-bold"><Database className="w-4 h-4"/> Database Maintenance</div><p className="text-xs text-slate-500 mt-2">پاکسازی فقط رکوردهای stale تعریف‌شده در backend را هدف می‌گیرد.</p><button onClick={onCleanup} className="btn-primary px-4 py-2 text-xs mt-4">Run Cleanup</button></div>;
+  if(section==='system-fee') return <div className="space-y-3">
+    <form onSubmit={saveFeeRate} className="rentora-card p-5 max-w-2xl space-y-4">
+      <div><h3 className="font-bold">Platform Fee</h3><p className="text-xs text-slate-500 mt-1">نرخ کارمزد پلتفرم بین ۱٪ تا ۵٪ تنظیم می‌شود. مبلغ نهایی همیشه بر اساس قیمت معتبر سرور محاسبه می‌شود.</p></div>
+      <div className="grid sm:grid-cols-[1fr_auto] gap-3 items-end">
+        <label className="text-xs font-bold">Fee rate (%)
+          <input value={feeRatePercent} onChange={e=>setFeeRatePercent(e.target.value)} type="number" min="1" max="5" step="0.01" inputMode="decimal" className="mt-2 w-full p-3 rounded-lg border bg-transparent text-sm" />
+        </label>
+        <div className="px-4 py-3 rounded-lg bg-slate-50 dark:bg-slate-800 text-sm font-black">{Number(feeRatePercent||0).toFixed(2)}%</div>
+      </div>
+      <div className="p-3 rounded-lg bg-[#EEEDFE] dark:bg-[#211E45] text-xs">نمونه: قیمت 100 π با نرخ {Number(feeRatePercent||0).toFixed(2)}٪ → کارمزد {Number((100 * Number(feeRatePercent||0) / 100).toFixed(4))} π</div>
+      {feeMessage && <div className="text-xs p-3 rounded-lg bg-slate-50 dark:bg-slate-800">{feeMessage}</div>}
+      <button disabled={feeSaving} className="btn-primary px-4 py-2 text-xs">{feeSaving ? 'در حال ذخیره...' : 'ذخیره نرخ کارمزد'}</button>
+    </form>
+    <div className="grid md:grid-cols-2 gap-3">{[['D1',system.d1Configured?'Ready':'Missing'],['KV',system.kvConfigured?'Ready':'Missing'],['R2',system.r2Configured?'Ready':'Optional'],['Pi API',system.piApiConfigured?'Configured':'Missing']].map(([l,v])=><div key={l} className="rentora-card p-4"><div className="text-[10px] text-slate-500">{l}</div><div className="font-bold mt-1">{v}</div></div>)}</div>
+  </div>;
+  return <div className="grid md:grid-cols-2 gap-3">{[['Platform Fee',`${(Number(feeRatePercent||system.platformFeeRate||0)).toFixed(2)}%`],['D1',system.d1Configured?'Ready':'Missing'],['KV',system.kvConfigured?'Ready':'Missing'],['R2',system.r2Configured?'Ready':'Optional'],['Pi API',system.piApiConfigured?'Configured':'Missing']].map(([l,v])=><div key={l} className="rentora-card p-4"><div className="text-[10px] text-slate-500">{l}</div><div className="font-bold mt-1">{v}</div></div>)}</div>;
+}
 function Status({s}) { return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800"><span className="w-1.5 h-1.5 rounded-full bg-current"/>{statusLabel(s)}</span>; }
