@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1000" viewBox="0 0 1440 1000">
+<rect width="1440" height="1000" fill="#f7f7fb"/>
+<rect x="0" y="0" width="260" height="1000" fill="#26215C"/>
+<text x="32" y="54" fill="white" font-family="Arial" font-size="24" font-weight="700">Rentora</text>
+<text x="32" y="78" fill="#c9c5ef" font-family="Arial" font-size="12">Admin Control Center</text>
+<g font-family="Arial" font-size="15" fill="#eee">
+<rect x="16" y="112" width="228" height="46" rx="12" fill="#534AB7"/><text x="32" y="141">Overview</text>
+<text x="32" y="196">Users</text><text x="32" y="246">KYC & Trust</text><text x="32" y="296">Listings</text><text x="32" y="346">Rentals</text><text x="32" y="396">Reports</text><text x="32" y="446">Payments</text><text x="32" y="496">Messages</text><text x="32" y="546">Audit Log</text>
+</g>
+<rect x="260" y="0" width="1180" height="82" fill="white" stroke="#e5e4ee"/>
+<text x="296" y="34" fill="#26215C" font-family="Arial" font-size="22" font-weight="700">Overview</text>
+<text x="296" y="58" fill="#737184" font-family="Arial" font-size="13">Marketplace health, trust and actions needing attention</text>
+<rect x="1100" y="20" width="300" height="42" rx="12" fill="#f1f0f8"/><text x="1120" y="46" fill="#777485" font-family="Arial" font-size="13">Search users, listings, rentals...</text>
+<g font-family="Arial">
+<rect x="292" y="112" width="250" height="112" rx="18" fill="white" stroke="#e4e2ec"/><text x="316" y="142" fill="#777485" font-size="13">Active Users</text><text x="316" y="184" fill="#26215C" font-size="30" font-weight="700">1,248</text><text x="432" y="184" fill="#4f8b68" font-size="12">+8.4%</text>
+<rect x="562" y="112" width="250" height="112" rx="18" fill="white" stroke="#e4e2ec"/><text x="586" y="142" fill="#777485" font-size="13">Active Listings</text><text x="586" y="184" fill="#26215C" font-size="30" font-weight="700">386</text><text x="700" y="184" fill="#4f8b68" font-size="12">+12</text>
+<rect x="832" y="112" width="250" height="112" rx="18" fill="white" stroke="#e4e2ec"/><text x="856" y="142" fill="#777485" font-size="13">Pending KYC</text><text x="856" y="184" fill="#a56b22" font-size="30" font-weight="700">17</text><text x="956" y="184" fill="#a56b22" font-size="12">Review</text>
+<rect x="1102" y="112" width="300" height="112" rx="18" fill="white" stroke="#e4e2ec"/><text x="1126" y="142" fill="#777485" font-size="13">Open Reports</text><text x="1126" y="184" fill="#a34242" font-size="30" font-weight="700">9</text><text x="1202" y="184" fill="#a34242" font-size="12">Needs action</text>
+<rect x="292" y="250" width="700" height="300" rx="18" fill="white" stroke="#e4e2ec"/>
+<text x="318" y="284" fill="#26215C" font-size="18" font-weight="700">Needs attention</text>
+<text x="318" y="308" fill="#777485" font-size="12">Prioritized operational queue</text>
+<g font-size="14">
+<rect x="318" y="330" width="648" height="54" rx="10" fill="#fff7e9"/><text x="338" y="363" fill="#76531e">17 KYC reviews pending</text><text x="850" y="363" fill="#534AB7">Review →</text>
+<rect x="318" y="396" width="648" height="54" rx="10" fill="#fff0f0"/><text x="338" y="429" fill="#8b3c3c">9 reports awaiting moderation</text><text x="850" y="429" fill="#534AB7">Open →</text>
+<rect x="318" y="462" width="648" height="54" rx="10" fill="#f3f2fb"/><text x="338" y="495" fill="#4b4770">6 listings flagged for review</text><text x="850" y="495" fill="#534AB7">Review →</text>
+</g>
+<rect x="1012" y="250" width="390" height="300" rx="18" fill="white" stroke="#e4e2ec"/>
+<text x="1038" y="284" fill="#26215C" font-size="18" font-weight="700">Marketplace status</text>
+<text x="1038" y="308" fill="#777485" font-size="12">Current operational snapshot</text>
+<text x="1038" y="354" fill="#777485" font-size="13">Active rentals</text><text x="1328" y="354" fill="#26215C" font-size="16" font-weight="700">74</text>
+<text x="1038" y="394" fill="#777485" font-size="13">Pending payments</text><text x="1328" y="394" fill="#26215C" font-size="16" font-weight="700">6</text>
+<text x="1038" y="434" fill="#777485" font-size="13">Unread conversations</text><text x="1328" y="434" fill="#26215C" font-size="16" font-weight="700">21</text>
+<text x="1038" y="474" fill="#777485" font-size="13">Platform fee today</text><text x="1328" y="474" fill="#26215C" font-size="16" font-weight="700">π 42.8</text>
+<rect x="292" y="576" width="1110" height="280" rx="18" fill="white" stroke="#e4e2ec"/>
+<text x="318" y="610" fill="#26215C" font-size="18" font-weight="700">Recent admin activity</text>
+<text x="318" y="634" fill="#777485" font-size="12">Audit-friendly, server-backed actions</text>
+<g font-size="13" fill="#555">
+<text x="318" y="680">14:32  •  KYC review completed</text><text x="1250" y="680" fill="#4f8b68">Approved</text>
+<text x="318" y="724">14:18  •  Listing moderation action</text><text x="1250" y="724" fill="#76531e">Hidden</text>
+<text x="318" y="768">13:51  •  User account action</text><text x="1250" y="768" fill="#534AB7">View</text>
+<text x="318" y="812">13:40  •  Report status updated</text><text x="1250" y="812" fill="#534AB7">Resolved</text>
+</g>
+<text x="292" y="910" fill="#8b8797" font-family="Arial" font-size="12">Preview only • Metrics and labels represent UI structure, not mocked production data.</text>
+</g>
+</svg>
