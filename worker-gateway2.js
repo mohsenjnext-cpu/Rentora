@@ -685,11 +685,15 @@ async function handleIncompletePayment(request, env) {
   const user = await requireUser(request, env);
   const body = await readJson(request);
   const paymentObj = body?.payment || {};
-  const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
-  const paymentIntentId = String(body?.paymentIntentId || paymentObj?.metadata?.paymentIntentId || '').trim();
-
-  if (!paymentId || !paymentIntentId) {
-    return json({ handled: false, error: 'paymentId and paymentIntentId are required', traceId }, 400, request, env);
+  const paymentIdRaw = body?.paymentId ?? paymentObj?.identifier ?? paymentObj?.id;
+  const paymentIntentIdRaw = body?.paymentIntentId ?? paymentObj?.metadata?.paymentIntentId;
+  if (typeof paymentIdRaw !== 'string' || typeof paymentIntentIdRaw !== 'string') {
+    return json({ handled: false, error: 'paymentId and paymentIntentId must be text values', traceId }, 400, request, env);
+  }
+  const paymentId = paymentIdRaw.trim();
+  const paymentIntentId = paymentIntentIdRaw.trim();
+  if (!paymentId || !paymentIntentId || paymentId.length > 128 || paymentIntentId.length > 128) {
+    return json({ handled: false, error: 'paymentId and paymentIntentId are required and limited to 128 characters', traceId }, 400, request, env);
   }
 
   const intent = await env.RENTORA_DB.prepare(
