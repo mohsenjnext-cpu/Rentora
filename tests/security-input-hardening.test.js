@@ -71,3 +71,11 @@ test('logout clears marketplace memory and private client state', () => {
   assert.match(rentoraContext, /setRentals\(\[\]\);/);
   assert.match(rentoraContext, /cloudSyncService\.clearUserSessionCache\(\);/);
 });
+
+
+test('listing numeric inputs reject booleans and blank prices', () => {
+  assert.match(worker, /const priceRaw = item\.pricePerDay/);
+  assert.match(worker, /typeof priceRaw === 'boolean'/);
+  assert.match(worker, /typeof priceRaw === 'string' && !priceRaw\.trim\(\)/);
+  assert.match(worker, /typeof depositRaw === 'boolean'/);
+});
