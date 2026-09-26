@@ -31,7 +31,7 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
 
   const imageUrl = (item.images && item.images.length > 0)
     ? item.images[0]
-    : 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80';
+    : '';
 
   return (
     <div
