@@ -1366,7 +1366,7 @@ export default {
         if (!targetUserId || targetUserId.length > 128) return errorResponse('Invalid target user ID', 400, env, undefined, origin);
         const { user } = await requireAdmin(request, env);
         const body = await readJson(request);
-        const newStatus = String(body?.status || '').trim().toLowerCase();
+        const newStatus = requireEnum(body?.status, 'status', ['active', 'suspended']).toLowerCase();
         if (!['active', 'suspended'].includes(newStatus)) {
           return errorResponse("Status must be 'active' or 'suspended'", 400, env, undefined, origin);
         }
@@ -1384,7 +1384,7 @@ export default {
         if (!targetUserId || targetUserId.length > 128) return errorResponse('Invalid user ID', 400, env, undefined, origin);
         const { user } = await requireAdmin(request, env);
         const body = await readJson(request);
-        const newKycStatus = String(body?.kycStatus || '').trim().toLowerCase();
+        const newKycStatus = requireEnum(body?.kycStatus, 'kycStatus', ['verified', 'unverified', 'unknown']).toLowerCase();
         if (!['verified', 'unverified', 'unknown'].includes(newKycStatus)) {
           return errorResponse("kycStatus must be 'verified', 'unverified', or 'unknown'", 400, env, undefined, origin);
         }
@@ -1402,7 +1402,7 @@ export default {
         if (!reportId) return errorResponse('Missing report ID', 400, env, undefined, origin);
         const { user } = await requireAdmin(request, env);
         const body = await readJson(request);
-        const newStatus = String(body?.status || '').trim().toLowerCase();
+        const newStatus = requireEnum(body?.status, 'status', ['open','reviewing','resolved','dismissed']).toLowerCase();
         if (!['open','reviewing','resolved','dismissed'].includes(newStatus)) {
           return errorResponse("Status must be 'open', 'reviewing', 'resolved', or 'dismissed'", 400, env, undefined, origin);
         }
@@ -1417,7 +1417,7 @@ export default {
         if (!listingId || listingId.length > 128) return errorResponse('Invalid listing ID', 400, env, undefined, origin);
         const { user } = await requireAdmin(request, env);
         const body = await readJson(request);
-        const newStatus = String(body?.status || '').trim().toLowerCase();
+        const newStatus = requireEnum(body?.status, 'status', ['active', 'paused', 'deleted']).toLowerCase();
         if (!['active', 'paused', 'deleted'].includes(newStatus)) {
           return errorResponse("Status must be 'active', 'paused', or 'deleted'", 400, env, undefined, origin);
         }
@@ -1587,11 +1587,12 @@ export default {
       if (method === 'POST' && path === '/api/payments/cancel') {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
-        if (!body.paymentIntentId) return errorResponse('paymentIntentId is required', 400, env, undefined, origin);
+        const paymentIntentId = requireString(body?.paymentIntentId, 'paymentIntentId', 128, { required: true });
+        const paymentIdInput = body?.paymentId == null ? null : requireString(body.paymentId, 'paymentId', 128, { required: true });
 
         const intent = await env.RENTORA_DB.prepare(
           'SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1'
-        ).bind(body.paymentIntentId, user.id).first();
+        ).bind(paymentIntentId, user.id).first();
         if (!intent) return errorResponse('Payment intent not found', 404, env, undefined, origin);
         if (intent.status === 'cancelled') {
           return jsonResponse({ cancelled: true, idempotent: true }, 200, env, origin);
@@ -1600,11 +1601,11 @@ export default {
           return errorResponse('Completed payment cannot be cancelled', 409, env, undefined, origin);
         }
 
-        if (body.paymentId && intent.pi_payment_id && String(body.paymentId) !== String(intent.pi_payment_id)) {
+        if (paymentIdInput && intent.pi_payment_id && paymentIdInput !== String(intent.pi_payment_id)) {
           return errorResponse('Payment ID does not match intent', 409, env, undefined, origin);
         }
 
-        const paymentId = body.paymentId || intent.pi_payment_id;
+        const paymentId = paymentIdInput || intent.pi_payment_id;
         if (paymentId) {
           const paymentResponse = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
           const payment = await paymentResponse.json().catch(() => ({}));
@@ -1636,10 +1637,10 @@ export default {
         let intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(body.paymentIntentId, user.id).first();
         if (!intent || new Date(intent.expires_at) <= new Date()) return errorResponse('Payment intent is invalid or expired', 409, env, undefined, origin);
         if (intent.status === 'completed') return jsonResponse({ approved: true, paymentId: body.paymentId, idempotent: true }, 200, env, origin);
-        if (intent.pi_payment_id && intent.pi_payment_id !== body.paymentId) return errorResponse('Payment ID does not match intent', 409, env, undefined, origin);
+        if (intent.pi_payment_id && intent.pi_payment_id !== paymentId) return errorResponse('Payment ID does not match intent', 409, env, undefined, origin);
         if (intent.status === 'approved' && intent.pi_payment_id === body.paymentId) return jsonResponse({ approved: true, paymentId: body.paymentId, idempotent: true }, 200, env, origin);
 
-        const paymentResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}`);
+        const paymentResponse = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
         const payment = await paymentResponse.json().catch(() => ({}));
         if (!paymentResponse.ok) return errorResponse('Unable to verify Pi payment', 502, env, undefined, origin);
 
@@ -1683,9 +1684,9 @@ export default {
         if (!paymentLimit.allowed) return errorResponse('Too many payment completion requests. Please retry shortly.', 429, env, { retryAfter: paymentLimit.retryAfter }, origin);
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
-        if (!body.paymentId || !body.txid || !body.paymentIntentId) {
-          return errorResponse('paymentId, txid and paymentIntentId are required', 400, env, undefined, origin);
-        }
+        const paymentId = requireString(body?.paymentId, 'paymentId', 128, { required: true });
+        const txid = requireString(body?.txid, 'txid', 256, { required: true });
+        const paymentIntentId = requireString(body?.paymentIntentId, 'paymentIntentId', 128, { required: true });
 
         const intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(body.paymentIntentId, user.id).first();
         if (!intent) return errorResponse('Payment intent not found', 404, env, undefined, origin);
@@ -1712,7 +1713,7 @@ export default {
         // The txid is a Pi-authoritative value once the payment has a transaction.
         // Never let a client-supplied txid overwrite that identity.
         const piTxid = String(payment?.transaction?.txid || '').trim();
-        if (piTxid && piTxid !== String(body.txid).trim()) {
+        if (piTxid && piTxid !== txid) {
           return errorResponse('Transaction ID does not match the verified Pi payment', 409, env, undefined, origin);
         }
         const existingTransaction = await env.RENTORA_DB.prepare(
@@ -1748,9 +1749,12 @@ export default {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
         const paymentObj = body?.payment || {};
-        const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
-        const suppliedTxid = String(body?.txid || paymentObj?.transaction?.txid || '').trim();
-        if (!paymentId) return jsonResponse({ handled: false, error: 'paymentId is required' }, 400, env, origin);
+        const paymentIdRaw = body?.paymentId ?? paymentObj?.identifier ?? paymentObj?.id;
+        const txidRaw = body?.txid ?? paymentObj?.transaction?.txid;
+        if (typeof paymentIdRaw !== 'string') return jsonResponse({ handled: false, error: 'paymentId must be a text value' }, 400, env, origin);
+        if (txidRaw != null && typeof txidRaw !== 'string') return jsonResponse({ handled: false, error: 'txid must be a text value' }, 400, env, origin);
+        const paymentId = requireString(paymentIdRaw, 'paymentId', 128, { required: true });
+        const suppliedTxid = txidRaw == null ? '' : requireString(txidRaw, 'txid', 256);
 
         try {
           // The SDK callback is not a trusted authority. Re-fetch the payment from Pi,
