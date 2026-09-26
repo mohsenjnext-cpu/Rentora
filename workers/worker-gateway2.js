@@ -470,12 +470,13 @@ async function piFetch(env, path, options = {}) {
   return fetch(`${base}${path}`, { ...options, headers });
 }
 function payoutIdempotencyKey(request, body) {
-  const key =
-    request.headers.get('Idempotency-Key') ||
-    request.headers.get('X-Idempotency-Key') ||
-    body?.idempotencyKey;
-
-  return key ? String(key).trim().slice(0, 200) : null;
+  const headerKey = request.headers.get('Idempotency-Key') || request.headers.get('X-Idempotency-Key');
+  const bodyKey = body?.idempotencyKey;
+  if (headerKey && typeof headerKey !== 'string') return null;
+  if (bodyKey != null && typeof bodyKey !== 'string') return null;
+  const key = headerKey || bodyKey || null;
+  const normalized = key ? key.trim() : null;
+  return normalized && normalized.length <= 200 ? normalized : null;
 }
 
 function parsePaymentMetadata(raw) {
