@@ -15,7 +15,7 @@ function section(start, end) {
 test('payment intent amount is server-owned', () => {
   const intent = section("path === '/api/payments/intent'", "path === '/api/payments/approve'");
   assert.match(intent, /SELECT r\.,?\s*\*?,?\s*l\.title/);
-  assert.match(intent, /bind\(body\.rentalId, user\.id\)/);
+  assert.match(intent, /bind\(rentalId, user\.id\)/);
   assert.match(intent, /rental\.platform_fee/);
   assert.doesNotMatch(intent, /body\.amount/);
 });
@@ -63,7 +63,7 @@ test('incomplete Pi reconciliation rejects transaction identity collisions befor
 
 test('payment completion requires an approved intent and strict Pi binding', () => {
   const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
-  assert.match(complete, /intent\.pi_payment_id && intent\.pi_payment_id !== body\.paymentId/);
+  assert.match(complete, /intent\.pi_payment_id && intent\.pi_payment_id !== paymentId/);
   assert.match(complete, /\['approved','completed'\]\.includes/);
   assert.match(worker, /Pi payment identifier mismatch/);
   assert.match(worker, /Pi payment amount mismatch/);
