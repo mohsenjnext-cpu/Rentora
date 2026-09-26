@@ -13,16 +13,13 @@ import {
 } from '../services/notificationService';
 
 const RentoraContext = createContext();
-const STORAGE_PREFIX = 'rentora_db_';
-
 export function RentoraProvider({ children }) {
   const { currentUser, isAdmin } = usePiAuth();
-  const [platformConfig, setPlatformConfig] = useState(() => {
-    try { const saved = localStorage.getItem(STORAGE_PREFIX + 'config_v9'); return saved ? JSON.parse(saved) : { platformFeePercentage: 5, minFeePi: 0.0001 }; }
-    catch (e) { return { platformFeePercentage: 5, minFeePi: 0.0001 }; }
-  });
+  // Financial authority remains on the server. This client value is display/config state only.
+  const [platformConfig, setPlatformConfig] = useState({ platformFeePercentage: 5, minFeePi: 0.0001 });
   const [items, setItems] = useState(() => cloudSyncService.getCachedItems());
-  const [favorites, setFavorites] = useState(() => { try { const saved = localStorage.getItem(STORAGE_PREFIX + 'favorites_v8'); return saved ? JSON.parse(saved) : []; } catch (e) { return []; } });
+  // Favorites are session-local UI state. Do not persist another user's preferences across logout/device handoff.
+  const [favorites, setFavorites] = useState([]);
   const [rentals, setRentals] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [reports, setReports] = useState([]);
@@ -98,8 +95,7 @@ export function RentoraProvider({ children }) {
     return () => { cancelled = true; };
   }, [refreshConversations]);
 
-  useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'config_v9', JSON.stringify(platformConfig)); } catch (e) {} }, [platformConfig]);
-  useEffect(() => { try { localStorage.setItem(STORAGE_PREFIX + 'favorites_v8', JSON.stringify(favorites)); } catch (e) {} }, [favorites]);
+  // Do not persist platform config or user-specific favorites in browser storage.
 
   useEffect(() => {
     const unsubscribe = cloudSyncService.subscribe((event, data) => {
@@ -181,16 +177,9 @@ export function RentoraProvider({ children }) {
 
   const addItem = async (itemData) => {
     if (!currentUser) throw new Error("برای ثبت آگهی ابتدا وارد حساب پای خود شوید.");
-    const defaultImages = {
-      tools: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80",
-      cameras: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900&auto=format&fit=crop&q=80",
-      camping: "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=900&auto=format&fit=crop&q=80",
-      sports: "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?w=900&auto=format&fit=crop&q=80",
-      vehicles: "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=900&auto=format&fit=crop&q=80",
-      events: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=900&auto=format&fit=crop&q=80",
-      home: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=900&auto=format&fit=crop&q=80"
-    };
-    const finalImage = itemData.images?.length ? itemData.images : [defaultImages[itemData.category] || defaultImages.tools];
+    // Never invent or fetch third-party placeholder media for a new listing.
+    // An image is optional; the server remains authoritative over persisted listing data.
+    const finalImage = Array.isArray(itemData.images) ? itemData.images.filter(Boolean) : [];
     const newItem = {
       id: "item_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
       title: itemData.title.trim(),
@@ -203,8 +192,8 @@ export function RentoraProvider({ children }) {
       images: Array.isArray(finalImage) ? finalImage : [finalImage],
       ownerUid: currentUser.uid,
       ownerUsername: currentUser.username,
-      ownerAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}`,
-      ownerBio: currentUser.bio || 'کاربر شبکه پای در رنتورا',
+      ownerAvatar: currentUser.avatar || null,
+      ownerBio: currentUser.bio || '',
       ownerKYC: currentUser?.kycStatus === 'verified' && !!currentUser?.isOfficialSdk,
       ownerReputation: null,
       rating: null,
