@@ -6,7 +6,8 @@ import { Home, Search, Clock, User } from 'lucide-react';
 export default function BottomNav({ currentTab, onNavigate }) {
   const { t } = useLanguage();
   const { rentals } = useRentora();
-  const activeRentalsCount = (rentals || []).filter(r => r.status === 'active' || r.status === 'confirmed' || r.status === 'awaiting_payment').length;
+  const ACTIVE_RENTAL_STATUSES = new Set(['draft', 'pending_payment', 'payment_approved', 'confirmed', 'active', 'requested', 'accepted']);
+  const activeRentalsCount = (rentals || []).filter(r => ACTIVE_RENTAL_STATUSES.has(String(r?.status || '').toLowerCase())).length;
 
   const navItems = [
     { id: 'home', label: t('navHome'), icon: Home },
