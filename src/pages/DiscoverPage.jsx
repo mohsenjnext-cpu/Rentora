@@ -83,13 +83,13 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
   return (
     <div className="space-y-4 pb-16 select-none">
       
-      {/* 1. Page title + Live Search Bar with inline filter icon */}
+      {/* 1. Discover search */}
       <div className="space-y-2">
-        <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
           {t('discoverTitle')}
         </h1>
 
-        <div className="flex items-center gap-2 w-full">
+        <div className="flex items-center gap-2 w-full sticky top-0 z-20 py-2 bg-inherit md:static md:py-0">
           {/* Live Search Bar with inline filter icon */}
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute top-2.5 left-3 rtl:left-auto rtl:right-3 stroke-[2]" />
@@ -128,7 +128,16 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
         </div>
       </div>
 
-      {/* 2. Row showing Result Count + Sort Control */}
+      {/* 2. Category shortcuts + results controls */}
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        {filterCategories.slice(0, 6).map(cat => {
+          const Icon = cat.icon;
+          const active = selectedCategory === cat.id;
+          return <button key={cat.id} type="button" onClick={() => setSelectedCategory(cat.id)} className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition ${active ? 'bg-[#26215C] text-white border-[#26215C] dark:bg-[#534AB7]' : 'bg-white dark:bg-[#151426] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-[#534AB7]'}`}><Icon className="w-3.5 h-3.5" />{cat.label}</button>;
+        })}
+      </div>
+
+      {/* 3. Row showing Result Count + Sort Control */}
       <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 py-1 border-b border-slate-150 dark:border-slate-800">
         <span className="text-[11px] font-medium">
           {l(`${filteredItems.length} کالا یافت شد`, `${filteredItems.length} items found`, `تم العثور على ${filteredItems.length} أغراض`, `共找到 ${filteredItems.length} 件物品`)}
@@ -149,7 +158,7 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
         </div>
       </div>
 
-      {/* 3. Items Grid / Consistent Empty State */}
+      {/* 4. Items Grid / Consistent Empty State */}
       {filteredItems.length === 0 ? (
         <EmptyState
           type="search"
@@ -171,7 +180,7 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
         </div>
       )}
 
-      {/* 4. Filter Sheet Modal */}
+      {/* 5. Filter Sheet Modal */}
       {filterSheetOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
           <div 
