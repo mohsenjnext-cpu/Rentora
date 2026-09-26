@@ -136,3 +136,11 @@ test('listing contact input rejects object/array coercion and enforces bounded c
   assert.match(worker, /Listing contact field is too long/);
   assert.match(worker, /\['phone', 'whatsapp', 'in_app'\]\.includes\(methodValue\)/);
 });
+
+
+test('rental quote rejects non-text listing IDs and invalid date values before financial calculation', () => {
+  assert.match(worker, /requireString\(body\?\.listingId, 'listingId', 128, \{ required: true \}\)/);
+  assert.match(worker, /requireString\(body\?\.startDate, 'startDate', 64, \{ required: true \}\)/);
+  assert.match(worker, /requireString\(body\?\.endDate, 'endDate', 64, \{ required: true \}\)/);
+  assert.match(worker, /Number\.isNaN\(Date\.parse\(startDate\)\)/);
+});
