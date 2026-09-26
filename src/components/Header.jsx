@@ -62,8 +62,8 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
       {/* ------------------------------------------------------------- */}
       {/* 1. DESKTOP HEADER (Desktop Viewport Only)                     */}
       {/* ------------------------------------------------------------- */}
-      <header className="hidden md:block sticky top-0 z-40 bg-white/95 dark:bg-[#121124]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 transition-colors">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+      <header className="hidden md:block sticky top-0 z-30 bg-white/92 dark:bg-[#121124]/92 backdrop-blur-xl border-b border-slate-200/70 dark:border-slate-800/70 transition-colors">
+        <div className="w-full px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           
           {/* Logo + Horizontal Nav Links */}
           <div className="flex items-center gap-6">
