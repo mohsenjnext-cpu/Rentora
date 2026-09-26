@@ -30,6 +30,7 @@ import ProfilePage from './pages/ProfilePage';
 import PublicProfilePage from './pages/PublicProfilePage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import SettingsPage from './pages/SettingsPage';
+import NotificationsPage from './pages/NotificationsPage';
 
 function MainApp() {
   const { dir } = useLanguage();
@@ -157,6 +158,7 @@ function MainApp() {
         {currentTab === 'profile' && <ProfilePage onNavigate={handleNavigate} onSelectItem={handleSelectItem} onRentItem={handleRentItem} onOpenPublicProfile={handleOpenPublicProfile} />}
         {currentTab === 'admin' && (isAdmin ? <AdminDashboardPage onNavigate={handleNavigate} onOpenPublicProfile={handleOpenPublicProfile} onEditItem={handleEditItem} /> : <div className="py-20 text-center max-w-md mx-auto space-y-4 animate-fadeIn select-none"><div className="w-14 h-14 mx-auto rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 flex items-center justify-center border border-rose-200 dark:border-rose-900 shadow-sm"><Lock className="w-7 h-7 stroke-[1.8]" /></div><div className="space-y-1"><h2 className="text-lg font-bold text-slate-900 dark:text-white">دسترسی غیرمجاز (۴۰۳)</h2><p className="text-xs text-slate-500 max-w-xs mx-auto">دسترسی به این بخش اختصاصی مدیران تاییدشده رنتورا است.</p></div><button type="button" onClick={() => handleNavigate('home')} className="btn-primary px-4 py-2 text-xs font-bold cursor-pointer">بازگشت به خانه</button></div>)}
         {currentTab === 'settings' && <SettingsPage onNavigate={handleNavigate} onOpenHelp={handleOpenHelp} onOpenSecurity={handleOpenSecurity} onOpenSupport={handleOpenSupport} />}
+        {currentTab === 'notifications' && <NotificationsPage onNavigate={handleNavigate} onOpenChat={() => handleOpenChat(null)} />}
       </main>
       <Footer onNavigate={handleNavigate} onOpenHelp={handleOpenHelp} />
       <Sidebar currentTab={currentTab} onNavigate={handleNavigate} mobileOpen={mobileSidebarOpen} setMobileOpen={setMobileSidebarOpen} onOpenChat={() => handleOpenChat(null)} onOpenHelp={handleOpenHelp} onOpenSecurity={handleOpenSecurity} onOpenSupport={handleOpenSupport} />
