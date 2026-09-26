@@ -22,6 +22,7 @@ export default function ChatPage({ onNavigate }) {
   const [query, setQuery] = useState('');
   const [text, setText] = useState('');
   const [warning, setWarning] = useState('');
+  const [listError, setListError] = useState('');
   const [loadingList, setLoadingList] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
@@ -49,7 +50,14 @@ export default function ChatPage({ onNavigate }) {
   const loadList = async () => {
     if (!isAuthenticated) return;
     setLoadingList(true);
-    try { await refreshConversations(); } finally { setLoadingList(false); }
+    setListError('');
+    try {
+      await refreshConversations();
+    } catch (e) {
+      setListError(e?.message || l('بارگذاری گفتگوها ناموفق بود.', 'Unable to refresh conversations.', 'تعذر تحديث المحادثات.', '无法刷新会话。'));
+    } finally {
+      setLoadingList(false);
+    }
   };
 
   const loadMessages = async (id) => {
@@ -119,7 +127,15 @@ export default function ChatPage({ onNavigate }) {
           <div className="mt-4 relative"><Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><input value={query} onChange={e=>setQuery(e.target.value)} className="w-full ps-9 pe-3 h-11 rounded-xl bg-slate-100 dark:bg-[#1c1b30] outline-none text-sm" placeholder={l('جستجوی گفتگو...', 'Search conversations...', 'البحث في المحادثات...', '搜索会话...')} /></div>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
-          {filtered.length === 0 ? <div className="p-10 text-center text-sm text-slate-500">{l('گفتگویی برای نمایش نیست.', 'No conversations to display.', 'لا توجد محادثات للعرض.', '暂无会话。')}</div> :
+          {listError ? (
+            <div className="p-6 text-center space-y-3">
+              <AlertTriangle className="w-7 h-7 mx-auto text-amber-500" />
+              <p className="text-xs text-slate-500 dark:text-slate-400">{listError}</p>
+              <button type="button" onClick={loadList} disabled={loadingList} className="btn-secondary px-4 py-2 text-xs font-bold disabled:opacity-50">
+                {loadingList ? l('در حال تلاش...', 'Retrying...', 'جارٍ إعادة المحاولة...', '正在重试…') : l('تلاش مجدد', 'Try again', 'إعادة المحاولة', '重试')}
+              </button>
+            </div>
+          ) : filtered.length === 0 ? <div className="p-10 text-center text-sm text-slate-500">{l('گفتگویی برای نمایش نیست.', 'No conversations to display.', 'لا توجد محادثات للعرض.', '暂无会话。')}</div> :
           filtered.map(c => {
             const u=getOther(c); const last=c.lastMessage?.text || c.last_message?.text || '';
             const unread=Number(c.unreadCount || c.unread_count || 0);
