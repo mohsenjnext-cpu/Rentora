@@ -515,6 +515,7 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
             </div>
           )}
 
+          <div id="activity-rental-history-panel" role="tabpanel">
           {historyRentals.length === 0 ? (
             <div className="p-8 text-center rounded-xl rentora-card space-y-2">
               <Package className="w-8 h-8 mx-auto text-slate-300 stroke-[1.5]" />
@@ -576,7 +577,8 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
                       <Flag className="w-4 h-4" />
                     </button>
                   </div>
-                </div>
+         </div>
+               </div>
               );
             })
           )}
