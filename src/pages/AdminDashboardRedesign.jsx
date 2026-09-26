@@ -56,6 +56,7 @@ export default function AdminDashboardRedesign({ onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activePanel, setActivePanel] = useState('overview');
+  const [updatingTicketId, setUpdatingTicketId] = useState('');
   const api = getApiBaseUrl();
   const lang = document.documentElement.lang?.toLowerCase().split('-')[0] || 'fa';
   const t = copy[lang] || copy.fa;
@@ -78,6 +79,26 @@ export default function AdminDashboardRedesign({ onNavigate }) {
   }, [api, isAdmin, t.noData]);
 
   useEffect(() => { load(); }, [load]);
+
+  const updateSupportStatus = useCallback(async (ticketId, status) => {
+    if (!ticketId || updatingTicketId) return;
+    setUpdatingTicketId(ticketId);
+    try {
+      const response = await fetch(`${api}/api/admin/support/${encodeURIComponent(ticketId)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || !json.success) throw new Error(json.error || 'Unable to update support ticket');
+      await load();
+    } catch (e) {
+      setError(e.message || 'Unable to update support ticket');
+    } finally {
+      setUpdatingTicketId('');
+    }
+  }, [api, load, updatingTicketId]);
 
   const overview = data?.overview || {};
   const treasury = data?.treasury || {};
@@ -206,6 +227,15 @@ export default function AdminDashboardRedesign({ onNavigate }) {
               <span className="px-2 py-1 rounded-full text-[9px] font-bold badge-amber">{ticket.status || 'open'}</span>
             </div>
             <p className="text-[10px] text-slate-500 mt-2 line-clamp-2">{ticket.message}</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {['open','in_progress','resolved','closed'].map(status => (
+                <button key={status} type="button" disabled={updatingTicketId === ticket.id || ticket.status === status}
+                  onClick={() => updateSupportStatus(ticket.id, status)}
+                  className="min-h-8 rounded-lg border border-slate-200 dark:border-white/10 px-2 text-[9px] font-bold disabled:opacity-50">
+                  {status}
+                </button>
+              ))}
+            </div>
           </div>)}
           {!supportTickets.length && <p className="text-xs text-slate-400 py-5 text-center">{t.noData}</p>}
         </div>
