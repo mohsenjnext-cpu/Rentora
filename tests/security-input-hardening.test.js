@@ -190,3 +190,21 @@ test('gateway payout idempotency rejects non-text and oversized keys', () => {
   assert.match(helper, /normalized\.length <= 200/);
   assert.doesNotMatch(helper, /String\(key\)\.trim\(\)/);
 });
+
+
+test('worker payment approval and completion use bounded identifiers', () => {
+  const approve = section("path === '/api/payments/approve'", "path === '/api/payments/complete'");
+  const complete = section("path === '/api/payments/complete'", "path === '/api/payments/incomplete'");
+  assert.match(approve, /requireString\(body\?\.paymentId, 'paymentId', 128, \{ required: true \}\)/);
+  assert.match(approve, /requireString\(body\?\.paymentIntentId, 'paymentIntentId', 128, \{ required: true \}\)/);
+  assert.match(complete, /requireString\(body\?\.paymentId, 'paymentId', 128, \{ required: true \}\)/);
+  assert.match(complete, /requireString\(body\?\.txid, 'txid', 256, \{ required: true \}\)/);
+  assert.match(complete, /requireString\(body\?\.paymentIntentId, 'paymentIntentId', 128, \{ required: true \}\)/);
+});
+
+test('worker incomplete payment does not coerce callback identifiers', () => {
+  const route = section("path === '/api/payments/incomplete'", "path === '/api/sync/item'");
+  assert.match(route, /paymentIdRaw = body\?\.paymentId/);
+  assert.match(route, /typeof paymentIdRaw !== 'string'/);
+  assert.match(route, /requireString\(paymentIdRaw, 'paymentId', 128, \{ required: true \}\)/);
+});
