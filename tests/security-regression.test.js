@@ -87,3 +87,9 @@ test('legacy rental sync rejects malformed and past dates before persistence', (
   assert.match(rentalSync, /Rental end date must be after start date/);
   assert.match(rentalSync, /Rental start date cannot be in the past/);
 });
+
+test('profile sync enforces bounded field lengths server-side', () => {
+  const profileSync = section("path === '/api/sync/user'", "path === '/api/upload'");
+  assert.match(profileSync, /profileLimits/);
+  assert.match(profileSync, /Profile field too long/);
+});
