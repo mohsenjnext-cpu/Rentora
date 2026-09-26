@@ -1830,6 +1830,26 @@ export default {
         if (typeof item?.title !== 'string' || (item?.description !== undefined && typeof item.description !== 'string') || (item?.category !== undefined && item.category !== null && typeof item.category !== 'string') || (item?.location !== undefined && item.location !== null && typeof item.location !== 'string')) return errorResponse('Invalid listing field type', 400, env, undefined, origin);
         if (!['draft','active','paused','deleted'].includes(listingStatus)) return errorResponse('Invalid listing status', 400, env, undefined, origin);
         const cInfo = item.contactInfo || (item.phoneContact ? { contactPhone: item.phoneContact } : null);
+        if (cInfo !== null && (typeof cInfo !== 'object' || Array.isArray(cInfo))) return errorResponse('Invalid listing contact info', 400, env, undefined, origin);
+        if (cInfo) {
+          const contactFields = [
+            ['contactName', 120], ['name', 120], ['contactPhone', 64], ['phone', 64], ['phoneContact', 64],
+            ['whatsapp', 64], ['preferredContactMethod', 40], ['method', 40], ['contactHours', 160],
+            ['hours', 160], ['coordinationNotes', 500], ['notes', 500]
+          ];
+          for (const [field, max] of contactFields) {
+            if (cInfo[field] !== undefined && cInfo[field] !== null && typeof cInfo[field] !== 'string') {
+              return errorResponse('Invalid listing contact field type', 400, env, undefined, origin);
+            }
+            if (typeof cInfo[field] === 'string' && cInfo[field].trim().length > max) {
+              return errorResponse('Listing contact field is too long', 400, env, undefined, origin);
+            }
+          }
+          const methodValue = String(cInfo.preferredContactMethod || cInfo.method || 'phone').trim().toLowerCase();
+          if (!['phone', 'whatsapp', 'in_app'].includes(methodValue)) {
+            return errorResponse('Invalid preferred contact method', 400, env, undefined, origin);
+          }
+        }
         const sanitizedItem = sanitizeListingPublicMetadata(item);
         const existing = await env.RENTORA_DB.prepare('SELECT * FROM listings WHERE id=?1 LIMIT 1').bind(item.id).first();
         if (existing) {
