@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100">
+<defs>
+ <linearGradient id="g" x1="0" x2="1"><stop stop-color="#26215C"/><stop offset="1" stop-color="#534AB7"/></linearGradient>
+ <filter id="s" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-opacity=".12"/></filter>
+</defs>
+<rect width="1600" height="1100" fill="#F7F7FB"/>
+<text x="70" y="70" font-family="Arial" font-size="30" font-weight="700" fill="#26215C">Rentora UI Preview • Home + Discover</text>
+<text x="70" y="105" font-family="Arial" font-size="16" fill="#666">Pre-code visual direction • RTL Persian • Pi Browser friendly • App Shell v1</text>
+
+<!-- HOME -->
+<rect x="60" y="150" width="720" height="850" rx="28" fill="white" filter="url(#s)"/>
+<rect x="60" y="150" width="720" height="210" rx="28" fill="url(#g)"/>
+<rect x="60" y="310" width="720" height="50" fill="url(#g)"/>
+<text x="710" y="210" text-anchor="end" font-family="Arial" font-size="28" font-weight="700" fill="white">کرایه کن، اجاره بده، ساده‌تر</text>
+<text x="710" y="245" text-anchor="end" font-family="Arial" font-size="15" fill="#E8E7FF">بازار امن اجاره همتا‌به‌همتا در Rentora</text>
+<rect x="110" y="285" width="620" height="78" rx="18" fill="white"/>
+<text x="690" y="332" text-anchor="end" font-family="Arial" font-size="16" fill="#777">دنبال چه چیزی می‌گردی؟</text>
+<circle cx="145" cy="324" r="20" fill="#EEEDFE"/><text x="145" y="331" text-anchor="middle" font-family="Arial" font-size="20" fill="#534AB7">⌕</text>
+
+<text x="710" y="410" text-anchor="end" font-family="Arial" font-size="20" font-weight="700" fill="#222">دسته‌بندی‌ها</text>
+<g font-family="Arial" font-size="13" fill="#333">
+ <rect x="110" y="435" width="130" height="58" rx="16" fill="#EEEDFE"/><text x="175" y="470" text-anchor="middle">🚲 وسایل نقلیه</text>
+ <rect x="255" y="435" width="130" height="58" rx="16" fill="#F1F1F5"/><text x="320" y="470" text-anchor="middle">🔧 ابزار</text>
+ <rect x="400" y="435" width="130" height="58" rx="16" fill="#F1F1F5"/><text x="465" y="470" text-anchor="middle">📷 الکترونیک</text>
+ <rect x="545" y="435" width="130" height="58" rx="16" fill="#F1F1F5"/><text x="610" y="470" text-anchor="middle">🏕️ سفر</text>
+</g>
+<text x="710" y="540" text-anchor="end" font-family="Arial" font-size="20" font-weight="700" fill="#222">پیشنهادهای نزدیک به تو</text>
+<g filter="url(#s)">
+ <rect x="105" y="565" width="195" height="220" rx="18" fill="white"/><rect x="105" y="565" width="195" height="115" rx="18" fill="#D9D7E8"/><text x="202" y="635" text-anchor="middle" font-family="Arial" font-size="13" fill="#666">تصویر کالا</text><text x="285" y="715" text-anchor="end" font-family="Arial" font-size="14" font-weight="700">دوچرخه شهری</text><text x="285" y="742" text-anchor="end" font-family="Arial" font-size="12" fill="#666">روزانه ۱۲ π</text><text x="285" y="766" text-anchor="end" font-family="Arial" font-size="11" fill="#777">مونترال • ★ 4.9</text>
+ <rect x="315" y="565" width="195" height="220" rx="18" fill="white"/><rect x="315" y="565" width="195" height="115" rx="18" fill="#D9D7E8"/><text x="412" y="635" text-anchor="middle" font-family="Arial" font-size="13" fill="#666">تصویر کالا</text><text x="495" y="715" text-anchor="end" font-family="Arial" font-size="14" font-weight="700">دریل حرفه‌ای</text><text x="495" y="742" text-anchor="end" font-family="Arial" font-size="12" fill="#666">روزانه ۸ π</text><text x="495" y="766" text-anchor="end" font-family="Arial" font-size="11" fill="#777">لاوال • ★ 4.8</text>
+ <rect x="525" y="565" width="195" height="220" rx="18" fill="white"/><rect x="525" y="565" width="195" height="115" rx="18" fill="#D9D7E8"/><text x="622" y="635" text-anchor="middle" font-family="Arial" font-size="13" fill="#666">تصویر کالا</text><text x="705" y="715" text-anchor="end" font-family="Arial" font-size="14" font-weight="700">دوربین اکشن</text><text x="705" y="742" text-anchor="end" font-family="Arial" font-size="12" fill="#666">روزانه ۱۵ π</text><text x="705" y="766" text-anchor="end" font-family="Arial" font-size="11" fill="#777">مونترال • ★ 4.7</text>
+</g>
+<rect x="110" y="830" width="610" height="105" rx="18" fill="#F4F3FF"/>
+<text x="690" y="865" text-anchor="end" font-family="Arial" font-size="17" font-weight="700" fill="#26215C">چرا Rentora؟</text>
+<text x="690" y="892" text-anchor="end" font-family="Arial" font-size="12" fill="#555">احراز هویت • قیمت‌گذاری شفاف • پرداخت کارمزد امن</text>
+<text x="690" y="915" text-anchor="end" font-family="Arial" font-size="12" fill="#555">اطلاعات اصلی از سرور تأیید می‌شود، نه از حافظه مرورگر</text>
+
+<!-- DISCOVER -->
+<rect x="820" y="150" width="720" height="850" rx="28" fill="white" filter="url(#s)"/>
+<text x="1470" y="205" text-anchor="end" font-family="Arial" font-size="28" font-weight="700" fill="#26215C">کشف کن</text>
+<text x="1470" y="235" text-anchor="end" font-family="Arial" font-size="14" fill="#777">جستجو، فیلتر و مرتب‌سازی بدون شلوغ‌کاری</text>
+<rect x="870" y="270" width="620" height="62" rx="16" fill="#F4F3FA" stroke="#DDD"/>
+<text x="1450" y="307" text-anchor="end" font-family="Arial" font-size="15" fill="#777">جستجوی ابزار، دوچرخه، دوربین...</text>
+<circle cx="900" cy="301" r="17" fill="#EEEDFE"/><text x="900" y="307" text-anchor="middle" font-family="Arial" font-size="18" fill="#534AB7">⌕</text>
+<g font-family="Arial" font-size="12" fill="#333">
+ <rect x="870" y="350" width="118" height="42" rx="12" fill="#EEEDFE"/><text x="929" y="376" text-anchor="middle">دسته‌بندی</text>
+ <rect x="998" y="350" width="118" height="42" rx="12" fill="#F1F1F5"/><text x="1057" y="376" text-anchor="middle">محدوده قیمت</text>
+ <rect x="1126" y="350" width="118" height="42" rx="12" fill="#F1F1F5"/><text x="1185" y="376" text-anchor="middle">مکان</text>
+ <rect x="1254" y="350" width="118" height="42" rx="12" fill="#F1F1F5"/><text x="1313" y="376" text-anchor="middle">دسترسی</text>
+ <rect x="1382" y="350" width="108" height="42" rx="12" fill="#F1F1F5"/><text x="1436" y="376" text-anchor="middle">فیلترها</text>
+</g>
+<text x="1470" y="435" text-anchor="end" font-family="Arial" font-size="18" font-weight="700">۱۲۴ نتیجه</text>
+<rect x="870" y="455" width="620" height="48" rx="12" fill="#FAFAFC" stroke="#EEE"/>
+<text x="1450" y="485" text-anchor="end" font-family="Arial" font-size="12" fill="#555">مرتب‌سازی: مرتبط‌ترین</text>
+<g>
+ <rect x="870" y="525" width="195" height="190" rx="16" fill="#FFF" stroke="#EEE"/><rect x="870" y="525" width="195" height="98" rx="16" fill="#D9D7E8"/><text x="968" y="579" text-anchor="middle" font-family="Arial" font-size="12" fill="#666">تصویر</text><text x="1048" y="655" text-anchor="end" font-family="Arial" font-size="13" font-weight="700">دوربین اکشن</text><text x="1048" y="680" text-anchor="end" font-family="Arial" font-size="11" fill="#666">۱۵ π / روز</text><text x="1048" y="700" text-anchor="end" font-family="Arial" font-size="10" fill="#777">★ 4.7 • مونترال</text>
+ <rect x="1085" y="525" width="195" height="190" rx="16" fill="#FFF" stroke="#EEE"/><rect x="1085" y="525" width="195" height="98" rx="16" fill="#D9D7E8"/><text x="1182" y="579" text-anchor="middle" font-family="Arial" font-size="12" fill="#666">تصویر</text><text x="1263" y="655" text-anchor="end" font-family="Arial" font-size="13" font-weight="700">دریل حرفه‌ای</text><text x="1263" y="680" text-anchor="end" font-family="Arial" font-size="11" fill="#666">۸ π / روز</text><text x="1263" y="700" text-anchor="end" font-family="Arial" font-size="10" fill="#777">★ 4.8 • لاوال</text>
+ <rect x="1300" y="525" width="190" height="190" rx="16" fill="#FFF" stroke="#EEE"/><rect x="1300" y="525" width="190" height="98" rx="16" fill="#D9D7E8"/><text x="1395" y="579" text-anchor="middle" font-family="Arial" font-size="12" fill="#666">تصویر</text><text x="1475" y="655" text-anchor="end" font-family="Arial" font-size="13" font-weight="700">دوچرخه شهری</text><text x="1475" y="680" text-anchor="end" font-family="Arial" font-size="11" fill="#666">۱۲ π / روز</text><text x="1475" y="700" text-anchor="end" font-family="Arial" font-size="10" fill="#777">★ 4.9 • مونترال</text>
+</g>
+<rect x="870" y="750" width="620" height="190" rx="18" fill="#F7F6FC"/>
+<text x="1450" y="790" text-anchor="end" font-family="Arial" font-size="16" font-weight="700" fill="#26215C">اصل طراحی</text>
+<text x="1450" y="820" text-anchor="end" font-family="Arial" font-size="12" fill="#555">کارت‌ها ساده، اطلاعات کلیدی قابل اسکن، فیلترها قابل توسعه</text>
+<text x="1450" y="848" text-anchor="end" font-family="Arial" font-size="12" fill="#555">RTL واقعی، موبایل‌محور و سازگار با App Shell فعلی</text>
+<text x="1450" y="876" text-anchor="end" font-family="Arial" font-size="12" fill="#555">هیچ قیمت یا مبلغ پرداختی از UI به‌عنوان مرجع مالی پذیرفته نمی‌شود</text>
+<text x="1450" y="905" text-anchor="end" font-family="Arial" font-size="12" fill="#555">این فقط Preview است، هنوز وارد کد صفحات نشده‌ایم.</text>
+</svg>
