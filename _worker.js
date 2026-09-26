@@ -2661,8 +2661,21 @@ export default {
         const listing = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.id=?1 AND l.status='active' LIMIT 1`).bind(rental.itemId).first();
         if (!listing) return errorResponse('Listing not found', 404, env, undefined, origin);
         if (listing.owner_user_id === user.id) return errorResponse('Owner cannot rent own listing', 409, env, undefined, origin);
-        const start = new Date(`${rental.startDate}T00:00:00Z`);
-        const end = new Date(`${rental.endDate}T00:00:00Z`);
+        const startDateRaw = String(rental.startDate || '').trim();
+        const endDateRaw = String(rental.endDate || '').trim();
+        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(startDateRaw) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(endDateRaw)) {
+          return errorResponse('Invalid rental dates', 400, env, undefined, origin);
+        }
+        const start = new Date(`${startDateRaw}T00:00:00Z`);
+        const end = new Date(`${endDateRaw}T00:00:00Z`);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) {
+          return errorResponse('Rental end date must be after start date', 400, env, undefined, origin);
+        }
+        const todayUtc = new Date();
+        todayUtc.setUTCHours(0, 0, 0, 0);
+        if (start.getTime() < todayUtc.getTime()) {
+          return errorResponse('Rental start date cannot be in the past', 400, env, undefined, origin);
+        }
         const days = Math.max(1, Math.ceil((end - start) / 86400000));
         const rentalAmount = Number(listing.price_per_day) * days;
         const deposit = Number(listing.deposit_amount);
