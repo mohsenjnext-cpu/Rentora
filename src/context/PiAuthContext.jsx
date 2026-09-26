@@ -10,10 +10,10 @@ function installSessionFetchBridge(onSessionInvalid) {
   const originalFetch = window.fetch.bind(window);
   const apiBase = getApiBaseUrl();
   window.fetch = async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input?.url || '';
+    const isApiRequest = (apiBase && url.startsWith(apiBase)) || url.startsWith('/api/');
+    const isPiLogin = url.includes('/api/auth/pi-login');
     try {
-      const url = typeof input === 'string' ? input : input?.url || '';
-      const isApiRequest = (apiBase && url.startsWith(apiBase)) || url.startsWith('/api/');
-      const isPiLogin = url.includes('/api/auth/pi-login');
       if (isApiRequest) {
         const headers = new Headers(input instanceof Request ? input.headers : undefined);
         new Headers(init.headers || {}).forEach((value, key) => headers.set(key, value));
