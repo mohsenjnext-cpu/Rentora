@@ -17,6 +17,7 @@ import SecurityModal from './components/SecurityModal';
 import SupportModal from './components/SupportModal';
 import ChatModal from './components/ChatModal';
 import { requestNotificationPermission } from './services/notificationService';
+import { cloudSyncService } from './services/cloudSyncService';
 
 import HomePage from './pages/HomePage';
 import HomeRedesign from './pages/HomeRedesign';
@@ -86,13 +87,30 @@ function MainApp() {
 
   useEffect(() => {
     const listingId = getListingIdFromPath();
-    if (!listingId || !Array.isArray(items) || items.length === 0) return;
-    const match = items.find((candidate) => String(candidate.id) === String(listingId));
+    if (!listingId) return;
+    let active = true;
+    const match = (Array.isArray(items) ? items : []).find((candidate) => String(candidate.id) === String(listingId));
     if (match) {
       setSelectedItem(match);
       setCurrentTab('item-detail');
+      return () => { active = false; };
     }
-  }, [items]);
+    if (isInitialLoadDone) {
+      cloudSyncService.fetchListingById(listingId)
+        .then((item) => {
+          if (!active || !item) return;
+          setSelectedItem(item);
+          setCurrentTab('item-detail');
+        })
+        .catch(() => {
+          if (!active) return;
+          setSelectedItem(null);
+          setCurrentTab('discover');
+          window.history.replaceState({}, '', '/');
+        });
+    }
+    return () => { active = false; };
+  }, [items, isInitialLoadDone]);
 
   useEffect(() => {
     const handlePopState = () => {
