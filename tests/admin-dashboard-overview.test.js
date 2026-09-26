@@ -11,3 +11,11 @@ test('admin overview exposes a needs-attention operational queue', () => {
   assert.match(page, /go\('reports-open'\)/);
   assert.match(page, /go\('payout-reconcile'\)/);
 });
+
+
+test('admin audit view exposes operational audit summaries', () => {
+  assert.match(fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', import.meta.url), 'utf8'), /function AuditView\(\{audit\}\)/);
+  assert.match(fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', import.meta.url), 'utf8'), /Total Events/);
+  assert.match(fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', import.meta.url), 'utf8'), /Action Types/);
+  assert.match(fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', import.meta.url), 'utf8'), /داده‌های ثبت‌شده را فقط نمایش می‌دهد/);
+});
