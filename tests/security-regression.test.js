@@ -101,3 +101,11 @@ test('conversation and message reads are bounded server-side', () => {
   const messages = section("path.startsWith('/api/conversations/') && path.endsWith('/messages')", "method === 'POST' && path.startsWith('/api/conversations/') && path.endsWith('/messages')");
   assert.match(messages, /ORDER BY m\.created_at ASC\n\s*LIMIT 200/);
 });
+
+
+test('sensitive rental records are not persisted to localStorage', () => {
+  const sync = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
+  assert.match(sync, /this\.rentalCache = \[\];/);
+  assert.doesNotMatch(sync, /localStorage\.getItem\(STORAGE_RENTALS_KEY\)/);
+  assert.doesNotMatch(sync, /localStorage\.setItem\(STORAGE_RENTALS_KEY/);
+});

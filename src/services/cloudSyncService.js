@@ -15,6 +15,8 @@ export class CloudSyncService {
     this.pollInterval = null;
     this.broadcastChannel = null;
     this.lastSyncedHash = '';
+    // Rental records are sensitive business state. Keep them in memory only and re-sync from the server.
+    this.rentalCache = [];
 
     // Initialize cross-tab BroadcastChannel
     if (typeof window !== 'undefined') {
@@ -880,40 +882,23 @@ export class CloudSyncService {
   }
 
   getCachedRentals() {
-    try {
-      const saved = localStorage.getItem(STORAGE_RENTALS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const dedupedMap = new Map();
-          parsed.forEach(r => {
-            if (r && r.id) dedupedMap.set(r.id, r);
-          });
-          return Array.from(dedupedMap.values());
-        }
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    return Array.isArray(this.rentalCache) ? [...this.rentalCache] : [];
   }
 
   saveCachedRentals(rentals) {
-    try {
-      const list = Array.isArray(rentals) ? rentals : [];
-      const dedupedMap = new Map();
-      list.forEach(r => {
-        if (r && r.id) dedupedMap.set(r.id, r);
-      });
-      localStorage.setItem(STORAGE_RENTALS_KEY, JSON.stringify(Array.from(dedupedMap.values())));
-    } catch (e) {}
+    const list = Array.isArray(rentals) ? rentals : [];
+    const dedupedMap = new Map();
+    list.forEach(r => {
+      if (r && r.id) dedupedMap.set(r.id, r);
+    });
+    this.rentalCache = Array.from(dedupedMap.values());
   }
 
   clearUserSessionCache() {
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem(STORAGE_USER_KEY);
-        localStorage.removeItem(STORAGE_RENTALS_KEY);
+        this.rentalCache = [];
         localStorage.removeItem('rentora_db_transactions_v8');
         localStorage.removeItem('rentora_db_reports_v8');
         localStorage.removeItem('rentora_live_v1_session');
