@@ -127,36 +127,8 @@ export default function ListItemPage({
     { id: 'home', label: t('catHome'), icon: Home }
   ];
 
-  const presetImages = {
-    tools: [
-      'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1581147036324-c17ac41dfa6c?w=900&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1530124566582-a618bc2615dc?w=900&auto=format&fit=crop&q=80'
-    ],
-    cameras: [
-      'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=900&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=900&auto=format&fit=crop&q=80'
-    ],
-    camping: [
-      'https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=900&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?w=900&auto=format&fit=crop&q=80'
-    ],
-    sports: [
-      'https://images.unsplash.com/photo-1517649763962-0c623266ddc0?w=900&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=900&auto=format&fit=crop&q=80'
-    ],
-    vehicles: [
-      'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=900&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=900&auto=format&fit=crop&q=80'
-    ],
-    events: [
-      'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=900&auto=format&fit=crop&q=80'
-    ],
-    home: [
-      'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=900&auto=format&fit=crop&q=80'
-    ]
-  };
+  // Real user photos only. No mock/sample listing imagery is inserted by the UI.
+  const presetImages = {};
 
   if (!isAuthenticated) {
     return (
@@ -320,10 +292,10 @@ export default function ListItemPage({
   };
 
   return (
-    <div className="max-w-xl mx-auto space-y-4 pb-20 select-none animate-fadeIn">
+    <div className="w-full max-w-5xl mx-auto space-y-5 pb-20 select-none animate-fadeIn">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           {isEditMode && (
             <button
@@ -375,7 +347,7 @@ export default function ListItemPage({
       )}
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="p-4 sm:p-5 rounded-2xl rentora-card space-y-4">
+      <form onSubmit={handleSubmit} className="p-4 sm:p-6 rounded-2xl rentora-card space-y-5 shadow-sm">
 
         {/* Title */}
         <div>
@@ -392,7 +364,7 @@ export default function ListItemPage({
         {/* Category Picker (Icons Select) */}
         <div>
           <label className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('fieldCategory')} *</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-1.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1.5">
             {categories.map((cat) => {
               const Icon = cat.icon;
               const isSelected = category === cat.id;
@@ -466,7 +438,7 @@ export default function ListItemPage({
         <div>
           <label className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('fieldDescription')}</label>
           <textarea
-            rows="3"
+            rows="4"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t('fieldDescriptionPlaceholder')}
@@ -713,7 +685,7 @@ export default function ListItemPage({
               <span>{l('توضیحات و دستورالعمل هماهنگی تحویل', 'Handover & Coordination Notes', 'ملاحظات التنسيق والاستلام', '交付与交接附加说明')}</span>
             </label>
             <textarea
-              rows="2"
+              rows="3"
               value={coordinationNotes}
               onChange={(e) => setCoordinationNotes(e.target.value)}
               placeholder={l('مثال: لطفاً ۲ ساعت قبل از مراجعه هماهنگ بفرمایید. همراه داشتن کارت شناسایی الزامی است.', 'e.g., Please call 2 hours before pickup. ID required.', 'مثال: يرجى الاتصال قبل ساعتين من الحضور. يلزم إحضار الهوية.', '例如：请提前2小时联系确认，自提时请携带有效证件。')}
