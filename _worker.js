@@ -1932,6 +1932,7 @@ export default {
           JOIN users u ON u.id = m.sender_user_id
           WHERE m.conversation_id = ?1
           ORDER BY m.created_at ASC
+          LIMIT 200
         `).bind(convId).all();
 
         const isPaid = conv.rental_payment_status === 'completed' && ['confirmed', 'active', 'completed'].includes(conv.rental_status);
