@@ -755,9 +755,19 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
                   <p className="text-slate-400">{l('در حال دریافت اطلاعات تماس امن از سرور...', 'Fetching secure contact data...', 'جارٍ تحميل بيانات التواصل...', '正在安全加载联系信息...')}</p>
                 </div>
               ) : contactError ? (
-                <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>{contactError}</span>
+                <div className="space-y-2">
+                  <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{contactError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => selectedContactRental && handleOpenContactModal(selectedContactRental)}
+                    className="w-full btn-secondary py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                    {l('تلاش مجدد', 'Try again', 'إعادة المحاولة', '重试')}
+                  </button>
                 </div>
               ) : rentalContactData ? (
                 <div className="space-y-3">
