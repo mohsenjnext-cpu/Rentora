@@ -80,7 +80,7 @@ export default function ItemCard({ item, onSelect, onRentClick, variant = 'defau
               {l('آگهی من', 'Mine', 'إعلاني', '我的发布')}
             </span>
           )}
-          <button type="button" aria-label={t('btnFavorite')} onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }} className="absolute top-2 right-2 rtl:right-auto rtl:left-2 w-8 h-8 rounded-full bg-[#26215C]/60 text-white flex items-center justify-center z-10">
+          <button type="button" aria-label={t('btnFavorite')} onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }} className="absolute top-2 right-2 rtl:right-auto rtl:left-2 w-11 h-11 min-w-11 rounded-full bg-[#26215C]/60 text-white flex items-center justify-center z-10">
             <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
           </button>
         </div>
@@ -89,9 +89,9 @@ export default function ItemCard({ item, onSelect, onRentClick, variant = 'defau
           <h3 className="mt-1 text-[12px] font-bold text-[#1E1E2F] dark:text-white text-right truncate">{item.title}</h3>
           <div className="mt-2 flex items-center justify-between gap-1">
             {isOwner ? (
-              <button type="button" onClick={(e) => { e.stopPropagation(); onSelect?.(item); }} className="bg-[#26215C] text-white rounded-lg px-3 py-1.5 text-[10px] font-bold">{l('مدیریت', 'Manage', 'إدارة', '管理')}</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); onSelect?.(item); }} className="min-h-11 bg-[#26215C] text-white rounded-lg px-3 py-1.5 text-[10px] font-bold">{l('مدیریت', 'Manage', 'إدارة', '管理')}</button>
             ) : (
-              <button type="button" onClick={(e) => { e.stopPropagation(); onRentClick?.(item); }} className="bg-[#26215C] text-white rounded-lg px-3 py-1.5 text-[10px] font-bold flex items-center gap-1"><Coins className="w-3 h-3 text-amber-300" />{t('itemBookBtn')}</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); onRentClick?.(item); }} className="min-h-11 bg-[#26215C] text-white rounded-lg px-3 py-1.5 text-[10px] font-bold flex items-center gap-1"><Coins className="w-3 h-3 text-amber-300" />{t('itemBookBtn')}</button>
             )}
             <span className="text-[12px] font-black text-rentora-success dark:text-[#48D2A8] whitespace-nowrap">{item.pricePerDay} π <span className="font-normal text-[10px] text-slate-400">/{l('روز', 'd', 'يوم', '天')}</span></span>
           </div>
@@ -137,7 +137,7 @@ export default function ItemCard({ item, onSelect, onRentClick, variant = 'defau
               e.stopPropagation();
               toggleFavorite(item.id);
             }}
-            className="absolute top-2 right-2 rtl:right-auto rtl:left-2 p-1.5 rounded-full bg-black/40 backdrop-blur-xs text-white hover:text-rose-400 transition cursor-pointer z-10"
+            className="absolute top-2 right-2 rtl:right-auto rtl:left-2 w-11 h-11 min-w-11 p-1.5 rounded-full bg-black/40 backdrop-blur-xs text-white hover:text-rose-400 transition cursor-pointer z-10"
             title={t('btnFavorite')}
           >
             <Heart className={`w-3.5 h-3.5 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
@@ -181,7 +181,7 @@ export default function ItemCard({ item, onSelect, onRentClick, variant = 'defau
               e.stopPropagation();
               if (onSelect) onSelect(item);
             }}
-            className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-[#1E1D33] text-slate-700 dark:text-slate-300 hover:border-[#534AB7] text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
+            className="min-h-11 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-[#1E1D33] text-slate-700 dark:text-slate-300 hover:border-[#534AB7] text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
           >
             <Settings className="w-3 h-3 text-[#534AB7]" />
             <span>{l('مدیریت آگهی', 'Manage', 'إدارة', '管理')}</span>
@@ -197,7 +197,7 @@ export default function ItemCard({ item, onSelect, onRentClick, variant = 'defau
                 onSelect(item);
               }
             }}
-            className="btn-primary px-2.5 py-1.5 text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
+            className="btn-primary min-h-11 px-2.5 py-1.5 text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
           >
             <Coins className="w-3 h-3 text-amber-400" />
             <span>{t('itemBookBtn')}</span>
