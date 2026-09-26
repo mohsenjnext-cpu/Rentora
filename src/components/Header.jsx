@@ -181,14 +181,15 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
               <RotateCw className={`w-4 h-4 text-[#534AB7] dark:text-[#AFA9EC] stroke-[2] ${isRefreshing ? 'animate-spin text-[#26215C]' : ''}`} />
             </button>
 
-            <button type="button" onClick={() => onNavigate('notifications')} className="relative p-2 rounded-lg bg-slate-100 dark:bg-[#1C1B30] text-slate-700 dark:text-slate-200 hover:bg-[#EEEDFE] dark:hover:bg-[#1E1B3D] transition cursor-pointer" title={l('اعلان‌ها', 'Notifications', 'الإشعارات', '通知')}><Bell className="w-4 h-4 text-[#534AB7] dark:text-[#AFA9EC] stroke-[1.8]" /></button>
+            <button type="button" onClick={() => onNavigate('notifications')} className={`relative p-2 rounded-lg transition cursor-pointer ${currentPage === 'notifications' ? 'bg-[#EEEDFE] text-[#26215C] dark:bg-[#1E1B3D] dark:text-[#EEEDFE]' : 'bg-slate-100 dark:bg-[#1C1B30] text-slate-700 dark:text-slate-200 hover:bg-[#EEEDFE] dark:hover:bg-[#1E1B3D]'}`} aria-label={l('اعلان‌ها', 'Notifications', 'الإشعارات', '通知')} aria-current={currentPage === 'notifications' ? 'page' : undefined}><Bell className="w-4 h-4 text-[#534AB7] dark:text-[#AFA9EC] stroke-[1.8]" /></button>
 
             {/* In-App Chat / Messages Icon */}
             <button
               type="button"
               onClick={onOpenChat}
-              className="relative p-2 rounded-lg bg-slate-100 dark:bg-[#1C1B30] text-slate-700 dark:text-slate-200 hover:bg-[#EEEDFE] dark:hover:bg-[#1E1B3D] transition cursor-pointer"
-              title={t('chatTitle')}
+              className={`relative p-2 rounded-lg transition cursor-pointer ${currentPage === 'chat' ? 'bg-[#EEEDFE] text-[#26215C] dark:bg-[#1E1B3D] dark:text-[#EEEDFE]' : 'bg-slate-100 dark:bg-[#1C1B30] text-slate-700 dark:text-slate-200 hover:bg-[#EEEDFE] dark:hover:bg-[#1E1B3D]'}`}
+              aria-label={t('chatTitle')}
+              aria-current={currentPage === 'chat' ? 'page' : undefined}
             >
               <MessageSquare className="w-4 h-4 text-[#534AB7] dark:text-[#AFA9EC] stroke-[1.8]" />
               {totalUnreadCount > 0 && (
@@ -303,13 +304,14 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
             <RotateCw className={`w-4 h-4 text-[#534AB7] stroke-[2] ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
 
-          <button type="button" onClick={() => onNavigate('notifications')} className="relative p-1.5 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer" aria-label="Notifications"><Bell className="w-4 h-4 stroke-[1.8] text-[#534AB7]" /></button>
+          <button type="button" onClick={() => onNavigate('notifications')} className={`relative p-1.5 rounded-lg cursor-pointer ${currentPage === 'notifications' ? 'bg-[#EEEDFE] text-[#26215C] dark:bg-[#1E1B3D] dark:text-[#EEEDFE]' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'}`} aria-label={l('اعلان‌ها', 'Notifications', 'الإشعارات', '通知')} aria-current={currentPage === 'notifications' ? 'page' : undefined}><Bell className="w-4 h-4 stroke-[1.8] text-[#534AB7]" /></button>
 
           <button
             type="button"
             onClick={onOpenChat}
-            className="relative p-1.5 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-            aria-label="Messages"
+            className={`relative p-1.5 rounded-lg cursor-pointer ${currentPage === 'chat' ? 'bg-[#EEEDFE] text-[#26215C] dark:bg-[#1E1B3D] dark:text-[#EEEDFE]' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            aria-label={t('chatTitle')}
+            aria-current={currentPage === 'chat' ? 'page' : undefined}
           >
             <MessageSquare className="w-4 h-4 stroke-[1.8] text-[#534AB7]" />
             {totalUnreadCount > 0 && (
