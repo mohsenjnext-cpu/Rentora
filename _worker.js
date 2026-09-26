@@ -1347,7 +1347,7 @@ export default {
       }
       if (method === 'POST' && path.startsWith('/api/admin/users/') && path.endsWith('/status')) {
         const targetUserId = path.slice('/api/admin/users/'.length, -'/status'.length).trim();
-        if (!targetUserId) return errorResponse('Missing target user ID', 400, env, undefined, origin);
+        if (!targetUserId || targetUserId.length > 128) return errorResponse('Invalid target user ID', 400, env, undefined, origin);
         const { user } = await requireAdmin(request, env);
         const body = await readJson(request);
         const newStatus = String(body?.status || '').trim().toLowerCase();
@@ -1365,7 +1365,7 @@ export default {
       }
       if (method === 'POST' && path.startsWith('/api/admin/users/') && path.endsWith('/kyc')) {
         const targetUserId = path.slice('/api/admin/users/'.length, -'/kyc'.length).trim();
-        if (!targetUserId) return errorResponse('Missing user ID', 400, env, undefined, origin);
+        if (!targetUserId || targetUserId.length > 128) return errorResponse('Invalid user ID', 400, env, undefined, origin);
         const { user } = await requireAdmin(request, env);
         const body = await readJson(request);
         const newKycStatus = String(body?.kycStatus || '').trim().toLowerCase();
@@ -1398,7 +1398,7 @@ export default {
       }
       if (method === 'POST' && path.startsWith('/api/admin/listings/') && path.endsWith('/status')) {
         const listingId = path.slice('/api/admin/listings/'.length, -'/status'.length).trim();
-        if (!listingId) return errorResponse('Missing listing ID', 400, env, undefined, origin);
+        if (!listingId || listingId.length > 128) return errorResponse('Invalid listing ID', 400, env, undefined, origin);
         const { user } = await requireAdmin(request, env);
         const body = await readJson(request);
         const newStatus = String(body?.status || '').trim().toLowerCase();
@@ -2270,9 +2270,9 @@ export default {
         if (!convId) return errorResponse('Missing conversation ID', 400, env, undefined, origin);
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
-        const rawText = String(body?.text || '').trim();
-        if (!rawText) return errorResponse('Message text cannot be empty', 400, env, undefined, origin);
-        if (rawText.length > 2000) return errorResponse('Message is too long (max 2000 characters)', 400, env, undefined, origin);
+        const rawText = requireString(body?.text, 'text', 2000, { required: true });
+        const messageType = requireEnum(body?.messageType || 'text', 'messageType', ['text']);
+
 
         const conv = await env.RENTORA_DB.prepare(`
           SELECT c.*, r.status AS rental_status, r.payment_status AS rental_payment_status
@@ -2471,10 +2471,7 @@ export default {
           return errorResponse('Rating must be an integer between 1 and 5', 400, env, undefined, origin);
         }
 
-        const reviewText = String(body?.reviewText || body?.comment || '').trim();
-        if (reviewText.length > 1000) {
-          return errorResponse('Review text is too long (max 1000 characters)', 400, env, undefined, origin);
-        }
+        const reviewText = requireString(body?.reviewText ?? body?.comment ?? '', 'reviewText', 1000);
 
         const rental = await env.RENTORA_DB.prepare(`
           SELECT r.*, l.id AS listing_id, l.owner_user_id
@@ -2998,10 +2995,15 @@ export default {
       if (method === 'POST' && path === '/api/sync/user') {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
-        const allowed = { displayName: body.displayName, avatar: body.avatar, bio: body.bio, location: body.location, phoneMasked: body.phoneMasked };
-        const meta = { ...parseMetadata(user.metadata), ...Object.fromEntries(Object.entries(allowed).filter(([,v]) => v !== undefined)) };
-        const newAvatar = body.avatar !== undefined ? String(body.avatar).trim() : user.avatar_url;
-        const newDisplayName = body.displayName !== undefined ? String(body.displayName).trim() : user.display_name;
+        const allowed = {};
+        if (body.displayName !== undefined) allowed.displayName = requireString(body.displayName, 'displayName', 120);
+        if (body.avatar !== undefined) allowed.avatar = requireString(body.avatar, 'avatar', 4096);
+        if (body.bio !== undefined) allowed.bio = requireString(body.bio, 'bio', 1000);
+        if (body.location !== undefined) allowed.location = requireString(body.location, 'location', 200);
+        if (body.phoneMasked !== undefined) allowed.phoneMasked = requireString(body.phoneMasked, 'phoneMasked', 64);
+        const meta = { ...parseMetadata(user.metadata), ...allowed };
+        const newAvatar = body.avatar !== undefined ? allowed.avatar : user.avatar_url;
+        const newDisplayName = body.displayName !== undefined ? allowed.displayName : user.display_name;
         const oldAvatar = user.avatar_url;
         await env.RENTORA_DB.prepare('UPDATE users SET display_name=?1,avatar_url=?2,metadata=?3,updated_at=?4 WHERE id=?5').bind(newDisplayName || user.display_name || user.username, newAvatar || null, JSON.stringify(meta), now(), user.id).run();
         if (oldAvatar && newAvatar && oldAvatar !== newAvatar) {
