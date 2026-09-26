@@ -353,7 +353,28 @@ function ListingsView({rows,section,busyId,updateListing,renderTable}) {
     {renderTable([['Title','title'],['Owner',r=>`@${r.owner_username||'—'}`],['Price',r=>money(r.price_per_day)],['Status',r=><Status s={r.status}/>],['Updated',r=>date(r.updated_at)],['Action',r=><button disabled={busyId===r.id} onClick={()=>updateListing(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'Pause':'Activate'}</button>]],rows,section==='listings-moderation'?'آگهی‌ای در صف بررسی نیست.':'آگهی‌ای وجود ندارد.')}
   </div>;
 }
-function ReportsView({rows,busyId,updateReport,renderTable}) { return renderTable([['Reporter',r=>`@${r.reporter_username||'—'}`],['Target',r=>`${r.target_type} / ${r.target_id}`],['Reason','reason'],['Status',r=><Status s={r.status}/>],['Date',r=>date(r.created_at)],['Action',r=><div className="flex gap-1">{r.status==='open'&&<button disabled={busyId===r.id} onClick={()=>updateReport(r,'reviewing')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Review</button>}{r.status==='reviewing'&&<button disabled={busyId===r.id} onClick={()=>updateReport(r,'resolved')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Resolve</button>}</div>]],rows); }
+function ReportsView({rows,busyId,updateReport,renderTable}) {
+  const open=rows.filter(r=>r.status==='open').length;
+  const reviewing=rows.filter(r=>r.status==='reviewing').length;
+  const resolved=rows.filter(r=>['resolved','dismissed'].includes(r.status)).length;
+  return <div className="space-y-3">
+    <div className="grid grid-cols-3 gap-2">
+      {[['Open',open],['Reviewing',reviewing],['Resolved',resolved]].map(([l,v]) => <div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
+    </div>
+    <div className="p-3 rounded-xl bg-[#EEEDFE] dark:bg-[#211E45] text-xs">گزارش‌ها برای بررسی Trust & Safety دسته‌بندی شده‌اند. تغییر وضعیت فقط از مسیر مدیریتی انجام می‌شود و نتیجه مستقیماً از API دریافت می‌شود.</div>
+    {renderTable([
+      ['Reporter',r=>`@${r.reporter_username||'—'}`],
+      ['Target',r=>`${r.target_type||'—'} / ${r.target_id||'—'}`],
+      ['Reason','reason'],
+      ['Status',r=><Status s={r.status}/>],
+      ['Date',r=>date(r.created_at)],
+      ['Action',r=><div className="flex gap-1 flex-wrap">
+        {r.status==='open'&&<button disabled={busyId===r.id} onClick={()=>updateReport(r,'reviewing')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Review</button>}
+        {r.status==='reviewing'&&<button disabled={busyId===r.id} onClick={()=>updateReport(r,'resolved')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Resolve</button>}
+      </div>]
+    ],rows,'گزارشی در این وضعیت وجود ندارد.')}
+  </div>;
+}
 function SystemView({system,section,onCleanup,feeRatePercent,setFeeRatePercent,feeSaving,feeMessage,saveFeeRate}) {
   if(section==='system-db') return <div className="rentora-card p-5"><div className="flex items-center gap-2 font-bold"><Database className="w-4 h-4"/> Database Maintenance</div><p className="text-xs text-slate-500 mt-2">پاکسازی فقط رکوردهای stale تعریف‌شده در backend را هدف می‌گیرد.</p><button onClick={onCleanup} className="btn-primary px-4 py-2 text-xs mt-4">Run Cleanup</button></div>;
   if(section==='system-fee') return <div className="space-y-3">
