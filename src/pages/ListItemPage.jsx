@@ -55,6 +55,8 @@ export default function ListItemPage({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successNotice, setSuccessNotice] = useState(false);
+  const [contactLoadError, setContactLoadError] = useState('');
+  const [contactRetryNonce, setContactRetryNonce] = useState(0);
 
   // Private Contact & Coordination State
   const [contactName, setContactName] = useState('');
@@ -67,6 +69,7 @@ export default function ListItemPage({
   // Synchronize state when entering Edit mode or changing itemToEdit
   useEffect(() => {
     let active = true;
+    setContactLoadError('');
     if (itemToEdit) {
       setTitle(itemToEdit.title || '');
       setCategory(itemToEdit.category || 'tools');
@@ -94,7 +97,9 @@ export default function ListItemPage({
             setContactHours(c.contactHours || '');
             setCoordinationNotes(c.coordinationNotes || '');
           }
-        }).catch(() => {});
+        }).catch(err => {
+          if (active) setContactLoadError(err?.message || l('اطلاعات تماس آگهی بارگذاری نشد. دوباره تلاش کنید.', 'Listing contact details could not be loaded. Try again.', 'تعذر تحميل بيانات اتصال الإعلان. حاول مجدداً.', '无法加载物品联系方式，请重试。'));
+        });
       }
     } else {
       setTitle('');
@@ -115,7 +120,7 @@ export default function ListItemPage({
     setErrorMessage('');
     setSuccessNotice(false);
     return () => { active = false; };
-  }, [itemToEdit, currentUser]);
+  }, [itemToEdit, currentUser, contactRetryNonce]);
 
   const categories = [
     { id: 'tools', label: t('catTools'), icon: Wrench },
@@ -169,7 +174,7 @@ export default function ListItemPage({
       );
       setImages(prev => [...prev, ...compressedImages].slice(0, 6));
     } catch (err) {
-      console.warn('[Image Upload Note]', err);
+      setErrorMessage(err?.message || l('بارگذاری تصویر ناموفق بود. دوباره تلاش کنید.', 'Image upload failed. Try again.', 'فشل تحميل الصورة. حاول مجدداً.', '图片上传失败，请重试。'));
     }
   };
 
@@ -343,6 +348,15 @@ export default function ListItemPage({
         <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
           <AlertCircle className="w-4 h-4 shrink-0 stroke-[2]" />
           <span>{errorMessage}</span>
+        </div>
+      )}
+
+      {contactLoadError && isEditMode && (
+        <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center justify-between gap-3" role="alert">
+          <span>{contactLoadError}</span>
+          <button type="button" onClick={() => setContactRetryNonce(v => v + 1)} className="shrink-0 underline font-bold cursor-pointer">
+            {l('تلاش مجدد', 'Try again', 'حاول مجدداً', '重试')}
+          </button>
         </div>
       )}
 
