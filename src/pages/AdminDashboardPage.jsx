@@ -234,7 +234,17 @@ export default function AdminDashboardPage({ onNavigate }) {
       let rows=filtered(txs,['id','type','status','pi_payment_id','pi_txid','user_id']);
       if(section==='tx-fees') rows=rows.filter(x=>x.type==='platform_fee'||!x.type);
       if(section==='tx-payouts') rows=rows.filter(x=>x.type==='admin_payout'||x.type==='user_payout');
-      return renderTable([['ID','id'],['Type',r=>statusLabel(r.type)],['Amount',r=>money(r.amount)],['Status',r=>statusLabel(r.status)],['Pi Payment','pi_payment_id'],['TXID','pi_txid'],['Date',r=>date(r.created_at)]],rows);
+      const fees=rows.filter(x=>x.type==='platform_fee'||!x.type).length;
+      const payoutRows=rows.filter(x=>x.type==='admin_payout'||x.type==='user_payout').length;
+      const completed=rows.filter(x=>['completed','success','succeeded'].includes(x.status)).length;
+      const pending=rows.filter(x=>['pending','processing','created','approved'].includes(x.status)).length;
+      return <div className="space-y-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {[['Platform Fees',fees],['Payouts',payoutRows],['Completed',completed],['Pending',pending]].map(([l,v])=><div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
+        </div>
+        <div className="p-3 rounded-xl bg-[#EEEDFE] dark:bg-[#211E45] text-xs">تراکنش‌ها فقط برای مشاهده و تطبیق مدیریتی هستند. مبلغ و وضعیت مالی از داده‌های معتبر سرور خوانده می‌شود و این نما منطق پرداخت را تغییر نمی‌دهد.</div>
+        {renderTable([['ID','id'],['Type',r=>statusLabel(r.type)],['Amount',r=>money(r.amount)],['Status',r=><Status s={r.status}/>],['Pi Payment','pi_payment_id'],['TXID','pi_txid'],['Date',r=>date(r.created_at)]],rows,'تراکنشی برای این بخش وجود ندارد.')}
+      </div>;
     }
     if(section==='audit') return renderTable([['Time',r=>date(r.timestamp)],['Admin',r=>r.adminUsername],['Action',r=>r.action],['Details',r=>JSON.stringify(r.details||{})]],filtered(audit,['adminUsername','action']));
     if(section.startsWith('system')) return <SystemView system={system} section={section} onCleanup={async()=>{try{await cloudSyncService.cleanupDatabase();await load();}catch(e){setError(e.message)}}} feeRatePercent={feeRatePercent} setFeeRatePercent={setFeeRatePercent} feeSaving={feeSaving} feeMessage={feeMessage} saveFeeRate={saveFeeRate}/>;
