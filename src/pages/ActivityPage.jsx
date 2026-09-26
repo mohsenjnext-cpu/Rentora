@@ -577,6 +577,7 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
                       <Flag className="w-4 h-4" />
                     </button>
                   </div>
+           </div>
                </div>
               );
             })
