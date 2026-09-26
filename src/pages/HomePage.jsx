@@ -106,66 +106,6 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
     </div>
   );
 
-  const MobileItemCard = ({ item }) => {
-    const isFav = favorites.includes(item.id);
-    const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
-    const ownerName = (item.ownerUsername || item.owner_username || '').toLowerCase().replace('@', '').trim();
-    const isOwner = Boolean(myName && ownerName && myName === ownerName);
-    const imageUrl = item.images?.[0] || item.imageUrl || item.image_url;
-
-    return (
-      <article
-        onClick={() => onSelectItem?.(item)}
-        className="bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 rounded-2xl p-1.5 overflow-hidden cursor-pointer shadow-sm active:scale-[.99] transition"
-      >
-        <div className="relative h-32 rounded-xl overflow-hidden bg-[#EEEDFE] dark:bg-[#211E45]">
-          {imageUrl ? (
-            <img src={imageUrl} alt={item.title || ''} className="w-full h-full object-cover" loading="lazy" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-[var(--primary-mid)]">
-              <Package className="w-8 h-8 stroke-[1.5]" />
-            </div>
-          )}
-          {item.ownerKYC && (
-            <span className="absolute top-2 start-2 rounded-lg px-1.5 py-1 text-[9px] font-bold badge-trust flex items-center gap-1 shadow-sm">
-              <ShieldCheck className="w-2.5 h-2.5" />
-              KYC
-            </span>
-          )}
-          <button
-            type="button"
-            aria-label={t('btnFavorite')}
-            onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
-            className="absolute top-2 end-2 w-8 h-8 rounded-full bg-[#26215C]/70 text-white backdrop-blur-sm flex items-center justify-center"
-          >
-            <Heart className={`w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
-          </button>
-        </div>
-        <div className="px-1.5 pt-2 pb-1">
-          <div className="text-[9px] text-slate-400 flex items-center justify-end gap-1 truncate">
-            <span>{item.location || l('مکان ثبت نشده', 'Location not set', 'الموقع غير محدد', '未设置位置')}</span>
-            <MapPin className="w-2.5 h-2.5 shrink-0" />
-          </div>
-          <h3 className="mt-1 text-[12px] font-bold text-slate-900 dark:text-white text-end truncate">{item.title}</h3>
-          <div className="mt-2 flex items-center justify-between gap-1">
-            {isOwner ? (
-              <button type="button" onClick={(e) => { e.stopPropagation(); onSelectItem?.(item); }} className="btn-primary rounded-lg px-3 py-1.5 text-[10px] font-bold">
-                {l('مدیریت', 'Manage', 'إدارة', '管理')}
-              </button>
-            ) : (
-              <button type="button" onClick={(e) => { e.stopPropagation(); onRentItem?.(item); }} className="btn-primary rounded-lg px-3 py-1.5 text-[10px] font-bold flex items-center gap-1">
-                <Coins className="w-3 h-3 text-amber-300" />{t('itemBookBtn')}
-              </button>
-            )}
-            <span className="text-[12px] font-black text-[var(--trust-text)] whitespace-nowrap">
-              {item.pricePerDay} π <span className="font-normal text-[10px] text-slate-400">/{l('روز', 'day', 'يوم', '天')}</span>
-            </span>
-          </div>
-        </div>
-      </article>
-    );
-  };
-
   return (
     <div className="select-none" onClick={() => searchFocused && setSearchFocused(false)}>
       <div className="md:hidden space-y-5 pb-4" onClick={(e) => e.stopPropagation()}>
@@ -224,7 +164,7 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
           {featuredItems.length === 0 ? (
             <EmptyState type="package" title={t('homeNoItemsTitle')} message={t('homeNoItemsDesc')} actionLabel={t('homePostFirstItem')} onAction={() => onNavigate('list-item')} />
           ) : (
-            <div className="grid grid-cols-2 gap-2.5">{featuredItems.slice(0, 4).map(item => <MobileItemCard key={item.id} item={item} />)}</div>
+            <div className="grid grid-cols-2 gap-2.5">{featuredItems.slice(0, 4).map(item => <ItemCard key={item.id} item={item} onSelect={onSelectItem} onRentClick={onRentItem} />)}</div>
           )}
         </section>
       </div>
