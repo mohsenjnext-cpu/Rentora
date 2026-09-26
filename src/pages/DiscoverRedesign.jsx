@@ -61,7 +61,7 @@ export default function DiscoverRedesign({ initialCategory = 'all', initialQuery
           <div className="min-w-0 flex-1">
             <RentoraInput id="discover-redesign-search" type="search" value={query} onChange={e => setQuery(e.target.value)}
               placeholder={t('discoverSearchPlaceholder')} leadingAdornment={<Search className="h-4 w-4" aria-hidden="true" />}
-              trailingAdornment={query ? <button type="button" onClick={() => setQuery('')} className="rounded p-1" aria-label={t('discoverClearSearch')}><X className="h-4 w-4" /></button> : null} />
+              trailingAdornment={query ? <button type="button" onClick={() => setQuery('')} className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg" aria-label={t('discoverClearSearch')}><X className="h-4 w-4" /></button> : null} />
           </div>
           <RentoraButton type="button" variant={filteredState ? 'primary' : 'secondary'} size="sm" onClick={() => setFiltersOpen(true)}
             aria-label={t('discoverFilterBtn')}><SlidersHorizontal className="h-4 w-4" /><span className="hidden sm:inline">{l('فیلتر', 'Filters', 'الفلاتر', '筛选')}</span></RentoraButton>
