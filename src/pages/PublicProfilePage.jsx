@@ -1,157 +1,85 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import { getUserReputationSummary } from '../services/reputationService';
 import { cloudSyncService } from '../services/cloudSyncService';
 import ItemCard from '../components/ItemCard';
-import { 
-  ArrowRight, 
-  ShieldCheck, 
-  Star, 
-  Package, 
-  Clock, 
-  MessageSquare,
-  Share2
-} from 'lucide-react';
+import ReportModal from '../components/ReportModal';
+import { ArrowRight, ShieldCheck, Star, Package, MessageSquare, Share2, Flag, UserX } from 'lucide-react';
 
-export default function PublicProfilePage({ 
-  username, 
-  onBack, 
-  onSelectItem, 
-  onRentItem, 
-  onOpenChat 
-}) {
-  const { lang, dir, t, l } = useLanguage();
-  const { users = [] } = usePiAuth();
+function Avatar({ src, username }) {
+  return src ? <img src={src} alt="" className="w-24 h-24 rounded-3xl object-cover bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700" /> :
+    <div className="w-24 h-24 rounded-3xl bg-[#EEEDFE] dark:bg-[#26215C] text-[#534AB7] dark:text-[#EEEDFE] flex items-center justify-center font-bold text-3xl">{(username || 'P').charAt(0).toUpperCase()}</div>;
+}
+
+export default function PublicProfilePage({ username, onBack, onSelectItem, onRentItem, onOpenChat }) {
+  const { dir, t, l } = useLanguage();
+  const { users = [], currentUser } = usePiAuth();
   const { items = [], rentals = [], fetchUserReviews } = useRentora();
-
   const [userReviewsData, setUserReviewsData] = useState(null);
   const [remoteUser, setRemoteUser] = useState(null);
-
-  const targetUsername = username || 'pioneer';
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const targetUsername = String(username || '').replace('@', '').trim();
 
   useEffect(() => {
     if (!targetUsername) return;
-    let isMounted = true;
-    cloudSyncService.fetchPublicUserProfile(targetUsername)
-      .then(u => {
-        if (isMounted && u) setRemoteUser(u);
-      })
-      .catch(() => {});
-    fetchUserReviews(targetUsername)
-      .then(data => {
-        if (isMounted && data) setUserReviewsData(data);
-      })
-      .catch(() => {});
-    return () => { isMounted = false; };
-  }, [targetUsername]);
+    let mounted = true;
+    cloudSyncService.fetchPublicUserProfile(targetUsername).then(u => mounted && u && setRemoteUser(u)).catch(() => {});
+    fetchUserReviews(targetUsername).then(data => mounted && data && setUserReviewsData(data)).catch(() => {});
+    return () => { mounted = false; };
+  }, [targetUsername, fetchUserReviews]);
 
   const targetUser = remoteUser || users.find(u => u.username?.toLowerCase() === targetUsername.toLowerCase());
-
-  // Items listed by this user
-  const userItems = (items || []).filter(
-    i => i.ownerUsername?.toLowerCase() === targetUsername.toLowerCase() &&
-         (!i.status || i.status === 'active')
-  );
-
-  // Dynamic reputation
-  const repSummary = getUserReputationSummary(targetUsername, userReviewsData || rentals);
+  const userItems = useMemo(() => (items || []).filter(i =>
+    i.ownerUsername?.toLowerCase() === targetUsername.toLowerCase() && (!i.status || i.status === 'active')
+  ), [items, targetUsername]);
+  const rep = getUserReputationSummary(targetUsername, userReviewsData || rentals);
+  const isSelf = currentUser?.username?.toLowerCase() === targetUsername.toLowerCase();
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4 pb-16 select-none animate-fadeIn">
-      
-      {/* Top Bar */}
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-[#534AB7] cursor-pointer"
-        >
-          <ArrowRight className={`w-4 h-4 ${dir === 'rtl' ? 'rotate-0' : 'rotate-180'}`} />
-          <span>{t('btnBack')}</span>
-        </button>
-      </div>
-
-      {/* Pioneer Card */}
-      <div className="p-4 sm:p-5 rounded-2xl rentora-card space-y-4">
-        <div className="flex items-start gap-3.5">
-          <img
-            src={targetUser?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${targetUsername}`}
-            alt=""
-            className="w-16 h-16 rounded-2xl object-cover bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shrink-0"
-          />
-          <div className="flex-1 space-y-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-slate-900 dark:text-white" dir="ltr">
-                {targetUser?.displayName || `@${targetUsername}`}
-              </h1>
-            </div>
-
-            <div className="flex items-center gap-1 text-xs font-bold">
-              {targetUser?.kycStatus === 'verified' ? (
-                <>
-                  <ShieldCheck className="w-3.5 h-3.5 stroke-[2.2] text-[#0F6E56]" />
-                  <span className="text-[#0F6E56]">KYC Verified Pioneer</span>
-                </>
-              ) : (
-                <span className="text-slate-400 font-normal">({l('احراز هویت نشده', 'Unverified', 'غير موثق', '未认证')})</span>
-              )}
-            </div>
-
-            <p className="text-xs text-slate-500 dark:text-slate-400 pt-1">
-              {targetUser?.bio || l('عضو تاییدشده جامعه پیشگامان شبکه پای در پلتفرم رنتورا.', 'Verified Pi Pioneer member on Rentora P2P marketplace.', 'عضو موثق في مجتمع رواد باي على منصة رنتورا.', 'Rentora 平台经过 Pi Network 认证的先锋成员。')}
-            </p>
-          </div>
-        </div>
-
-        {/* Dynamic Reputation Summary */}
-        <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-150 dark:border-slate-800 text-center">
-          <div className="space-y-0.5">
-            <span className="text-[10px] text-slate-400">{t('itemReviewsTitle')}</span>
-            <div className="text-xs font-bold text-amber-500 flex items-center justify-center gap-1">
-              <Star className="w-3.5 h-3.5 fill-amber-400" />
-              <span>{repSummary.formattedScore} ({repSummary.reviewCount})</span>
-            </div>
-          </div>
-
-          <div className="space-y-0.5">
-            <span className="text-[10px] text-slate-400">{t('ownerStatsListings')}</span>
-            <div className="text-xs font-bold text-slate-900 dark:text-white font-mono">
-              {userItems.length}
-            </div>
-          </div>
+    <div className="w-full max-w-6xl mx-auto space-y-5 pb-16 animate-fadeIn">
+      <div className="flex items-center justify-between gap-3">
+        <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-[#534AB7]"><ArrowRight className={'w-4 h-4 ' + (dir === 'rtl' ? '' : 'rotate-180')} />{t('btnBack')}</button>
+        <div className="flex gap-2">
+          {!isSelf && <button type="button" onClick={() => onOpenChat?.(null)} className="btn-secondary px-3 py-2 text-xs font-bold flex items-center gap-1.5"><MessageSquare className="w-4 h-4" />{l('گفتگو', 'Chat', 'محادثة', '聊天')}</button>}
+          <button type="button" onClick={() => setIsReportOpen(true)} className="p-2 rounded-xl border border-slate-200 dark:border-slate-700" title={l('گزارش', 'Report', 'إبلاغ', '举报')}><Flag className="w-4 h-4" /></button>
+          <button type="button" onClick={() => { try { navigator.share?.({ title: targetUser?.displayName || targetUsername, text: '@' + targetUsername }); } catch {} }} className="p-2 rounded-xl border border-slate-200 dark:border-slate-700" title={l('اشتراک‌گذاری', 'Share', 'مشاركة', '分享')}><Share2 className="w-4 h-4" /></button>
         </div>
       </div>
 
-      {/* Items Section */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-          <Package className="w-4 h-4 text-[#534AB7]" />
-          <span>{l('وسایل آگهی‌شده توسط این کاربر', 'Items listed by this Pioneer', 'الأغراض المعروضة بواسطة هذا المستخدم', '该用户发布的物品')} ({userItems.length})</span>
-        </h2>
-
-        {userItems.length === 0 ? (
-          <div className="p-8 text-center rounded-xl rentora-card space-y-2">
-            <Package className="w-8 h-8 mx-auto text-slate-300 stroke-[1.5]" />
-            <p className="text-xs text-slate-400">
-              {l('این کاربر در حال حاضر آگهی فعالی ندارد.', 'No active listings currently.', 'لا توجد إعلانات نشطة حالياً لهذا المستخدم.', '该用户当前没有处于活跃状态的物品。')}
-            </p>
+      <section className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-5">
+        <div className="rentora-card rounded-3xl p-5 sm:p-7">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+            <Avatar src={targetUser?.avatar} username={targetUsername} />
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{targetUser?.displayName || '@' + targetUsername}</h1>
+              <p className="text-sm text-slate-500" dir="ltr">@{targetUsername}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {targetUser?.kycStatus === 'verified' && <span className="badge-trust px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5" />KYC Verified</span>}
+                <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300">{l('پروفایل عمومی', 'Public profile', 'ملف عام', '公开主页')}</span>
+              </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 max-w-2xl">{targetUser?.bio || l('عضو جامعه Rentora.', 'Rentora community member.', 'عضو مجتمع Rentora.', 'Rentora 社区成员。')}</p>
+            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-3.5">
-            {userItems.map(item => (
-              <ItemCard
-                key={item.id}
-                item={item}
-                onSelect={onSelectItem}
-                onRentClick={onRentItem}
-              />
-            ))}
+          <div className="grid grid-cols-3 gap-2 mt-6 pt-5 border-t border-slate-200 dark:border-slate-800">
+            <div className="text-center"><div className="text-lg font-bold text-amber-500 flex justify-center gap-1"><Star className="w-4 h-4 fill-amber-400 mt-1" />{rep.formattedScore}</div><span className="text-[11px] text-slate-400">{t('itemReviewsTitle')}</span></div>
+            <div className="text-center"><div className="text-lg font-bold">{rep.reviewCount}</div><span className="text-[11px] text-slate-400">{l('نظرات', 'Reviews', 'المراجعات', '评价')}</span></div>
+            <div className="text-center"><div className="text-lg font-bold">{userItems.length}</div><span className="text-[11px] text-slate-400">{t('ownerStatsListings')}</span></div>
           </div>
-        )}
-      </div>
+        </div>
+        <div className="rounded-3xl bg-[#EEEDFE] dark:bg-[#26215C] p-5 space-y-3"><p className="text-xs font-bold text-[#26215C] dark:text-white">{l('اعتماد در معامله', 'Trust for rentals', 'الثقة في الإيجار', '租赁信任')}</p><p className="text-xs leading-5 text-slate-600 dark:text-slate-300">{l('اطلاعات عمومی، KYC و امتیازها برای کمک به تصمیم‌گیری قبل از هماهنگی اجاره نمایش داده می‌شوند.', 'Public identity, KYC and reputation help people assess a rental before coordinating.', 'تساعد الهوية العامة وKYC والسمعة في تقييم الإيجار قبل التنسيق.', '公开身份、KYC 和信誉帮助用户在租赁前了解对方。')}</p></div>
+      </section>
 
+      <section>
+        <div className="flex items-center justify-between mb-3"><h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2"><Package className="w-5 h-5 text-[#534AB7]" />{l('آگهی‌های فعال', 'Active listings', 'الإعلانات النشطة', '活跃物品')} <span className="text-xs text-slate-400">({userItems.length})</span></h2></div>
+        {userItems.length ? <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">{userItems.map(item => <ItemCard key={item.id} item={item} onSelect={onSelectItem} onRentClick={onRentItem} />)}</div> :
+          <div className="rentora-card rounded-2xl p-10 text-center space-y-2"><UserX className="w-8 h-8 mx-auto text-slate-300" /><p className="text-xs text-slate-400">{l('این کاربر در حال حاضر آگهی فعال ندارد.', 'No active listings currently.', 'لا توجد إعلانات نشطة حالياً.', '该用户目前没有活跃物品。')}</p></div>}
+      </section>
+
+      {rep.reviewCount > 0 && <section className="rentora-card rounded-2xl p-4"><div className="flex items-center gap-2 mb-3"><Star className="w-4 h-4 text-amber-500 fill-amber-400" /><h2 className="text-sm font-bold">{l('اعتبار و نظرات', 'Reputation & reviews', 'السمعة والمراجعات', '信誉与评价')}</h2></div><div className="flex items-center gap-2 text-xs"><span className="font-bold text-amber-500">{rep.formattedScore}</span><span className="text-slate-400">({rep.reviewCount} {l('نظر', 'reviews', 'مراجعة', '条评价')})</span></div></section>}
+
+      {isReportOpen && <ReportModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} targetType="user" targetId={targetUser?.uid || targetUser?.id || targetUsername} />}
     </div>
   );
 }
