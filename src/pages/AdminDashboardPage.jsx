@@ -1,8 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   LayoutDashboard, WalletCards, ArrowUpRight, Users, Package, AlertTriangle,
-  CreditCard, ShieldCheck, Settings, RefreshCw, Lock, Search, CheckCircle2,
-  XCircle, Clock3, Activity, Database, Wallet, ChevronDown, Loader2, Wrench
+  CreditCard, ShieldCheck, Settings, RefreshCw, Lock, Search,
+  Activity, Database, Wallet, ChevronDown, Loader2
 } from 'lucide-react';
 import { usePiAuth } from '../context/PiAuthContext';
 import { getApiBaseUrl } from '../services/apiConfig';
@@ -37,7 +37,7 @@ function statusLabel(s) {
 }
 
 export default function AdminDashboardPage({ onNavigate }) {
-  const { isAdmin, currentUser } = usePiAuth();
+  const { isAdmin } = usePiAuth();
   const [section, setSection] = useState('overview');
   const [expanded, setExpanded] = useState({});
   const [data, setData] = useState(null);
