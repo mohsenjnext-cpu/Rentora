@@ -789,6 +789,25 @@ export class CloudSyncService {
     return data.message;
   }
 
+  async markConversationAsRead(conversationId) {
+    if (!conversationId) throw new Error('conversationId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) return false;
+    const res = await fetch(`${apiBase}/api/conversations/${encodeURIComponent(conversationId)}/read`, {
+      credentials: 'include',
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({})
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در ثبت وضعیت خوانده‌شدن گفتگو');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
   broadcastConversationRead(convId) {
     if (!convId) return false;
     try {
