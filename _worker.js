@@ -204,7 +204,27 @@ async function getSession(request, env) { const header = request.headers.get('Au
 async function requireUser(request, env) { requireBindings(env); const session = await getSession(request, env); if (!session?.uid) throw Object.assign(new Error('Authentication required'), { status: 401 }); const row = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE pi_uid = ?1 LIMIT 1').bind(session.uid).first(); if (!row || row.status !== 'active') throw Object.assign(new Error('User is not active'), { status: 403 }); return { session, user: row }; }
 const QUOTE_TTL = 900; // 15 minutes in seconds
 
-function calculateAuthoritativeFinancials(pricePerDay, depositAmount, startDateStr, endDateStr, feeRate = 0.05, minFeePi = 0.0001) {
+const PLATFORM_FEE_MIN_RATE = 0.01;
+const PLATFORM_FEE_MAX_RATE = 0.05;
+const PLATFORM_FEE_DEFAULT_RATE = 0.05;
+const PLATFORM_FEE_CONFIG_KEY = 'config:platform_fee_rate';
+
+function clampPlatformFeeRate(rate) {
+  const value = Number(rate);
+  if (!Number.isFinite(value)) return PLATFORM_FEE_DEFAULT_RATE;
+  return Math.min(PLATFORM_FEE_MAX_RATE, Math.max(PLATFORM_FEE_MIN_RATE, value));
+}
+
+async function getPlatformFeeRate(env) {
+  const stored = await env?.RENTORA_KV?.get(PLATFORM_FEE_CONFIG_KEY);
+  if (stored !== null && stored !== undefined && stored !== '') {
+    const parsed = Number(stored);
+    if (Number.isFinite(parsed) && parsed >= PLATFORM_FEE_MIN_RATE && parsed <= PLATFORM_FEE_MAX_RATE) return parsed;
+  }
+  return clampPlatformFeeRate(env?.PLATFORM_FEE_RATE || PLATFORM_FEE_DEFAULT_RATE);
+}
+
+function calculateAuthoritativeFinancials(pricePerDay, depositAmount, startDateStr, endDateStr, feeRate = PLATFORM_FEE_DEFAULT_RATE, minFeePi = 0.0001) {
   const start = new Date(startDateStr);
   const end = new Date(endDateStr);
   if (isNaN(start.getTime()) || isNaN(end.getTime())) {
@@ -2503,7 +2523,7 @@ export default {
             listing.deposit_amount,
             body.startDate,
             body.endDate,
-            Number(env.PLATFORM_FEE_RATE || 0.05),
+            await getPlatformFeeRate(env),
             0.0001
           );
         } catch (err) {
@@ -2701,7 +2721,8 @@ export default {
         const days = Math.max(1, Math.ceil((end - start) / 86400000));
         const rentalAmount = Number(listing.price_per_day) * days;
         const deposit = Number(listing.deposit_amount);
-        const fee = Math.max(0.0001, rentalAmount * Number(listing.platform_fee_rate || env.PLATFORM_FEE_RATE || 0.05));
+        const feeRate = await getPlatformFeeRate(env);
+        const fee = Math.max(0.0001, Number((rentalAmount * feeRate).toFixed(4)));
         const total = fee;
 
         // Cancel previous pending_payment rentals by the same renter on the same listing so they don't block themselves
