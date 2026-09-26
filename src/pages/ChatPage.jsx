@@ -132,7 +132,7 @@ export default function ChatPage({ onNavigate }) {
         <div className="p-4 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center justify-between gap-3">
             <div><h1 className="text-lg font-bold text-slate-900 dark:text-white">{l('گفتگوها', 'Conversations', 'المحادثات', '会话')}</h1><p className="text-xs text-slate-500 mt-1">{conversations.length} {l('گفتگوی فعال', 'active chats', 'محادثات نشطة', '个活跃会话')}</p></div>
-            <button type="button" onClick={loadList} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Refresh"><RefreshCw className={`w-4 h-4 text-[#534AB7] ${loadingList ? 'animate-spin' : ''}`} /></button>
+            <button type="button" onClick={loadList} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800" aria-label={l('به‌روزرسانی گفتگوها', 'Refresh conversations', 'تحديث المحادثات', '刷新会话')}><RefreshCw className={`w-4 h-4 text-[#534AB7] ${loadingList ? 'animate-spin' : ''}`} /></button>
           </div>
           <div className="mt-4 relative"><Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><input value={query} onChange={e=>setQuery(e.target.value)} className="w-full ps-9 pe-3 h-11 rounded-xl bg-slate-100 dark:bg-[#1c1b30] outline-none text-sm" placeholder={l('جستجوی گفتگو...', 'Search conversations...', 'البحث في المحادثات...', '搜索会话...')} /></div>
         </div>
