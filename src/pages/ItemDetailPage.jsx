@@ -31,16 +31,20 @@ export default function ItemDetailPage({
     reviews: []
   });
   const [loadingReviews, setLoadingReviews] = useState(false);
+  const [reviewsError, setReviewsError] = useState('');
 
   useEffect(() => {
     if (!item?.id) return;
     let mounted = true;
     setLoadingReviews(true);
+    setReviewsError('');
     fetchListingReviews(item.id)
       .then((data) => {
         if (mounted && data) setReviewsData(data);
       })
-      .catch(() => {})
+      .catch(() => {
+        if (mounted) setReviewsError(l('بارگذاری نظرات ناموفق بود.', 'Unable to load reviews.', 'تعذر تحميل التقييمات.', '评价加载失败。'));
+      })
       .finally(() => {
         if (mounted) setLoadingReviews(false);
       });
@@ -254,6 +258,8 @@ export default function ItemDetailPage({
             <h2 className="font-black text-sm sm:text-base text-slate-900 dark:text-white">{t('itemReviewsTitle')} ({totalReviews})</h2>
             {loadingReviews ? (
               <div className="rentora-card p-5 flex justify-center items-center gap-2 text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin text-[#534AB7]" />{localized('در حال بارگذاری نظرات...', 'Loading reviews...', 'جارٍ تحميل التقييمات...', '正在加载评价...')}</div>
+            ) : reviewsError ? (
+              <div className="rentora-card p-5 text-center text-xs text-rose-500 dark:text-rose-300">{reviewsError}</div>
             ) : totalReviews === 0 ? (
               <div className="rentora-card p-5 text-center text-xs text-slate-400">{t('itemNoReviews')}</div>
             ) : (
