@@ -22,6 +22,7 @@ export default function ChatPage({ onNavigate }) {
   const [query, setQuery] = useState('');
   const [text, setText] = useState('');
   const [warning, setWarning] = useState('');
+  const [messageLoadError, setMessageLoadError] = useState('');
   const [listError, setListError] = useState('');
   const [loadingList, setLoadingList] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -64,13 +65,16 @@ export default function ChatPage({ onNavigate }) {
     if (!id || !isAuthenticated) return;
     setLoadingMessages(true);
     setWarning('');
+    setMessageLoadError('');
     try {
       const data = await fetchConversationMessages(id);
       setMessages(Array.isArray(data?.messages) ? data.messages : []);
       if (markConversationAsRead) await markConversationAsRead(id);
       requestAnimationFrame(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; });
     } catch (e) {
-      setWarning(e?.message || l('خطا در بارگذاری گفتگو.', 'Unable to load this conversation.', 'تعذر تحميل المحادثة.', '无法加载此会话。'));
+      const message = e?.message || l('خطا در بارگذاری گفتگو.', 'Unable to load this conversation.', 'تعذر تحميل المحادثة.', '无法加载此会话。');
+      setMessageLoadError(message);
+      setWarning(message);
     } finally { setLoadingMessages(false); }
   };
 
@@ -80,8 +84,14 @@ export default function ChatPage({ onNavigate }) {
   useEffect(() => {
     if (!selectedId || !isAuthenticated) return;
     const timer = setInterval(() => fetchConversationMessages(selectedId).then(data => {
-      if (Array.isArray(data?.messages)) setMessages(data.messages);
-    }).catch(() => {}), 2500);
+      if (Array.isArray(data?.messages)) {
+        setMessages(data.messages);
+        setMessageLoadError('');
+      }
+    }).catch((e) => {
+      const message = e?.message || l('اتصال گفتگو قطع شد. برای بارگذاری مجدد تلاش کنید.', 'Conversation refresh failed. Try loading it again.', 'تعذر تحديث المحادثة. حاول تحميلها مجدداً.', '会话刷新失败，请重新加载。');
+      setMessageLoadError(message);
+    }), 2500);
     return () => clearInterval(timer);
   }, [selectedId, isAuthenticated, fetchConversationMessages]);
 
@@ -157,16 +167,17 @@ export default function ChatPage({ onNavigate }) {
         </header>
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3">
           {loadingMessages ? <div className="text-center py-10 text-xs text-slate-400">{l('در حال بارگذاری پیام‌ها...','Loading messages...','جار تحميل الرسائل...','正在加载消息...')}</div> :
+          messageLoadError ? <div className="h-full flex items-center justify-center text-center p-8"><div className="space-y-3"><AlertTriangle className="w-8 h-8 mx-auto text-amber-500"/><p className="text-xs text-slate-500 dark:text-slate-400">{messageLoadError}</p><button type="button" onClick={() => loadMessages(selectedId)} disabled={loadingMessages} className="btn-secondary px-4 py-2 text-xs font-bold disabled:opacity-50">{loadingMessages ? l('در حال تلاش...','Retrying...','جارٍ إعادة المحاولة...','正在重试…') : l('تلاش مجدد','Try again','إعادة المحاولة','重试')}</button></div></div> :
           messages.length===0 ? <div className="h-full flex items-center justify-center text-center text-sm text-slate-400">{l('هنوز پیامی در این گفتگو نیست.','No messages in this conversation yet.','لا توجد رسائل في هذه المحادثة بعد.','此会话暂无消息。')}</div> :
           messages.map((m,i)=>{const mine=String(m.senderUid||m.sender_uid||m.senderUsername||'').toLowerCase()===String(currentUser?.uid||currentUser?.username||'').toLowerCase(); return <div key={m.id||i} className={`flex ${mine?'justify-end':'justify-start'}`}><div className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm ${mine?'bg-[#534AB7] text-white rounded-br-md':'bg-slate-100 dark:bg-[#1c1b30] text-slate-800 dark:text-slate-100 rounded-bl-md'}`}>{m.text || m.content || ''}</div></div>;})}
         </div>
-        {warning && <div className="mx-4 mb-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-200 flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0"/><span>{warning}</span></div>}
+        {warning && !messageLoadError && <div className="mx-4 mb-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-200 flex gap-2"><AlertTriangle className="w-4 h-4 shrink-0"/><span>{warning}</span></div>}
         <div className="p-3 md:p-4 border-t border-slate-200 dark:border-slate-800">
           <div className="flex gap-2 items-end"><textarea value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleSend();}}} rows={1} className="flex-1 min-h-11 max-h-32 resize-none rounded-xl bg-slate-100 dark:bg-[#1c1b30] px-4 py-3 text-sm outline-none" placeholder={l('پیام خود را بنویسید...','Write a message...','اكتب رسالة...','输入消息...')} /><button type="button" onClick={handleSend} disabled={!text.trim()||sending} className="btn-primary min-h-11 px-4 flex items-center gap-2 disabled:opacity-50"><Send className="w-4 h-4"/><span className="hidden sm:inline">{l('ارسال','Send','إرسال','发送')}</span></button></div>
           <div className="flex items-center gap-1.5 mt-2 text-[10px] text-slate-400"><ShieldCheck className="w-3 h-3"/>{l('پیش از رزرو، اطلاعات تماس و پرداخت خارج از رنتورا محدود است.','Before booking, off-platform contact and payment details are restricted.','قبل الحجز، يتم تقييد بيانات الاتصال والدفع خارج المنصة.','预订前会限制站外联系方式和付款信息。')}</div>
         </div></>}
       </section>
+      {selected && <ReportModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} type="conversation" target={{ id: selected.id, username: getOther(selected).username, title: selected.listing?.title || selected.item?.title || l('گفتگو','Conversation','محادثة','会话') }} />}
     </div>
   </div>;
-  {selected && <ReportModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} type="conversation" target={{ id: selected.id, username: getOther(selected).username, title: selected.listing?.title || selected.item?.title || l('گفتگو','Conversation','محادثة','会话') }} />}
 }
