@@ -15,6 +15,10 @@ export class CloudSyncService {
     this.pollInterval = null;
     this.broadcastChannel = null;
     this.lastSyncedHash = '';
+    // Public marketplace/user data is memory-only. Browser storage must not become
+    // a stale secondary authority or retain another user's profile after logout.
+    this.memoryItems = [];
+    this.memoryUsers = [];
 
     // Initialize cross-tab BroadcastChannel
     if (typeof window !== 'undefined') {
@@ -827,7 +831,6 @@ export class CloudSyncService {
   async _doFetchSharedData(forceNotify = false) {
     const localItems = this.getCachedItems();
     const localRentals = this.getCachedRentals();
-    const localUsers = this.getCachedUsers();
 
     const apiBase = getApiBaseUrl();
     if (!apiBase) {
@@ -865,19 +868,8 @@ export class CloudSyncService {
         const remoteRentals = Array.isArray(data.rentals) ? data.rentals : [];
         this.saveCachedRentals(remoteRentals);
 
-        // 3. Merge users
-        const remoteUsers = Array.isArray(data.users) ? data.users : [];
-        const mergedUsersMap = new Map();
-        localUsers.forEach(u => {
-          if (u.username) mergedUsersMap.set(u.username.toLowerCase(), u);
-        });
-        remoteUsers.forEach(u => {
-          if (u.username) {
-            const existing = mergedUsersMap.get(u.username.toLowerCase());
-            mergedUsersMap.set(u.username.toLowerCase(), { ...existing, ...u });
-          }
-        });
-        const mergedUsers = Array.from(mergedUsersMap.values());
+        // 3. Users are also server-authoritative and memory-only.
+        const mergedUsers = Array.isArray(data.users) ? data.users : [];
         this.saveCachedUsers(mergedUsers);
 
         const remoteTransactions = Array.isArray(data.transactions) ? data.transactions : [];
@@ -914,7 +906,7 @@ export class CloudSyncService {
     return {
       items: localItems,
       rentals: localRentals,
-      users: localUsers,
+      users: this.getCachedUsers(),
       reviews: [],
       transactions: []
     };
@@ -939,70 +931,49 @@ export class CloudSyncService {
   }
 
   getCachedItems() {
-    try {
-      const saved = localStorage.getItem(STORAGE_ITEMS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    return Array.isArray(this.memoryItems) ? this.memoryItems : [];
   }
 
   saveCachedItems(items) {
-    try {
-      localStorage.setItem(STORAGE_ITEMS_KEY, JSON.stringify(items || []));
-    } catch (e) {}
+    this.memoryItems = Array.isArray(items) ? items : [];
   }
 
   getCachedRentals() {
     // Intentionally empty. Rentals may contain private booking/payment state.
-    // Never restore them from localStorage or use browser storage as authority.
     return [];
   }
 
   saveCachedRentals(_rentals) {
-    // Intentionally a no-op for backward-compatible callers.
     // Server/D1 remains the only source of rental/payment truth.
   }
 
   clearUserSessionCache() {
+    // Remove legacy browser-stored state left by older builds. Current app state is
+    // held in React/service memory and the authenticated HttpOnly session cookie.
     try {
       if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem(STORAGE_USER_KEY);
-        localStorage.removeItem(STORAGE_RENTALS_KEY);
-        localStorage.removeItem('rentora_db_transactions_v8');
-        localStorage.removeItem('rentora_db_reports_v8');
-        localStorage.removeItem('rentora_live_v1_session');
+        [
+          STORAGE_USER_KEY,
+          STORAGE_ITEMS_KEY,
+          STORAGE_RENTALS_KEY,
+          STORAGE_USERS_KEY,
+          'rentora_live_v1_session',
+          'rentora_db_transactions_v8',
+          'rentora_db_reports_v8'
+        ].forEach((key) => localStorage.removeItem(key));
       }
     } catch (_) {}
+    this.memoryItems = [];
+    this.memoryUsers = [];
     this.lastSyncedHash = '';
   }
 
   getCachedUsers() {
-    try {
-      const saved = localStorage.getItem(STORAGE_USERS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    return Array.isArray(this.memoryUsers) ? this.memoryUsers : [];
   }
 
   saveCachedUsers(users) {
-    try {
-      const safeUsers = (Array.isArray(users) ? users : []).map((user) => {
-        if (!user || typeof user !== 'object') return user;
-        const { sessionToken, accessToken, ...safeUser } = user;
-        return safeUser;
-      });
-      localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(safeUsers));
-    } catch (e) {}
+    this.memoryUsers = Array.isArray(users) ? users : [];
   }
 
   subscribe(callback) {
