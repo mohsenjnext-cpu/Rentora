@@ -61,7 +61,7 @@ export default function HomeRedesign({ onNavigate, onSelectItem, onRentItem }) {
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-slate-900 dark:text-white">{l('دسته‌بندی‌ها', 'Categories', 'الفئات', '分类')}</h2>
-          <button type="button" onClick={() => onNavigate('discover')} className="text-xs font-semibold text-violet-600 dark:text-violet-300">{t('homeViewAll')}</button>
+          <button type="button" onClick={() => onNavigate('discover')} className="min-h-11 px-2 inline-flex items-center text-xs font-semibold text-violet-600 dark:text-violet-300">{t('homeViewAll')}</button>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none" role="list">
           {categories.map(([id, label, Icon]) => (
@@ -88,7 +88,7 @@ export default function HomeRedesign({ onNavigate, onSelectItem, onRentItem }) {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-black text-slate-900 dark:text-white">{t('homeFeaturedTitle')}</h2>
-          <button type="button" onClick={() => onNavigate('discover')} className="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 dark:text-violet-300">{t('homeViewAll')}<ArrowLeft className="h-3.5 w-3.5" /></button>
+          <button type="button" onClick={() => onNavigate('discover')} className="min-h-11 px-2 inline-flex items-center gap-1 text-xs font-semibold text-violet-600 dark:text-violet-300">{t('homeViewAll')}<ArrowLeft className="h-3.5 w-3.5" /></button>
         </div>
         {loading ? (
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4" role="status" aria-label={l('در حال بارگذاری آگهی‌ها', 'Loading listings', 'جارٍ تحميل الإعلانات', '正在加载物品')}>
