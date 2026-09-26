@@ -359,7 +359,7 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
         <button
           type="button"
           onClick={() => setActiveTab('active')}
-          role="tab" aria-selected={activeTab === 'active'} aria-controls="activity-rentals-panel" role="tab" aria-selected={activeTab === 'history'} aria-controls="activity-rental-history-panel" className={`flex-1 py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
+          role="tab" aria-selected={activeTab === 'active'} aria-controls="activity-rentals-panel" className={`flex-1 py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
             activeTab === 'active'
               ? 'bg-white dark:bg-[#26215C] text-[#26215C] dark:text-white shadow-xs'
               : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -371,6 +371,9 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
 
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'history'}
+          aria-controls="activity-rental-history-panel"
           onClick={() => setActiveTab('history')}
           className={`flex-1 py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
             activeTab === 'history'
@@ -385,7 +388,7 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
 
       {/* Active Tab */}
       {activeTab === 'active' && (
-        <div className="space-y-3">
+        <div id="activity-rentals-panel" role="tabpanel" className="space-y-3">
           {activeRentals.length === 0 ? (
             <div className="p-8 text-center rounded-xl rentora-card space-y-2">
               <Package className="w-8 h-8 mx-auto text-slate-300 stroke-[1.5]" />
