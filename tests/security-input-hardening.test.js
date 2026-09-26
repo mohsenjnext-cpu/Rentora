@@ -128,3 +128,11 @@ test('rental creation requires a server-issued quote when quoteId is supplied', 
   assert.match(route, /Quote does not belong to the authenticated user/);
   assert.match(route, /quote\.expiresAt/);
 });
+
+
+test('listing contact input rejects object/array coercion and enforces bounded contact fields', () => {
+  assert.match(worker, /Invalid listing contact info/);
+  assert.match(worker, /Invalid listing contact field type/);
+  assert.match(worker, /Listing contact field is too long/);
+  assert.match(worker, /\['phone', 'whatsapp', 'in_app'\]\.includes\(methodValue\)/);
+});
