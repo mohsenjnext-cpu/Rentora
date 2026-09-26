@@ -1773,6 +1773,7 @@ export default {
           WHERE (c.owner_user_id = ?1 OR c.renter_user_id = ?1)
             AND c.status != 'archived'
           ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
+          LIMIT 100
         `).bind(user.id).all();
 
         const conversations = (rows.results || []).map(row => {
@@ -1931,6 +1932,7 @@ export default {
           JOIN users u ON u.id = m.sender_user_id
           WHERE m.conversation_id = ?1
           ORDER BY m.created_at ASC
+          LIMIT 200
         `).bind(convId).all();
 
         const isPaid = conv.rental_payment_status === 'completed' && ['confirmed', 'active', 'completed'].includes(conv.rental_status);

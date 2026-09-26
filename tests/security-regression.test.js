@@ -93,3 +93,11 @@ test('profile sync enforces bounded field lengths server-side', () => {
   assert.match(profileSync, /profileLimits/);
   assert.match(profileSync, /Profile field too long/);
 });
+
+
+test('conversation and message reads are bounded server-side', () => {
+  const list = section("path === '/api/conversations'", "method === 'POST' && path === '/api/conversations'");
+  assert.match(list, /ORDER BY COALESCE\(c\.last_message_at, c\.created_at\) DESC\n\s*LIMIT 100/);
+  const messages = section("path.startsWith('/api/conversations/') && path.endsWith('/messages')", "method === 'POST' && path.startsWith('/api/conversations/') && path.endsWith('/messages')");
+  assert.match(messages, /ORDER BY m\.created_at ASC\n\s*LIMIT 200/);
+});
