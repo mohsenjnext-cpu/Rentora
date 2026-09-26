@@ -1633,12 +1633,13 @@ export default {
         if (!paymentLimit.allowed) return errorResponse('Too many payment approval requests. Please retry shortly.', 429, env, { retryAfter: paymentLimit.retryAfter }, origin);
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
-        if (!body.paymentId || !body.paymentIntentId) return errorResponse('paymentId and paymentIntentId are required', 400, env, undefined, origin);
-        let intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(body.paymentIntentId, user.id).first();
+        const paymentId = requireString(body?.paymentId, 'paymentId', 128, { required: true });
+        const paymentIntentId = requireString(body?.paymentIntentId, 'paymentIntentId', 128, { required: true });
+        let intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(paymentIntentId, user.id).first();
         if (!intent || new Date(intent.expires_at) <= new Date()) return errorResponse('Payment intent is invalid or expired', 409, env, undefined, origin);
-        if (intent.status === 'completed') return jsonResponse({ approved: true, paymentId: body.paymentId, idempotent: true }, 200, env, origin);
+        if (intent.status === 'completed') return jsonResponse({ approved: true, paymentId: paymentId, idempotent: true }, 200, env, origin);
         if (intent.pi_payment_id && intent.pi_payment_id !== paymentId) return errorResponse('Payment ID does not match intent', 409, env, undefined, origin);
-        if (intent.status === 'approved' && intent.pi_payment_id === body.paymentId) return jsonResponse({ approved: true, paymentId: body.paymentId, idempotent: true }, 200, env, origin);
+        if (intent.status === 'approved' && intent.pi_payment_id === paymentId) return jsonResponse({ approved: true, paymentId: paymentId, idempotent: true }, 200, env, origin);
 
         const paymentResponse = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
         const payment = await paymentResponse.json().catch(() => ({}));
@@ -1649,18 +1650,18 @@ export default {
 
         // Atomically bind the intent BEFORE touching Pi. This closes the race where
         // two different Pi payments could both be approved while only one wins the D1 claim.
-        const claim = await env.RENTORA_DB.prepare(`UPDATE payment_intents SET pi_payment_id=?1,updated_at=?2 WHERE id=?3 AND status='created' AND (pi_payment_id IS NULL OR pi_payment_id=?1)`).bind(body.paymentId, now(), intent.id).run();
+        const claim = await env.RENTORA_DB.prepare(`UPDATE payment_intents SET pi_payment_id=?1,updated_at=?2 WHERE id=?3 AND status='created' AND (pi_payment_id IS NULL OR pi_payment_id=?1)`).bind(paymentId, now(), intent.id).run();
         if (!Number(claim?.meta?.changes || 0)) {
           intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(intent.id, user.id).first();
-          if (!intent || intent.pi_payment_id !== body.paymentId || !['created','approved','completed'].includes(intent.status)) {
+          if (!intent || intent.pi_payment_id !== paymentId || !['created','approved','completed'].includes(intent.status)) {
             return errorResponse('Payment intent was concurrently claimed by another payment', 409, env, undefined, origin);
           }
           if (intent.status === 'completed' || intent.status === 'approved') {
-            return jsonResponse({ approved: true, paymentId: body.paymentId, idempotent: true }, 200, env, origin);
+            return jsonResponse({ approved: true, paymentId: paymentId, idempotent: true }, 200, env, origin);
           }
         }
 
-        const approveResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}/approve`, { method: 'POST', body: '{}' });
+        const approveResponse = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, { method: 'POST', body: '{}' });
         const approved = await approveResponse.json().catch(() => ({}));
         if (!approveResponse.ok && !(approveResponse.status === 400 && String(JSON.stringify(approved)).toLowerCase().includes('already'))) {
           // Keep the same Pi payment bound to the intent so a retry can recover from
@@ -1671,13 +1672,13 @@ export default {
         const approvedClaim = await env.RENTORA_DB.prepare(`UPDATE payment_intents SET status='approved',updated_at=?1 WHERE id=?2 AND status='created' AND pi_payment_id=?3`).bind(now(), intent.id, body.paymentId).run();
         if (!Number(approvedClaim?.meta?.changes || 0)) {
           intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(intent.id, user.id).first();
-          if (!intent || intent.pi_payment_id !== body.paymentId || !['approved','completed'].includes(intent.status)) {
+          if (!intent || intent.pi_payment_id !== paymentId || !['approved','completed'].includes(intent.status)) {
             return errorResponse('Payment intent was concurrently finalized by another request', 409, env, undefined, origin);
           }
         }
         await env.RENTORA_DB.prepare(`UPDATE rentals SET status='payment_approved',updated_at=?1 WHERE id=?2 AND status IN ('pending_payment','payment_approved')`).bind(now(), intent.rental_id).run();
 
-        return jsonResponse({ approved: true, paymentId: body.paymentId, data: approved, idempotent: Number(approvedClaim?.meta?.changes || 0) === 0 }, 200, env, origin);
+        return jsonResponse({ approved: true, paymentId: paymentId, data: approved, idempotent: Number(approvedClaim?.meta?.changes || 0) === 0 }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/payments/complete') {
         const paymentLimit = await enforceRateLimit(request, env, 'payment-complete', 20, 60);
@@ -1688,13 +1689,13 @@ export default {
         const txid = requireString(body?.txid, 'txid', 256, { required: true });
         const paymentIntentId = requireString(body?.paymentIntentId, 'paymentIntentId', 128, { required: true });
 
-        const intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(body.paymentIntentId, user.id).first();
+        const intent = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE id=?1 AND user_id=?2 LIMIT 1').bind(paymentIntentId, user.id).first();
         if (!intent) return errorResponse('Payment intent not found', 404, env, undefined, origin);
         if (intent.status === 'completed') {
           return jsonResponse({ completed: true, paymentId: intent.pi_payment_id, txid: intent.pi_txid, idempotent: true }, 200, env, origin);
         }
 
-        if (intent.pi_payment_id && intent.pi_payment_id !== body.paymentId) {
+        if (intent.pi_payment_id && intent.pi_payment_id !== paymentId) {
           return errorResponse('Payment ID does not match intent', 409, env, undefined, origin);
         }
         if (!['approved','completed'].includes(String(intent.status || '').toLowerCase())) {
@@ -1740,8 +1741,8 @@ export default {
           env.RENTORA_DB.prepare(`UPDATE rentals SET payment_status='completed',status='confirmed',updated_at=?1 WHERE id=?2`).bind(now(), intent.rental_id),
           env.RENTORA_DB.prepare(`INSERT INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)`).bind(`tx_${crypto.randomUUID()}`, intent.id, body.paymentId, body.txid, user.id, intent.amount, now())
         ]);
-        await env.RENTORA_KV.put(`payment-complete:${intent.id}`, JSON.stringify({ paymentId: body.paymentId, txid: body.txid, at: now() }), { expirationTtl: 60 * 60 * 24 * 30 });
-        return jsonResponse({ completed: true, paymentId: body.paymentId, txid: body.txid, data: completion }, 200, env, origin);
+        await env.RENTORA_KV.put(`payment-complete:${intent.id}`, JSON.stringify({ paymentId: paymentId, txid: body.txid, at: now() }), { expirationTtl: 60 * 60 * 24 * 30 });
+        return jsonResponse({ completed: true, paymentId: paymentId, txid: body.txid, data: completion }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/payments/incomplete') {
         const paymentLimit = await enforceRateLimit(request, env, 'payment-incomplete', 20, 60);
