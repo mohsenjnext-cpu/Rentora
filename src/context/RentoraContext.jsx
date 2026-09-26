@@ -17,7 +17,7 @@ export function RentoraProvider({ children }) {
   const { currentUser, isAdmin } = usePiAuth();
   // Financial authority remains on the server. This client value is display/config state only.
   const [platformConfig, setPlatformConfig] = useState({ platformFeePercentage: 5, minFeePi: 0.0001 });
-  const [items, setItems] = useState(() => cloudSyncService.getCachedItems());
+  const [items, setItems] = useState([]);
   // Favorites are session-local UI state. Do not persist another user's preferences across logout/device handoff.
   const [favorites, setFavorites] = useState([]);
   const [rentals, setRentals] = useState([]);
@@ -37,10 +37,13 @@ export function RentoraProvider({ children }) {
   // This prevents a logout/offline transition from leaving another user's rental/payment data visible.
   useEffect(() => {
     if (currentUser) return;
+    setItems([]);
+    setFavorites([]);
     setRentals([]);
     setTransactions([]);
     setReports([]);
     setConversations([]);
+    setLatestNotification(null);
     knownMsgIdsRef.current.clear();
     cloudSyncService.clearUserSessionCache();
   }, [currentUser]);
