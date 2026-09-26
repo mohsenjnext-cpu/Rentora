@@ -80,3 +80,8 @@ test('frontend auth bridge uses HttpOnly cookie sessions instead of browser-stor
   assert.match(piAuthContext, /headers\.set\('X-Rentora-Client', 'web'\)/);
   assert.match(piAuthContext, /localStorage\.removeItem\('rentora_live_v1_session'\)/);
 });
+
+test('frontend admin state requires the server-verified authorization result', () => {
+  assert.match(piAuthContext, /const isActuallyAdmin = Boolean\(currentUser\?\.uid && isServerVerifiedAdmin\)/);
+  assert.doesNotMatch(piAuthContext, /isServerVerifiedAdmin \|\| currentUser\?\.role === ['"]admin['"]/);
+});
