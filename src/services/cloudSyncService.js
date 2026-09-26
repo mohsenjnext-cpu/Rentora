@@ -652,6 +652,26 @@ export class CloudSyncService {
     return data;
   }
 
+  async fetchListingById(listingId) {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+    const id = String(listingId || '').trim();
+    if (!id) throw new Error('listingId is required');
+    const res = await fetch(`${apiBase}/api/listings/${encodeURIComponent(id)}?_t=${Date.now()}`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { ...this.getAuthHeaders(), 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+      cache: 'no-store'
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data?.item) {
+      const err = new Error(data?.error || 'آگهی موردنظر پیدا نشد.');
+      err.status = res.status;
+      throw err;
+    }
+    return data.item;
+  }
+
   async fetchListingReviews(listingId) {
     if (!listingId) throw new Error('listingId is required');
     const apiBase = getApiBaseUrl();
