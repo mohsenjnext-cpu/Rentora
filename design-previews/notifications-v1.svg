@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="980" viewBox="0 0 1440 980">
+<rect width="1440" height="980" fill="#F7F7FA"/>
+<rect x="0" y="0" width="272" height="980" fill="#fff"/>
+<rect x="272" y="0" width="1168" height="72" fill="#fff"/>
+<rect x="272" y="72" width="1168" height="908" fill="#F7F7FA"/>
+<text x="40" y="48" font-family="Arial" font-size="24" font-weight="700" fill="#26215C">Rentora</text>
+<rect x="24" y="108" width="224" height="52" rx="14" fill="#EEEDFE"/>
+<text x="48" y="141" font-family="Arial" font-size="15" font-weight="700" fill="#26215C">Home</text>
+<text x="48" y="196" font-family="Arial" font-size="15" fill="#475569">Discover</text>
+<text x="48" y="248" font-family="Arial" font-size="15" fill="#475569">Owner Hub</text>
+<text x="48" y="300" font-family="Arial" font-size="15" fill="#475569">Activity</text>
+<text x="48" y="352" font-family="Arial" font-size="15" fill="#475569">Profile</text>
+<text x="48" y="420" font-family="Arial" font-size="15" fill="#475569">Messages</text>
+<circle cx="210" cy="414" r="10" fill="#EF4444"/><text x="207" y="418" font-family="Arial" font-size="9" font-weight="700" fill="#fff">2</text>
+<text x="312" y="46" font-family="Arial" font-size="18" font-weight="700" fill="#0F172A">Notifications</text>
+<rect x="1290" y="20" width="38" height="34" rx="10" fill="#EEEDFE"/>
+<path d="M1309 27v16m-7-5h14" stroke="#534AB7" stroke-width="2"/>
+<circle cx="1322" cy="21" r="7" fill="#EF4444"/><text x="1320" y="24" font-family="Arial" font-size="7" font-weight="700" fill="#fff">3</text>
+
+<text x="320" y="130" font-family="Arial" font-size="28" font-weight="700" fill="#0F172A">Notifications</text>
+<text x="320" y="158" font-family="Arial" font-size="13" fill="#64748B">Important rental, message, payment and account updates in one place.</text>
+
+<rect x="320" y="188" width="800" height="62" rx="16" fill="#fff" stroke="#E2E8F0"/>
+<rect x="338" y="204" width="88" height="30" rx="15" fill="#26215C"/>
+<text x="360" y="224" font-family="Arial" font-size="12" font-weight="700" fill="#fff">All</text>
+<text x="458" y="224" font-family="Arial" font-size="12" fill="#475569">Unread 3</text>
+<text x="572" y="224" font-family="Arial" font-size="12" fill="#475569">Rentals</text>
+<text x="670" y="224" font-family="Arial" font-size="12" fill="#475569">Messages</text>
+<text x="790" y="224" font-family="Arial" font-size="12" fill="#475569">System</text>
+<text x="990" y="224" font-family="Arial" font-size="11" font-weight="700" fill="#534AB7">Mark all read</text>
+
+<rect x="320" y="270" width="800" height="108" rx="18" fill="#F5F3FF" stroke="#DDD6FE"/>
+<circle cx="366" cy="324" r="22" fill="#534AB7"/>
+<text x="358" y="331" font-family="Arial" font-size="20" fill="#fff">↗</text>
+<text x="404" y="308" font-family="Arial" font-size="14" font-weight="700" fill="#0F172A">New rental request</text>
+<text x="404" y="331" font-family="Arial" font-size="12" fill="#475569">A renter sent a request for your camera listing.</text>
+<text x="404" y="353" font-family="Arial" font-size="10" fill="#94A3B8">8 min ago</text>
+<circle cx="1084" cy="307" r="5" fill="#534AB7"/>
+
+<rect x="320" y="394" width="800" height="108" rx="18" fill="#fff" stroke="#E2E8F0"/>
+<circle cx="366" cy="448" r="22" fill="#E1F5EE"/>
+<text x="358" y="455" font-family="Arial" font-size="20" fill="#0F6E56">✓</text>
+<text x="404" y="432" font-family="Arial" font-size="14" font-weight="700" fill="#0F172A">Payment confirmed</text>
+<text x="404" y="455" font-family="Arial" font-size="12" fill="#475569">Your Rentora platform fee payment was confirmed.</text>
+<text x="404" y="477" font-family="Arial" font-size="10" fill="#94A3B8">42 min ago</text>
+
+<rect x="320" y="518" width="800" height="108" rx="18" fill="#fff" stroke="#E2E8F0"/>
+<circle cx="366" cy="572" r="22" fill="#FFF7ED"/>
+<text x="358" y="579" font-family="Arial" font-size="20" fill="#C2410C">!</text>
+<text x="404" y="556" font-family="Arial" font-size="14" font-weight="700" fill="#0F172A">Action needed</text>
+<text x="404" y="579" font-family="Arial" font-size="12" fill="#475569">A handover confirmation is waiting in your Owner Hub.</text>
+<text x="404" y="601" font-family="Arial" font-size="10" fill="#94A3B8">2 hr ago</text>
+<circle cx="1084" cy="555" r="5" fill="#534AB7"/>
+
+<rect x="320" y="650" width="800" height="108" rx="18" fill="#fff" stroke="#E2E8F0"/>
+<circle cx="366" cy="704" r="22" fill="#EEF2FF"/>
+<text x="358" y="711" font-family="Arial" font-size="20" fill="#4F46E5">i</text>
+<text x="404" y="688" font-family="Arial" font-size="14" font-weight="700" fill="#0F172A">Profile update</text>
+<text x="404" y="711" font-family="Arial" font-size="12" fill="#475569">Your trust profile information was updated successfully.</text>
+<text x="404" y="733" font-family="Arial" font-size="10" fill="#94A3B8">Yesterday</text>
+
+<rect x="1150" y="188" width="250" height="570" rx="20" fill="#fff" stroke="#E2E8F0"/>
+<text x="1180" y="228" font-family="Arial" font-size="15" font-weight="700" fill="#0F172A">Notification rules</text>
+<text x="1180" y="258" font-family="Arial" font-size="11" fill="#64748B">Keep the inbox useful, not noisy.</text>
+<line x1="1180" y1="280" x2="1370" y2="280" stroke="#E2E8F0"/>
+<text x="1180" y="316" font-family="Arial" font-size="12" font-weight="700" fill="#0F172A">Rentals</text>
+<text x="1180" y="338" font-family="Arial" font-size="10" fill="#64748B">Requests, confirmations, conflicts</text>
+<text x="1180" y="386" font-family="Arial" font-size="12" font-weight="700" fill="#0F172A">Messages</text>
+<text x="1180" y="408" font-family="Arial" font-size="10" fill="#64748B">New conversation activity</text>
+<text x="1180" y="456" font-family="Arial" font-size="12" font-weight="700" fill="#0F172A">Payments</text>
+<text x="1180" y="478" font-family="Arial" font-size="10" fill="#64748B">Platform fee and Pi status</text>
+<text x="1180" y="526" font-family="Arial" font-size="12" font-weight="700" fill="#0F172A">System</text>
+<text x="1180" y="548" font-family="Arial" font-size="10" fill="#64748B">Security and account notices</text>
+<rect x="1180" y="592" width="190" height="42" rx="12" fill="#EEEDFE"/>
+<text x="1210" y="618" font-family="Arial" font-size="11" font-weight="700" fill="#534AB7">Notification preferences</text>
+<text x="1180" y="700" font-family="Arial" font-size="10" fill="#94A3B8">Mobile uses a full-screen inbox.</text>
+<text x="1180" y="718" font-family="Arial" font-size="10" fill="#94A3B8">Sensitive details stay out of alerts.</text>
+</svg>
