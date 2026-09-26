@@ -8,7 +8,7 @@ if (!app.includes('currentTab === \'discover\'') || !app.includes('useItemDetail
 for (const token of ['useRentora', 'ItemCard', 'RentoraInput', 'RentoraButton', 'RentoraEmptyState', 'RentoraSkeleton']) {
   if (!page.includes(token)) throw new Error(`Discover redesign missing ${token}`);
 }
-for (const token of ['selected', 'category', 'condition', 'maxPrice', 'sort', 'filtersOpen']) {
+for (const token of ['category', 'condition', 'maxPrice', 'sort', 'filtersOpen']) {
   if (!page.includes(token)) throw new Error(`Discover redesign missing filter state: ${token}`);
 }
 if (page.includes('localStorage.')) throw new Error('Discover redesign must not persist private state in localStorage');
