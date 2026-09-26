@@ -578,7 +578,6 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
                     </button>
                   </div>
            </div>
-               </div>
               );
             })
           )}
