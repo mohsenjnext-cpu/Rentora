@@ -80,10 +80,6 @@ export default function ReviewModal({ rental, isOpen, onClose, onReviewSubmitted
       if (typeof onReviewSubmitted === 'function') {
         onReviewSubmitted();
       }
-      setTimeout(() => {
-        setSubmitted(false);
-        onClose();
-      }, 2000);
     } catch (err) {
       setErrorMsg(err?.message || l('خطا در ثبت نظر', 'Failed to submit review', 'فشل في إرسال التقييم', '提交评价失败'));
     } finally {
@@ -124,7 +120,7 @@ export default function ReviewModal({ rental, isOpen, onClose, onReviewSubmitted
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+            className="min-h-11 min-w-11 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -170,7 +166,7 @@ export default function ReviewModal({ rental, isOpen, onClose, onReviewSubmitted
               <button
                 type="button"
                 onClick={onClose}
-                className="btn-secondary w-full py-2 text-xs font-bold"
+                className="btn-secondary min-h-11 w-full py-2 text-xs font-bold"
               >
                 {l('متوجه شدم', 'Got it', 'فهمت ذلك', '知道了')}
               </button>
@@ -245,7 +241,7 @@ export default function ReviewModal({ rental, isOpen, onClose, onReviewSubmitted
                     key={star}
                     type="button"
                     onClick={() => setRating(star)}
-                    className="p-1.5 transition transform hover:scale-110 cursor-pointer"
+                    className="min-h-11 min-w-11 p-1.5 transition transform hover:scale-110 cursor-pointer flex items-center justify-center"
                   >
                     <Star
                       className={`w-7 h-7 ${
@@ -285,7 +281,7 @@ export default function ReviewModal({ rental, isOpen, onClose, onReviewSubmitted
             <button
               type="submit"
               disabled={submitting}
-              className="btn-primary w-full py-2.5 text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+              className="btn-primary min-h-11 w-full py-2.5 text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
             >
               {submitting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
