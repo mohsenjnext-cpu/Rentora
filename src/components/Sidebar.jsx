@@ -167,6 +167,9 @@ export default function Sidebar({
       <div className="p-3 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/80 dark:bg-[#16152B]/80 flex items-center justify-between shrink-0">
         <div className="relative">
           <button type="button" onClick={() => setLangMenuOpen(v => !v)}
+            aria-label={l('انتخاب زبان', 'Select language', 'اختيار اللغة', '选择语言')}
+            aria-expanded={langMenuOpen}
+            aria-haspopup="menu"
             className="px-2.5 py-2 rounded-xl bg-white dark:bg-[#211F39] border border-slate-200 dark:border-slate-700 text-[10px] font-semibold flex items-center gap-1.5 cursor-pointer">
             <Globe className="w-3.5 h-3.5 text-[var(--primary-mid)]"/>{getLanguageLabel(lang)}
             <ChevronDown className={`w-3 h-3 transition-transform ${langMenuOpen ? 'rotate-180' : ''}`}/>
@@ -176,13 +179,15 @@ export default function Sidebar({
               ['fa','فارسی'],['en','English'],['ar','العربية'],['zh','简体中文']
             ].map(([code,label]) => (
               <button key={code} type="button" onClick={() => { changeLanguage(code); setLangMenuOpen(false); }}
+                role="menuitemradio"
+                aria-checked={lang === code}
                 className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
                 <span>{label}</span>{lang === code && <Check className="w-3.5 h-3.5 text-[var(--primary-mid)]"/>}
               </button>
             ))}
           </div>}
         </div>
-        <button type="button" onClick={toggleTheme} className="p-2 rounded-xl bg-white dark:bg-[#211F39] border border-slate-200 dark:border-slate-700 cursor-pointer" aria-label="Toggle Theme">
+        <button type="button" onClick={toggleTheme} className="p-2 rounded-xl bg-white dark:bg-[#211F39] border border-slate-200 dark:border-slate-700 cursor-pointer" aria-label={l('تغییر پوسته', 'Toggle theme', 'تبديل المظهر', '切换主题')}>
           {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400"/> : <Moon className="w-4 h-4 text-slate-700"/>}
         </button>
       </div>
