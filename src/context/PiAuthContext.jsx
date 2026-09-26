@@ -165,9 +165,10 @@ export function PiAuthProvider({ children }) {
     return cloudSyncService.setAdminListingStatus(listingId, newStatus);
   };
 
-  const isActuallyAdmin = Boolean(
-    (currentUser?.uid && (isServerVerifiedAdmin || currentUser?.role === 'admin'))
-  );
+  // Admin access is a server assertion, never a client/stale role field.
+  // The user object may be cached or returned by an older auth path, so role alone
+  // must never elevate the browser into the admin surface.
+  const isActuallyAdmin = Boolean(currentUser?.uid && isServerVerifiedAdmin);
 
   return (
     <PiAuthContext.Provider value={{
