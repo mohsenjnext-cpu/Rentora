@@ -267,6 +267,7 @@ function Overview({cards,o,reports,payouts,go}) {
   return <div className="space-y-4"><div className="grid grid-cols-2 md:grid-cols-3 gap-3">{cards.map(([l,v,I])=><div key={l} className="rentora-card p-4"><I className="w-4 h-4 text-[#534AB7] mb-3"/><div className="text-lg font-black">{v}</div><div className="text-[10px] text-slate-500 mt-1">{l}</div></div>)}</div>
     <div className="grid md:grid-cols-2 gap-3"><div className="rentora-card p-4"><div className="flex justify-between"><b className="text-sm">Operational Alerts</b><AlertTriangle className="w-4 h-4 text-amber-600"/></div><p className="text-xs text-slate-500 mt-3">{o.openAlerts||0} مورد نیازمند بررسی.</p><button onClick={()=>go('reports-open')} className="btn-secondary px-3 py-2 text-[11px] mt-3">مشاهده گزارش‌ها</button></div>
       <div className="rentora-card p-4"><b className="text-sm">Payout Pipeline</b><div className="flex gap-2 mt-3 flex-wrap">{['reserved','creating','pi_created','approving','approved','completing','completed','reconciliation_required'].map(s=><span key={s} className="px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[9px]">{s}: {payouts.filter(p=>p.status===s).length}</span>)}</div></div></div>
+    <NeedsAttention reports={reports} payouts={payouts} go={go}/>
   </div>;
 }
 
