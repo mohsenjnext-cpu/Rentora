@@ -18,15 +18,21 @@ test('critical rental workflow keeps quote -> rental authority on the server', (
   assert.match(quoteBlock, /RENTORA_KV\.put\(\`quote:\$\{quoteId\}/);
 
   const rentalBlock = worker.slice(rentalStart, worker.indexOf("path === '/api/payments/intent'", rentalStart));
-  assert.match(rentalBlock, /quote\.listingId/);
-  assert.match(rentalBlock, /quote\.startDate/);
-  assert.match(rentalBlock, /quote\.endDate/);
+  assert.match(rentalBlock, /body\.quoteId/);
+  assert.match(rentalBlock, /rawQuote.*RENTORA_KV\.get\(\`quote:\$\{body\.quoteId\}/s);
+  assert.match(rentalBlock, /quote = JSON\.parse\(rawQuote\)/);
+  assert.match(rentalBlock, /quote\.renterUserId !== user\.id/);
+  assert.match(rentalBlock, /quote\.renterUid !== user\.pi_uid/);
+  assert.match(rentalBlock, /quote\?\.listingId/);
+  assert.match(rentalBlock, /quote\?\.startDate/);
+  assert.match(rentalBlock, /quote\?\.endDate/);
+  assert.match(rentalBlock, /calculateAuthoritativeFinancials\(/);
   assert.match(rentalBlock, /quote\.pricePerDay !== financials\.pricePerDay/);
   assert.match(rentalBlock, /quote\.depositAmount !== financials\.depositAmount/);
-  assert.match(rentalBlock, /rental_amount/);
-  assert.match(rentalBlock, /deposit_amount/);
-  assert.match(rentalBlock, /platform_fee/);
-  assert.match(rentalBlock, /total_amount/);
+  assert.match(rentalBlock, /financials\.baseRentalAmount/);
+  assert.match(rentalBlock, /financials\.depositAmount/);
+  assert.match(rentalBlock, /financials\.platformFee/);
+  assert.match(rentalBlock, /financials\.totalAmount/);
   assert.match(rentalBlock, /'pending_payment'/);
 });
 
