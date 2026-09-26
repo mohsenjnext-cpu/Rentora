@@ -221,7 +221,7 @@ export default function AdminDashboardPage({ onNavigate }) {
       let rows = filtered(listings,['title','owner_username','location','status']);
       if(section==='listings-active') rows=rows.filter(x=>x.status==='active');
       if(section==='listings-paused') rows=rows.filter(x=>x.status==='paused');
-      return <ListingsView rows={rows} busyId={busyId} updateListing={updateListing} renderTable={renderTable}/>;
+      return <ListingsView rows={rows} section={section} busyId={busyId} updateListing={updateListing} renderTable={renderTable}/>;
     }
     if (section.startsWith('reports')) {
       let rows = filtered(reports,['id','reporter_username','target_type','target_id','reason','status']);
@@ -341,7 +341,18 @@ function UserDetails({user,onBack}) {
   const fields=[['Username',user.username?`@${user.username}`:'—'],['Pi UID',user.piUid || user.uid || '—'],['Role',user.role || 'user'],['Status',user.status || '—'],['KYC',user.kycStatus || 'unknown'],['Joined',user.joinedDate || user.created_at || '—'],['Display Name',user.displayName || '—'],['Location',user.location || '—'],['Bio',user.bio || '—']];
   return <div className="space-y-3"><button onClick={onBack} className="btn-secondary px-3 py-2 text-xs">بازگشت به کاربران</button><div className="rentora-card p-5 grid sm:grid-cols-2 gap-4">{fields.map(([label,value])=><div key={label}><div className="text-[10px] text-slate-500">{label}</div><div className="text-sm font-bold mt-1 break-words">{String(value)}</div></div>)}</div></div>;
 }
-function ListingsView({rows,busyId,updateListing,renderTable}) { return renderTable([['Title','title'],['Owner',r=>`@${r.owner_username||'—'}`],['Price',r=>money(r.price_per_day)],['Status',r=><Status s={r.status}/>],['Updated',r=>date(r.updated_at)],['Action',r=><button disabled={busyId===r.id} onClick={()=>updateListing(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'Pause':'Activate'}</button>]],rows); }
+function ListingsView({rows,section,busyId,updateListing,renderTable}) {
+  const active=rows.filter(r=>r.status==='active').length;
+  const paused=rows.filter(r=>r.status==='paused').length;
+  const moderation=rows.filter(r=>['pending','moderation','pending_moderation','review'].includes(r.status)).length;
+  return <div className="space-y-3">
+    <div className="grid grid-cols-3 gap-2">
+      {[['Active',active],['Paused',paused],['Moderation',moderation]].map(([l,v]) => <div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
+    </div>
+    {section==='listings-moderation' && <div className="p-3 rounded-xl bg-[#EEEDFE] dark:bg-[#211E45] text-xs">صف بررسی محتوا و وضعیت آگهی‌ها. تغییر وضعیت فقط از مسیر مدیریتی و سرویس سمت سرور انجام می‌شود.</div>}
+    {renderTable([['Title','title'],['Owner',r=>`@${r.owner_username||'—'}`],['Price',r=>money(r.price_per_day)],['Status',r=><Status s={r.status}/>],['Updated',r=>date(r.updated_at)],['Action',r=><button disabled={busyId===r.id} onClick={()=>updateListing(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'Pause':'Activate'}</button>]],rows,section==='listings-moderation'?'آگهی‌ای در صف بررسی نیست.':'آگهی‌ای وجود ندارد.')}
+  </div>;
+}
 function ReportsView({rows,busyId,updateReport,renderTable}) { return renderTable([['Reporter',r=>`@${r.reporter_username||'—'}`],['Target',r=>`${r.target_type} / ${r.target_id}`],['Reason','reason'],['Status',r=><Status s={r.status}/>],['Date',r=>date(r.created_at)],['Action',r=><div className="flex gap-1">{r.status==='open'&&<button disabled={busyId===r.id} onClick={()=>updateReport(r,'reviewing')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Review</button>}{r.status==='reviewing'&&<button disabled={busyId===r.id} onClick={()=>updateReport(r,'resolved')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Resolve</button>}</div>]],rows); }
 function SystemView({system,section,onCleanup,feeRatePercent,setFeeRatePercent,feeSaving,feeMessage,saveFeeRate}) {
   if(section==='system-db') return <div className="rentora-card p-5"><div className="flex items-center gap-2 font-bold"><Database className="w-4 h-4"/> Database Maintenance</div><p className="text-xs text-slate-500 mt-2">پاکسازی فقط رکوردهای stale تعریف‌شده در backend را هدف می‌گیرد.</p><button onClick={onCleanup} className="btn-primary px-4 py-2 text-xs mt-4">Run Cleanup</button></div>;
