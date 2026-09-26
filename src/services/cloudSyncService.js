@@ -195,7 +195,10 @@ export class CloudSyncService {
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data?.success !== true) {
-      throw new Error(data?.error || 'خطا در دریافت پیش‌فاکتور از سرور');
+      const err = new Error(data?.error || 'خطا در دریافت پیش‌فاکتور از سرور');
+      err.status = res.status;
+      err.data = data;
+      throw err;
     }
     return data.quote;
   }
@@ -213,7 +216,10 @@ export class CloudSyncService {
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data?.success !== true) {
-      throw new Error(data?.error || 'خطا در ایجاد قرارداد اجاره در سرور');
+      const err = new Error(data?.error || 'خطا در ایجاد قرارداد اجاره در سرور');
+      err.status = res.status;
+      err.data = data;
+      throw err;
     }
     return data.rental;
   }

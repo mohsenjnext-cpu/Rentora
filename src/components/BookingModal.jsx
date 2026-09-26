@@ -30,7 +30,6 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
   const {
     calculatePricing,
-    createRentalBooking,
     executePiPaymentForRental,
     fetchRentalContact
   } = useRentora();
@@ -187,14 +186,15 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
           });
         }
       } catch (createErr) {
-        // Fallback for offline/compatibility mode
-        const draftRental = await createRentalBooking(item, {
-          startDate: dates.startDate,
-          endDate: dates.endDate,
-          daysCount,
-          notes
-        });
-        persistedRental = await cloudSyncService.broadcastNewRental(draftRental);
+        if (createErr?.status === 409) {
+          throw new Error(l(
+            'این کالا برای تاریخ‌های انتخابی دیگر در دسترس نیست. لطفاً تاریخ دیگری انتخاب کنید.',
+            'These dates are no longer available for this listing. Please choose different dates.',
+            'لم تعد هذه التواريخ متاحة لهذا الإعلان. يرجى اختيار تواريخ أخرى.',
+            '所选日期已无法预订此商品，请选择其他日期。'
+          ));
+        }
+        throw createErr;
       }
 
       if (!persistedRental?.id) throw new Error('ثبت رزرو در سرور ناموفق بود.');
