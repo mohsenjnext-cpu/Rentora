@@ -174,3 +174,19 @@ test('gateway payment completion requires bounded text identifiers', () => {
   assert.match(gateway, /body\?\.txid !== 'string'/);
   assert.match(gateway, /paymentIntentId\.length > 128/);
 });
+
+
+test('gateway payment approval requires bounded text identifiers', () => {
+  const route = gateway.slice(gateway.indexOf('async function approvePayment'), gateway.indexOf('async function completePayment'));
+  assert.match(route, /paymentIdRaw = body\?\.paymentId/);
+  assert.match(route, /paymentIntentIdRaw = body\?\.paymentIntentId/);
+  assert.match(route, /paymentId\.length > 128/);
+  assert.match(route, /paymentIntentId\.length > 128/);
+});
+
+test('gateway payout idempotency rejects non-text and oversized keys', () => {
+  const helper = gateway.slice(gateway.indexOf('function payoutIdempotencyKey'), gateway.indexOf('function parsePaymentMetadata'));
+  assert.match(helper, /bodyKey != null && typeof bodyKey !== 'string'/);
+  assert.match(helper, /normalized\.length <= 200/);
+  assert.doesNotMatch(helper, /String\(key\)\.trim\(\)/);
+});
