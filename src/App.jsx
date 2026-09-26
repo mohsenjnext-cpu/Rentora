@@ -49,6 +49,7 @@ function MainApp() {
   const [isDirectBookingOpen, setIsDirectBookingOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const navigationHistoryReady = React.useRef(false);
+  const itemsRef = React.useRef(items);
 
   const getNavigationState = () => ({
     currentTab,
@@ -66,6 +67,10 @@ function MainApp() {
   };
 
   useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return undefined;
 
     const initialState = getNavigationState();
@@ -79,8 +84,8 @@ function MainApp() {
       setCurrentTab(state.currentTab);
       setPreviousTab(state.previousTab || 'discover');
       setSelectedItemId(state.selectedItemId || null);
-      setSelectedItem((items || []).find(item => item.id === state.selectedItemId) || null);
-      setEditingItem((items || []).find(item => item.id === state.editingItemId) || null);
+      setSelectedItem((itemsRef.current || []).find(item => item.id === state.selectedItemId) || null);
+      setEditingItem((itemsRef.current || []).find(item => item.id === state.editingItemId) || null);
       setPublicProfileUsername(state.publicProfileUsername || null);
       setDiscoverInitialCategory(state.discoverInitialCategory || 'all');
       setDiscoverInitialQuery(state.discoverInitialQuery || '');
@@ -91,7 +96,7 @@ function MainApp() {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [items]);
+  }, []);
 
   // Modals States
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
