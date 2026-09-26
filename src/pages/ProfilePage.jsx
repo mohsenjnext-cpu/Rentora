@@ -80,9 +80,12 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
     setIsUploadingImage(true); setProfileError('');
     try {
       const url = await cloudSyncService.compressImage(file, 400, 0.85);
-      setAvatar(url);
+      if (!url || url.startsWith('data:')) {
+        throw new Error(l('آپلود سرور تصویر انجام نشد. تصویر محلی ذخیره نشد.', 'The server did not persist the image. The local image was not saved.', 'تعذر حفظ الصورة على الخادم. لم يتم حفظ الصورة محلياً.', '服务器未保存图片，本地图片不会被保存。'));
+      }
       const updater = updateProfile || updateUserProfile;
       if (updater && !isEditing) await updater({ avatar: url });
+      setAvatar(url);
       setSaveSuccess(true); setTimeout(() => setSaveSuccess(false), 2500);
     } catch (err) { setProfileError(err?.message || l('آپلود تصویر ناموفق بود.', 'Profile photo upload failed.', 'فشل رفع الصورة.', '头像上传失败。')); }
     finally { setIsUploadingImage(false); e.target.value = ''; }
