@@ -45,7 +45,6 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
     { id: 'home', label: t('catHome'), icon: Home }
   ];
 
-  // Filter & sort
   const filteredItems = useMemo(() => {
     return (items || []).filter((item) => {
       if (!item) return false;
@@ -69,7 +68,7 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
       if (sortBy === 'price_asc') return (a.pricePerDay || 0) - (b.pricePerDay || 0);
       if (sortBy === 'price_desc') return (b.pricePerDay || 0) - (a.pricePerDay || 0);
       if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
-      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0); // newest
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
     });
   }, [items, query, selectedCategory, selectedCondition, selectedCity, maxPrice, sortBy]);
 
@@ -86,15 +85,10 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
 
   return (
     <div className="space-y-4 pb-16 select-none">
-      
-      {/* 1. Discover search */}
       <div className="space-y-2">
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">
-          {t('discoverTitle')}
-        </h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">{t('discoverTitle')}</h1>
 
         <div className="flex items-center gap-2 w-full sticky top-0 z-20 py-2 bg-inherit md:static md:py-0">
-          {/* Live Search Bar with inline filter icon */}
           <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute top-2.5 left-3 rtl:left-auto rtl:right-3 stroke-[2]" />
             <input
@@ -117,7 +111,6 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
             )}
           </div>
 
-          {/* Inline Filter Button (Opens filter sheet) */}
           <button
             type="button"
             onClick={() => setFilterSheetOpen(true)}
@@ -128,6 +121,8 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
             }`}
             aria-label={t('discoverFilterBtn')}
             title={t('discoverFilterBtn')}
+            aria-expanded={filterSheetOpen}
+            aria-controls="discover-filter-dialog"
           >
             <SlidersHorizontal className="w-4 h-4 stroke-[1.8]" />
             <span className="hidden sm:inline">{l('فیلترها', 'Filters', 'الفلاتر', '筛选')}</span>
@@ -135,16 +130,24 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
         </div>
       </div>
 
-      {/* 2. Category shortcuts + results controls */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide" role="group" aria-label={l('دسته‌بندی‌ها', 'Categories', 'الفئات', 'الفئات')}>
         {filterCategories.slice(0, 6).map(cat => {
           const Icon = cat.icon;
           const active = selectedCategory === cat.id;
-          return <button key={cat.id} type="button" onClick={() => setSelectedCategory(cat.id)} className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition ${active ? 'bg-[#26215C] text-white border-[#26215C] dark:bg-[#534AB7]' : 'bg-white dark:bg-[#151426] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-[#534AB7]'}`}><Icon className="w-3.5 h-3.5" />{cat.label}</button>;
+          return <button
+            key={cat.id}
+            type="button"
+            onClick={() => setSelectedCategory(cat.id)}
+            aria-pressed={active}
+            className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold border transition ${
+              active ? 'bg-[#26215C] text-white border-[#26215C] dark:bg-[#534AB7]' : 'bg-white dark:bg-[#151426] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-[#534AB7]'
+            }`}
+          >
+            <Icon className="w-3.5 h-3.5" />{cat.label}
+          </button>;
         })}
       </div>
 
-      {/* 3. Row showing Result Count + Sort Control */}
       <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 py-1 border-b border-slate-150 dark:border-slate-800">
         <span className="text-[11px] font-medium">
           {l(`${filteredItems.length} کالا یافت شد`, `${filteredItems.length} items found`, `تم العثور على ${filteredItems.length} أغراض`, `共找到 ${filteredItems.length} 件物品`)}
@@ -166,7 +169,6 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
         </div>
       </div>
 
-      {/* 4. Items Grid / Consistent Empty State */}
       {filteredItems.length === 0 ? (
         <EmptyState
           type="search"
@@ -178,42 +180,36 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
           {filteredItems.map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              onSelect={onSelectItem}
-              onRentClick={onRentItem}
-            />
+            <ItemCard key={item.id} item={item} onSelect={onSelectItem} onRentClick={onRentItem} />
           ))}
         </div>
       )}
 
-      {/* 5. Filter Sheet Modal */}
       {filterSheetOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-fadeIn">
-          <div 
+          <div
+            id="discover-filter-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="discover-filter-title"
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-md bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-4 sm:p-5 space-y-4 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-              <span className="text-xs font-bold text-slate-900 dark:text-white">
-                {t('discoverFilterBtn')}
-              </span>
+              <span id="discover-filter-title" className="text-xs font-bold text-slate-900 dark:text-white">{t('discoverFilterBtn')}</span>
               <button
                 type="button"
                 onClick={() => setFilterSheetOpen(false)}
+                aria-label={l('بستن فیلترها', 'Close filters', 'إغلاق الفلاتر', '关闭筛选')}
                 className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Category Filter Inside Sheet (with icons) */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                {t('discoverFilterCategory')}:
-              </label>
-              <div className="grid grid-cols-2 gap-1.5">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('discoverFilterCategory')}:</label>
+              <div className="grid grid-cols-2 gap-1.5" role="group" aria-label={t('discoverFilterCategory')}>
                 {filterCategories.map(cat => {
                   const Icon = cat.icon;
                   const isSel = selectedCategory === cat.id;
@@ -222,6 +218,7 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
                       key={cat.id}
                       type="button"
                       onClick={() => setSelectedCategory(cat.id)}
+                      aria-pressed={isSel}
                       className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
                         isSel
                           ? 'bg-[#26215C] text-white dark:bg-[#534AB7]'
@@ -236,7 +233,6 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
               </div>
             </div>
 
-            {/* Price Slider */}
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
                 <span>{t('discoverFilterMaxPrice')}:</span>
@@ -254,10 +250,10 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
               />
             </div>
 
-            {/* Condition Dropdown */}
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('itemCondition')}:</label>
+              <label htmlFor="discover-condition" className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('itemCondition')}:</label>
               <select
+                id="discover-condition"
                 value={selectedCondition}
                 onChange={(e) => setSelectedCondition(e.target.value)}
                 className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#1E1D33] text-slate-900 dark:text-white text-xs"
@@ -269,10 +265,10 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
               </select>
             </div>
 
-            {/* City */}
             <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('discoverFilterLocation')}:</label>
+              <label htmlFor="discover-location" className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('discoverFilterLocation')}:</label>
               <input
+                id="discover-location"
                 aria-label={t('discoverFilterLocation')}
                 type="text"
                 value={selectedCity}
@@ -282,7 +278,6 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
               />
             </div>
 
-            {/* Actions */}
             <div className="pt-2 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
@@ -304,7 +299,6 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
           </div>
         </div>
       )}
-
     </div>
   );
 }
