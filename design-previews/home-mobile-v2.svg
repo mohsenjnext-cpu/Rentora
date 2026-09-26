@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500">
+<defs><linearGradient id="h" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#26215C"/><stop offset="1" stop-color="#534AB7"/></linearGradient><filter id="s"><feDropShadow dx="0" dy="5" stdDeviation="9" flood-opacity=".11"/></filter></defs>
+<rect width="1200" height="1500" fill="#F7F7FA"/>
+<!-- mobile frame -->
+<rect x="80" y="35" width="440" height="1430" rx="38" fill="#fff" stroke="#ddd" stroke-width="3"/>
+<text x="112" y="82" font-family="Arial" font-size="18" font-weight="700" fill="#26215C">☰  Rentora</text>
+<text x="410" y="82" font-family="Arial" font-size="20" fill="#555">◉  ●</text>
+<!-- hero -->
+<rect x="102" y="108" width="396" height="220" rx="25" fill="url(#h)"/>
+<text x="130" y="153" font-family="Arial" font-size="23" font-weight="700" fill="#fff">چیزی که لازم داری،</text>
+<text x="130" y="183" font-family="Arial" font-size="23" font-weight="700" fill="#fff">همین اطراف پیدا کن</text>
+<text x="130" y="211" font-family="Arial" font-size="13" fill="#E8E7FF">اجاره مستقیم و شفاف از افراد</text>
+<rect x="130" y="238" width="340" height="58" rx="16" fill="#fff"/><text x="152" y="273" font-family="Arial" font-size="14" fill="#999">دوربین، دریل، دوچرخه...</text><text x="430" y="273" font-size="18" fill="#534AB7">⌕</text>
+<!-- quick chips -->
+<text x="102" y="368" font-family="Arial" font-size="19" font-weight="700">کشف سریع</text>
+<g font-family="Arial" font-size="12"><rect x="102" y="388" width="115" height="38" rx="19" fill="#EEEDFE"/><text x="123" y="412" fill="#534AB7">نزدیک من</text><rect x="226" y="388" width="126" height="38" rx="19" fill="#fff" stroke="#ddd"/><text x="243" y="412" fill="#555">✓ احراز شده</text><rect x="361" y="388" width="137" height="38" rx="19" fill="#fff" stroke="#ddd"/><text x="379" y="412" fill="#555">★ صاحبان معتبر</text></g>
+<!-- categories -->
+<text x="102" y="470" font-family="Arial" font-size="19" font-weight="700">دسته‌بندی‌ها</text>
+<g filter="url(#s)" font-family="Arial" font-size="12">
+<rect x="102" y="490" width="118" height="74" rx="16" fill="#fff"/><text x="124" y="520">🚲 وسایل نقلیه</text><text x="124" y="544" fill="#888">دوچرخه و اسکوتر</text>
+<rect x="230" y="490" width="118" height="74" rx="16" fill="#fff"/><text x="252" y="520">🛠 ابزار</text><text x="252" y="544" fill="#888">تجهیزات</text>
+<rect x="358" y="490" width="140" height="74" rx="16" fill="#fff"/><text x="380" y="520">📷 دیجیتال</text><text x="380" y="544" fill="#888">دوربین و کنسول</text></g>
+<text x="102" y="592" font-family="Arial" font-size="13" fill="#534AB7">همه دسته‌ها ›</text>
+<!-- nearby horizontal -->
+<text x="102" y="644" font-family="Arial" font-size="19" font-weight="700">نزدیک تو</text><text x="102" y="668" font-family="Arial" font-size="12" fill="#777">موارد قابل دسترسی در اطراف</text>
+<g filter="url(#s)" font-family="Arial">
+<rect x="102" y="686" width="220" height="275" rx="18" fill="#fff"/><rect x="102" y="686" width="220" height="125" rx="18" fill="#DDD"/><text x="170" y="752" font-size="25" fill="#999">IMAGE</text><circle cx="298" cy="714" r="18" fill="#fff"/><text x="291" y="720" font-size="17">♡</text><text x="118" y="838" font-size="15" font-weight="700">دریل حرفه‌ای</text><rect x="118" y="854" width="78" height="21" rx="11" fill="#E7F5EC"/><text x="131" y="869" font-size="10" fill="#26734D">✓ احراز شده</text><text x="118" y="898" font-size="11" fill="#666">۳.۲ km · ابزار</text><text x="118" y="931" font-size="14" font-weight="700" fill="#26215C">۱۸۰ Pi / روز</text>
+<rect x="336" y="686" width="220" height="275" rx="18" fill="#fff"/><rect x="336" y="686" width="220" height="125" rx="18" fill="#DDD"/><text x="404" y="752" font-size="25" fill="#999">IMAGE</text><circle cx="532" cy="714" r="18" fill="#fff"/><text x="525" y="720" font-size="17">♡</text><text x="352" y="838" font-size="15" font-weight="700">دوربین Sony</text><rect x="352" y="854" width="78" height="21" rx="11" fill="#E7F5EC"/><text x="365" y="869" font-size="10" fill="#26734D">✓ احراز شده</text><text x="352" y="898" font-size="11" fill="#666">۴.۱ km · دیجیتال</text><text x="352" y="931" font-size="14" font-weight="700" fill="#26215C">۲۵۰ Pi / روز</text></g>
+<!-- recommended -->
+<text x="102" y="1015" font-family="Arial" font-size="19" font-weight="700">پیشنهاد برای تو</text>
+<rect x="102" y="1040" width="396" height="120" rx="18" fill="#fff" filter="url(#s)"/><rect x="102" y="1040" width="120" height="120" rx="18" fill="#DDD"/><text x="133" y="1102" font-family="Arial" font-size="22" fill="#999">IMAGE</text><text x="242" y="1078" font-family="Arial" font-size="15" font-weight="700">کنسول بازی</text><text x="242" y="1103" font-family="Arial" font-size="12" fill="#666">بر اساس کشف اخیر</text><text x="242" y="1132" font-family="Arial" font-size="14" font-weight="700" fill="#26215C">۳۲۰ Pi / روز</text>
+<!-- trust -->
+<text x="102" y="1210" font-family="Arial" font-size="19" font-weight="700">چرا Rentora؟</text>
+<g font-family="Arial"><rect x="102" y="1232" width="396" height="70" rx="16" fill="#fff"/><text x="122" y="1260" font-size="14" font-weight="700" fill="#26215C">✓ احراز هویت</text><text x="122" y="1283" font-size="11" fill="#666">نشانه اعتماد قابل مشاهده</text>
+<rect x="102" y="1314" width="396" height="70" rx="16" fill="#fff"/><text x="122" y="1342" font-size="14" font-weight="700" fill="#26215C">★ امتیاز و سابقه</text><text x="122" y="1365" font-size="11" fill="#666">بازخورد و سابقه فعالیت</text></g>
+<!-- bottom nav -->
+<rect x="102" y="1400" width="396" height="54" rx="18" fill="#fff" stroke="#ddd"/>
+<text x="126" y="1434" font-family="Arial" font-size="11" fill="#534AB7">⌂ خانه</text><text x="205" y="1434" font-family="Arial" font-size="11" fill="#666">⌕ کشف</text>
+<circle cx="300" cy="1426" r="24" fill="#534AB7"/><text x="293" y="1433" font-size="20" fill="#fff">+</text>
+<text x="352" y="1434" font-family="Arial" font-size="11" fill="#666">▣ فعالیت</text><text x="438" y="1434" font-family="Arial" font-size="11" fill="#666">♙ پروفایل</text>
+<!-- state notes outside device -->
+<text x="650" y="120" font-family="Arial" font-size="25" font-weight="700" fill="#26215C">Home Mobile V2</text>
+<text x="650" y="160" font-family="Arial" font-size="16" fill="#555">صفحه موبایل با اولویت جستجو، کشف سریع و کارت‌های افقی</text>
+<text x="650" y="215" font-family="Arial" font-size="15" fill="#555">حالت‌های لازم برای implementation:</text>
+<text x="650" y="250" font-family="Arial" font-size="14" fill="#555">• Guest: محتوای عمومی + ورود هنگام اقدام حساس</text>
+<text x="650" y="280" font-family="Arial" font-size="14" fill="#555">• Authenticated: پیشنهادها و وضعیت شخصی</text>
+<text x="650" y="310" font-family="Arial" font-size="14" fill="#555">• No nearby: پیام بدون لو دادن موقعیت دقیق</text>
+<text x="650" y="340" font-family="Arial" font-size="14" fill="#555">• Loading / Empty / Error: skeleton و state اختصاصی</text>
+<text x="650" y="370" font-family="Arial" font-size="14" fill="#555">• Search: ورود به Discover با query</text>
+</svg>
