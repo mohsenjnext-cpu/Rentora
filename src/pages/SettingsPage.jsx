@@ -55,10 +55,10 @@ export default function SettingsPage({
   };
 
   return (
-    <div className="max-w-xl mx-auto space-y-4 pb-16 select-none animate-fadeIn">
+    <div className="w-full max-w-5xl mx-auto space-y-5 pb-16 select-none animate-fadeIn">
       
       {/* Header */}
-      <div className="flex items-center gap-2.5 p-4 rounded-xl rentora-card">
+      <div className="flex items-center gap-2.5 p-5 rounded-2xl rentora-card">
         <div className="w-9 h-9 rounded-lg bg-[#26215C] text-white flex items-center justify-center shrink-0 shadow-sm">
           <Settings className="w-5 h-5 stroke-[2]" />
         </div>
@@ -67,7 +67,7 @@ export default function SettingsPage({
             {t('settingsTitle')}
           </h1>
           <p className="text-[11px] text-slate-400">
-            {t('settingsSubtitle')}
+            {l('حساب، اعتماد، حریم خصوصی و ترجیحات برنامه در یک مرکز کنترل ساده', 'Account, trust, privacy and app preferences in one calm control center', 'الحساب والثقة والخصوصية وتفضيلات التطبيق في مركز تحكم واحد', '账户、信任、隐私与应用偏好集中管理')}
           </p>
         </div>
       </div>
@@ -87,7 +87,7 @@ export default function SettingsPage({
           onClick={() => {
             if (typeof onOpenSecurity === 'function') onOpenSecurity();
           }}
-          className="w-full p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#151426] hover:border-[#0F6E56] hover:bg-emerald-50/20 dark:hover:bg-[#0E241E]/30 flex items-center justify-between text-xs transition cursor-pointer group shadow-2xs"
+          className="w-full p-3.5 min-h-12 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#151426] hover:border-[#0F6E56] hover:bg-emerald-50/20 dark:hover:bg-[#0E241E]/30 flex items-center justify-between text-xs transition cursor-pointer group shadow-2xs"
         >
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#E1F5EE] dark:bg-[#0B382C] text-[#0F6E56] dark:text-[#48D2A8] flex items-center justify-center shrink-0 group-hover:scale-105 transition">
