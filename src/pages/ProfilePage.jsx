@@ -6,13 +6,6 @@ import { getUserReputationSummary } from '../services/reputationService';
 import { cloudSyncService } from '../services/cloudSyncService';
 import { User, ShieldCheck, Star, Settings, Globe, LogOut, Edit3, Camera, Save, Package, CheckCircle2, AlertCircle, CalendarDays } from 'lucide-react';
 
-const AVATAR_PRESETS = [
-  'https://api.dicebear.com/7.x/bottts/svg?seed=PioneerAlpha',
-  'https://api.dicebear.com/7.x/bottts/svg?seed=PiExplorer',
-  'https://api.dicebear.com/7.x/bottts/svg?seed=PiBuilder',
-  'https://api.dicebear.com/7.x/bottts/svg?seed=PiCrafter'
-];
-
 function Avatar({ src, username, className = 'w-20 h-20' }) {
   return src ? <img src={src} alt="" className={className + ' rounded-2xl object-cover bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700'} /> :
     <div className={className + ' rounded-2xl bg-[#EEEDFE] dark:bg-[#26215C] text-[#534AB7] dark:text-[#EEEDFE] flex items-center justify-center font-bold text-2xl border border-slate-200 dark:border-slate-700'}>{(username || 'P').charAt(0).toUpperCase()}</div>;
@@ -103,7 +96,7 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
         <div className="rentora-card rounded-3xl p-5 sm:p-7">
           {isEditing ? <form onSubmit={save} className="space-y-5">
             <div className="flex items-center gap-4"><Avatar src={avatar} username={currentUser.username} className="w-20 h-20" /><button type="button" disabled={isUploadingImage} onClick={() => fileInputRef.current?.click()} className="btn-secondary px-3 py-2 text-xs font-bold flex items-center gap-2"><Camera className="w-4 h-4" />{isUploadingImage ? l('در حال پردازش...', 'Processing...', 'جارٍ المعالجة...', '处理中...') : l('انتخاب تصویر', 'Choose photo', 'اختيار صورة', '选择头像')}</button></div>
-            <div className="flex gap-2 overflow-x-auto">{AVATAR_PRESETS.map(url => <button type="button" key={url} onClick={() => setAvatar(url)} className={'shrink-0 rounded-xl p-0.5 border-2 ' + (avatar === url ? 'border-[#534AB7]' : 'border-transparent')}><img src={url} alt="" className="w-10 h-10 rounded-lg" /></button>)}</div>
+            
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">{l('نام نمایشی', 'Display name', 'الاسم المعروض', '显示名称')}<input value={displayName} onChange={e => setDisplayName(e.target.value)} maxLength={80} className="w-full mt-1 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white text-sm" /></label>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">{l('بیو', 'Bio', 'نبذة', '简介')}<textarea value={bio} onChange={e => setBio(e.target.value)} maxLength={500} rows="3" className="w-full mt-1 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white text-sm" /></label>
             <div className="flex gap-2"><button disabled={isSaving} className="btn-primary px-5 py-2 text-xs font-bold flex gap-2"><Save className="w-4 h-4" />{isSaving ? l('در حال ذخیره...', 'Saving...', 'جارٍ الحفظ...', '保存中...') : t('btnSave')}</button><button type="button" onClick={() => setIsEditing(false)} className="btn-secondary px-4 py-2 text-xs font-bold">{t('btnCancel')}</button></div>
