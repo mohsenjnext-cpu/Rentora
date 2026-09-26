@@ -6,7 +6,7 @@ import BookingModal from '../components/BookingModal';
 import ReportModal from '../components/ReportModal';
 import {
   ArrowRight, MapPin, Star, Heart, Share2, ShieldCheck, Coins, Flag,
-  Check, MessageSquare, Edit3, Loader2, Lock, ChevronLeft, ChevronRight
+  Check, MessageSquare, Edit3, Loader2, Lock, ChevronLeft, ChevronRight, Maximize2, X
 } from 'lucide-react';
 
 export default function ItemDetailPage({
@@ -25,6 +25,7 @@ export default function ItemDetailPage({
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [reviewsData, setReviewsData] = useState({
     stats: { totalReviews: 0, averageRating: null, isNew: true },
@@ -53,7 +54,24 @@ export default function ItemDetailPage({
 
   useEffect(() => {
     setActiveImageIndex(0);
+    setGalleryOpen(false);
   }, [item?.id]);
+
+  useEffect(() => {
+    if (!galleryOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setGalleryOpen(false);
+      if (event.key === 'ArrowLeft') moveImage(-1);
+      if (event.key === 'ArrowRight') moveImage(1);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [galleryOpen, imagesList.length]);
 
   if (!item) return null;
 
@@ -145,7 +163,7 @@ export default function ItemDetailPage({
           <section>
             <div className="relative aspect-[16/10] sm:aspect-[16/9] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
               {hasGallery ? (
-                <img src={imagesList[activeImageIndex]} alt={item.title} className="w-full h-full object-cover" />
+                <img src={imagesList[activeImageIndex]} alt={item.title} className="w-full h-full object-cover cursor-zoom-in" onClick={() => setGalleryOpen(true)} />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
                   <div className="w-14 h-14 rounded-2xl bg-white/80 dark:bg-slate-800 flex items-center justify-center mb-2 text-xl font-black">R</div>
@@ -167,6 +185,10 @@ export default function ItemDetailPage({
                   </button>
                   <button type="button" onClick={() => moveImage(1)} className="absolute top-1/2 end-3 -translate-y-1/2 w-9 h-9 rounded-full bg-black/45 text-white flex items-center justify-center cursor-pointer" aria-label={localized('تصویر بعدی', 'Next image', 'الصورة التالية', '下一张')}>
                     <ChevronRight className={dir === 'rtl' ? 'rotate-180' : ''} />
+                  </button>
+                  <button type="button" onClick={() => setGalleryOpen(true)} className="absolute bottom-3 start-3 px-2.5 py-1.5 rounded-lg bg-black/55 text-white text-[10px] font-bold inline-flex items-center gap-1.5 cursor-pointer" aria-label={localized('باز کردن گالری تمام‌صفحه', 'Open fullscreen gallery', 'فتح المعرض بملء الشاشة', '打开全屏图库')}>
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    {localized('تمام‌صفحه', 'Fullscreen', 'ملء الشاشة', '全屏')}
                   </button>
                   <span className="absolute bottom-3 end-3 px-2 py-1 rounded-md bg-black/55 text-white text-[10px] font-bold">
                     {activeImageIndex + 1} / {imagesList.length}
@@ -338,6 +360,25 @@ export default function ItemDetailPage({
         </aside>
       </div>
 
+
+      {galleryOpen && hasGallery && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col" role="dialog" aria-modal="true" aria-label={localized('گالری تصاویر', 'Image gallery', 'معرض الصور', '图片图库')}>
+          <div className="flex items-center justify-between gap-3 px-4 py-3 text-white">
+            <span className="text-xs font-bold">{activeImageIndex + 1} / {imagesList.length}</span>
+            <button type="button" onClick={() => setGalleryOpen(false)} className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center cursor-pointer" aria-label={localized('بستن گالری', 'Close gallery', 'إغلاق المعرض', '关闭图库')}><X className="w-5 h-5" /></button>
+          </div>
+          <div className="relative flex-1 min-h-0 flex items-center justify-center px-4 pb-4">
+            <img src={imagesList[activeImageIndex]} alt={item.title} className="max-w-full max-h-full object-contain" />
+            {imagesList.length > 1 && <>
+              <button type="button" onClick={() => moveImage(-1)} className="absolute start-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer" aria-label={localized('تصویر قبلی', 'Previous image', 'الصورة السابقة', '上一张')}><ChevronLeft className={dir === 'rtl' ? 'rotate-180' : ''} /></button>
+              <button type="button" onClick={() => moveImage(1)} className="absolute end-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer" aria-label={localized('تصویر بعدی', 'Next image', 'الصورة التالية', '下一张')}><ChevronRight className={dir === 'rtl' ? 'rotate-180' : ''} /></button>
+            </>}
+          </div>
+          {imagesList.length > 1 && <div className="flex gap-2 overflow-x-auto px-4 pb-4 justify-center">
+            {imagesList.map((src, index) => <button key={"fullscreen-" + src + "-" + index} type="button" onClick={() => setActiveImageIndex(index)} className={"w-16 h-12 rounded-lg overflow-hidden border-2 shrink-0 cursor-pointer " + (activeImageIndex === index ? 'border-white' : 'border-transparent opacity-60')} aria-label={localized('تصویر ' + (index + 1), 'Image ' + (index + 1), 'صورة ' + (index + 1), '图片 ' + (index + 1))}><img src={src} alt="" className="w-full h-full object-cover" /></button>)}
+          </div>}
+        </div>
+      )}
       <BookingModal item={item} isOpen={bookingModalOpen} onClose={() => setBookingModalOpen(false)} onBookingSuccess={onBookingSuccess} />
       <ReportModal target={{ username: item.ownerUsername, title: item.title }} type="listing" isOpen={reportModalOpen} onClose={() => setReportModalOpen(false)} />
     </div>
