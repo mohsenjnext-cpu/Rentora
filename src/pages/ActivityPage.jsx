@@ -275,12 +275,12 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4 pb-16 select-none animate-fadeIn">
+    <div className="max-w-2xl mx-auto space-y-4 pb-16 select-none animate-fadeIn" aria-labelledby="activity-page-title">
 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+          <h1 id="activity-page-title" className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
             {t('activityTitle')}
           </h1>
           <p className="text-[11px] text-slate-400">
@@ -315,9 +315,9 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
           </div>
           <span className="text-[10px] font-mono text-slate-400">{filteredActivity.length}</span>
         </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist">
+        <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label={l('فیلتر فعالیت', 'Activity filters', 'فلاتر النشاط', '活动筛选')}>
           {activityFilters.map(([key, label]) => (
-            <button key={key} type="button" onClick={() => setActivityFilter(key)}
+            <button key={key} type="button" role="tab" aria-selected={activityFilter === key} onClick={() => setActivityFilter(key)}
               className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border transition cursor-pointer ${
                 activityFilter === key
                   ? 'bg-[#534AB7] text-white border-[#534AB7]'
@@ -359,7 +359,7 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
         <button
           type="button"
           onClick={() => setActiveTab('active')}
-          className={`flex-1 py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
+          role="tab" aria-selected={activeTab === 'active'} aria-controls="activity-rentals-panel" className={`flex-1 py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
             activeTab === 'active'
               ? 'bg-white dark:bg-[#26215C] text-[#26215C] dark:text-white shadow-xs'
               : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
@@ -371,6 +371,9 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
 
         <button
           type="button"
+          role="tab"
+          aria-selected={activeTab === 'history'}
+          aria-controls="activity-rental-history-panel"
           onClick={() => setActiveTab('history')}
           className={`flex-1 py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
             activeTab === 'history'
@@ -385,7 +388,7 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
 
       {/* Active Tab */}
       {activeTab === 'active' && (
-        <div className="space-y-3">
+        <div id="activity-rentals-panel" role="tabpanel" className="space-y-3">
           {activeRentals.length === 0 ? (
             <div className="p-8 text-center rounded-xl rentora-card space-y-2">
               <Package className="w-8 h-8 mx-auto text-slate-300 stroke-[1.5]" />
@@ -486,8 +489,7 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
 
       {/* History Tab */}
       {activeTab === 'history' && (
-        <div className="space-y-3">
-          {/* Action Bar when history exists */}
+        <div id="activity-rental-history-panel" role="tabpanel" className="space-y-3">
           {historyRentals.length > 0 && (
             <div className="flex items-center justify-between px-1 py-1">
               <span className="text-xs text-slate-500 font-medium">
@@ -546,30 +548,15 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
                   </div>
 
                   <div className="flex items-center gap-2 pt-1 border-t border-slate-150 dark:border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedAgreementRental(rental)}
-                      className="btn-secondary px-3 py-1.5 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
-                    >
+                    <button type="button" onClick={() => setSelectedAgreementRental(rental)} className="btn-secondary px-3 py-1.5 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer">
                       <FileText className="w-3.5 h-3.5 text-[#534AB7]" />
                       <span>{l('قرارداد', 'Agreement', 'العقد', '协议')}</span>
                     </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setSelectedRentalForReview(rental)}
-                      className="btn-secondary flex-1 py-1.5 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
-                    >
+                    <button type="button" onClick={() => setSelectedRentalForReview(rental)} className="btn-secondary flex-1 py-1.5 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer">
                       <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
                       <span>{t('btnLeaveReview')}</span>
                     </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setSelectedRentalForReport(rental)}
-                      className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-500 cursor-pointer"
-                      title={t('btnReportDispute')}
-                    >
+                    <button type="button" onClick={() => setSelectedRentalForReport(rental)} className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-500 cursor-pointer" title={t('btnReportDispute')}>
                       <Flag className="w-4 h-4" />
                     </button>
                   </div>
