@@ -325,7 +325,16 @@ function Payouts({payouts,reconciliation,section,submitPayout,payoutAmount,setPa
 }
 
 function UsersView({rows,section,busyId,updateUser,onDetails,renderTable}) {
-  return renderTable([['Username',r=>`@${r.username||'—'}`],['Status',r=><Status s={r.status}/>],['KYC',r=><Status s={r.kycStatus||'unknown'}/>],['Role',r=>r.role],['Joined',r=>date(r.created_at||r.joinedDate)],['Actions',r=><div className="flex gap-1"><button disabled={busyId===r.id} onClick={()=>updateUser(r,'status')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'Suspend':'Activate'}</button><button disabled={busyId===r.id} onClick={()=>updateUser(r,'kyc')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.kycStatus==='verified'?'Unverify':'Verify KYC'}</button><button onClick={()=>onDetails(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Details</button></div>]],rows);
+  const verified = rows.filter(r => r.kycStatus === 'verified').length;
+  const pending = rows.filter(r => r.kycStatus && r.kycStatus !== 'verified').length;
+  const suspended = rows.filter(r => r.status === 'suspended').length;
+  return <div className="space-y-3">
+    <div className="grid grid-cols-3 gap-2">
+      {[['نمایش', rows.length], ['KYC تاییدشده', verified], ['تعلیق‌شده', suspended]].map(([l,v]) => <div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
+    </div>
+    {section === 'users-kyc' && <div className="p-3 rounded-xl bg-[#EEEDFE] dark:bg-[#211E45] text-xs">صفحه KYC فقط کاربرانی را نشان می‌دهد که هنوز وضعیت تاییدشده ندارند. {pending} مورد در این فهرست است.</div>}
+    {renderTable([['Username',r=>`@${r.username||'—'}`],['Status',r=><Status s={r.status}/>],['KYC',r=><Status s={r.kycStatus||'unknown'}/>],['Role',r=>r.role],['Joined',r=>date(r.created_at||r.joinedDate)],['Actions',r=><div className="flex gap-1 flex-wrap"><button disabled={busyId===r.id} onClick={()=>updateUser(r,'status')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'Suspend':'Activate'}</button><button disabled={busyId===r.id} onClick={()=>updateUser(r,'kyc')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.kycStatus==='verified'?'Unverify':'Verify KYC'}</button><button onClick={()=>onDetails(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Details</button></div>]],rows)}
+  </div>;
 }
 function UserDetails({user,onBack}) {
   if (!user) return <div className="rentora-card p-6 text-sm text-slate-500">کاربری برای نمایش وجود ندارد.</div>;
