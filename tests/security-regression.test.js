@@ -211,3 +211,11 @@ test('frontend authenticated actions use HttpOnly cookie sessions instead of loc
   const context = fs.readFileSync(new URL('../src/context/RentoraContext.jsx', import.meta.url), 'utf8');
   assert.doesNotMatch(context, /localStorage\.getItem\(['"]rentora_live_v1_session['"]\)/);
 });
+
+test('server rejects malformed report target types and oversized text fields', () => {
+  const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+  assert.match(worker, /function requireString\(value, field, maxLength/);
+  assert.match(worker, /function requireEnum\(value, field, allowed/);
+  assert.match(worker, /requireEnum\(body\?\.type \|\| body\?\.targetType \|\| 'listing'/);
+  assert.match(worker, /requireString\(body\?\.details \?\? body\?\.description \?\? '', 'details', 2000\)/);
+});
