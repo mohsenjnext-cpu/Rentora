@@ -2023,12 +2023,20 @@ export default {
             r.rental_amount,
             r.platform_fee,
             r.start_date,
-            r.end_date
+            r.end_date,
+            COALESCE((
+              SELECT COUNT(1)
+              FROM messages m
+              WHERE m.conversation_id = c.id
+                AND m.sender_user_id != ?1
+                AND (cr.last_read_at IS NULL OR m.created_at > cr.last_read_at)
+            ), 0) AS unread_count
           FROM conversations c
           JOIN listings l ON l.id = c.listing_id
           JOIN users ou ON ou.id = c.owner_user_id
           JOIN users ru ON ru.id = c.renter_user_id
           LEFT JOIN rentals r ON r.id = c.rental_id
+          LEFT JOIN conversation_reads cr ON cr.conversation_id = c.id AND cr.user_id = ?1
           WHERE (c.owner_user_id = ?1 OR c.renter_user_id = ?1)
             AND c.status != 'archived'
           ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
@@ -2074,6 +2082,7 @@ export default {
             } : null,
             lastMessageText: row.last_message_text || '',
             lastMessageAt: row.last_message_at || row.created_at,
+            unreadCount: Number(row.unread_count || 0),
             createdAt: row.created_at,
             updatedAt: row.updated_at
           };
@@ -2091,6 +2100,19 @@ export default {
         return new Response(JSON.stringify({ success: true, conversations }), { status: 200, headers });
       }
 
+      if (method === 'POST' && path.startsWith('/api/conversations/') && path.endsWith('/read')) {
+        const convId = path.slice('/api/conversations/'.length, -'/read'.length).trim();
+        if (!convId) return errorResponse('Missing conversation ID', 400, env, undefined, origin);
+        const { user } = await requireUser(request, env);
+        const conv = await env.RENTORA_DB.prepare('SELECT id, owner_user_id, renter_user_id FROM conversations WHERE id=?1 LIMIT 1').bind(convId).first();
+        if (!conv) return errorResponse('Conversation not found', 404, env, undefined, origin);
+        if (conv.owner_user_id !== user.id && conv.renter_user_id !== user.id && !(isAdmin(user.pi_uid, env) && user.role === 'admin')) {
+          return errorResponse('Access denied to conversation', 403, env, undefined, origin);
+        }
+        const timestamp = now();
+        await env.RENTORA_DB.prepare('INSERT INTO conversation_reads(conversation_id, user_id, last_read_at, updated_at) VALUES(?1, ?2, ?3, ?3) ON CONFLICT(conversation_id, user_id) DO UPDATE SET last_read_at=excluded.last_read_at, updated_at=excluded.updated_at').bind(convId, user.id, timestamp).run();
+        return jsonResponse({ success: true, conversationId: convId, lastReadAt: timestamp }, 200, env, origin);
+      }
       if (method === 'POST' && path === '/api/conversations') {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
