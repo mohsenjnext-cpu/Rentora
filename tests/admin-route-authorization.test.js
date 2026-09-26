@@ -20,7 +20,7 @@ const routeGuards = [
 
 test('all privileged admin routes are protected by server-side admin authorization', () => {
   for (const { name, route } of routeGuards) {
-    assert.match(source, route, \`route should be present and guarded: \${name}\`);
+    assert.match(source, route, `route should be present and guarded: ${name}`);
   }
 
   const reconciliationIndex = source.indexOf("path === '/api/admin/reconciliation/");
