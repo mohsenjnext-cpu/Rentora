@@ -1055,13 +1055,14 @@ export default {
       if (method === 'GET' && path === '/api/admin/console') {
         const { user } = await requireAdmin(request, env);
         const [
-          usersRes, listingsRes, rentalsRes, reportsRes, transactionsRes
+          usersRes, listingsRes, rentalsRes, reportsRes, transactionsRes, supportRes
         ] = await Promise.all([
           env.RENTORA_DB.prepare("SELECT * FROM users ORDER BY created_at DESC LIMIT 500").all(),
           env.RENTORA_DB.prepare("SELECT l.*, u.username owner_username, u.pi_uid owner_pi_uid FROM listings l JOIN users u ON u.id=l.owner_user_id ORDER BY l.created_at DESC LIMIT 500").all(),
           env.RENTORA_DB.prepare("SELECT r.*, l.title listing_title, u.username renter_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users u ON u.id=r.renter_user_id ORDER BY r.created_at DESC LIMIT 500").all(),
           env.RENTORA_DB.prepare("SELECT rp.*, u.username reporter_username FROM reports rp JOIN users u ON u.id=rp.reporter_user_id ORDER BY rp.created_at DESC LIMIT 500").all(),
-          env.RENTORA_DB.prepare("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 500").all()
+          env.RENTORA_DB.prepare("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 500").all(),
+          env.RENTORA_DB.prepare("SELECT st.*, u.username, u.pi_uid FROM support_tickets st JOIN users u ON u.id=st.user_id ORDER BY st.created_at DESC LIMIT 500").all()
         ]);
 
         const revenue = await env.RENTORA_DB.prepare(
@@ -1090,6 +1091,7 @@ export default {
         const rentals = rentalsRes.results || [];
         const reports = reportsRes.results || [];
         const transactions = transactionsRes.results || [];
+        const supportTickets = supportRes.results || [];
         const totalRevenue = Number(revenue?.totalRevenue || 0);
         const paidOut = Number(revenue?.paidOut || 0);
         const reserved = payouts.filter(p => ['reserved','creating','pi_created','approving','approved','completing'].includes(p.status))
@@ -1108,7 +1110,8 @@ export default {
             reservedTreasury: reserved,
             paidOut,
             openAlerts: reports.filter(r => r.status === 'open').length +
-              payouts.filter(p => p.status === 'reconciliation_required').length
+              payouts.filter(p => p.status === 'reconciliation_required').length +
+              supportTickets.filter(t => t.status === 'open').length
           },
           treasury: { totalRevenue, available, reserved, paidOut },
           users,
@@ -1116,6 +1119,7 @@ export default {
           rentals,
           reports,
           transactions,
+          supportTickets,
           payouts,
           reconciliation,
           auditLogs: Array.isArray(auditLogs) ? auditLogs.slice(0, 200) : [],
