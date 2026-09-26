@@ -50,9 +50,7 @@ export default function ItemCard({ item, onSelect, onRentClick, variant = 'defau
   // Dynamic Item Rating
   const ratingSummary = getItemRatingSummary(item);
 
-  const imageUrl = (item.images && item.images.length > 0)
-    ? item.images[0]
-    : 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80';
+  const imageUrl = item.images?.[0] || null;
 
   if (variant === 'compact') {
     return (
@@ -68,7 +66,7 @@ export default function ItemCard({ item, onSelect, onRentClick, variant = 'defau
           >
             <span className="sr-only">{item.title}</span>
           </button>
-          <img src={imageUrl} alt="" aria-hidden="true" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
+          {imageUrl ? <img src={imageUrl} alt="" aria-hidden="true" className="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" /> : <div aria-hidden="true" className="w-full h-full flex items-center justify-center text-slate-400 dark:text-slate-500"><span className="text-[10px]">{l('تصویر موجود نیست', 'No image', 'لا توجد صورة', '暂无图片')}</span></div>}
           {item.ownerKYC && (
             <span className="absolute top-2 left-2 rtl:left-auto rtl:right-2 rounded px-1.5 py-0.5 text-[9px] font-bold badge-trust flex items-center gap-0.5 shadow-xs">
               <ShieldCheck className="w-2.5 h-2.5 stroke-[2.2]" />
@@ -108,12 +106,12 @@ export default function ItemCard({ item, onSelect, onRentClick, variant = 'defau
       <div>
         {/* Image Container with Badges */}
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100 dark:bg-slate-800">
-          <img
+          {imageUrl ? <img
             src={imageUrl}
             alt={item.title}
             className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
             loading="lazy"
-          />
+          /> : <div aria-hidden="true" className="w-full h-full flex items-center justify-center text-slate-400 dark:text-slate-500"><span className="text-xs">{l('تصویر موجود نیست', 'No image', 'لا توجد صورة', '暂无图片')}</span></div>}
 
           {/* Badges in Top Corners */}
           <div className="absolute top-2 left-2 rtl:left-auto rtl:right-2 flex items-center gap-1 z-10">
