@@ -21,6 +21,7 @@ import { requestNotificationPermission } from './services/notificationService';
 import HomePage from './pages/HomePage';
 import HomeRedesign from './pages/HomeRedesign';
 import DiscoverPage from './pages/DiscoverPage';
+import DiscoverRedesign from './pages/DiscoverRedesign';
 import ItemDetailPage from './pages/ItemDetailPage';
 import ItemDetailRedesign from './pages/ItemDetailRedesign';
 import ListItemPage from './pages/ListItemPage';
@@ -200,7 +201,7 @@ function MainApp() {
       <Header onNavigate={handleNavigate} currentPage={currentTab} onOpenSidebar={() => setMobileSidebarOpen(true)} onOpenChat={() => handleOpenChat(null)} />
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 pb-28 md:pb-12">
         {currentTab === 'home' && (useItemDetailRedesign ? <HomeRedesign onNavigate={handleNavigate} onSelectItem={handleSelectItem} onRentItem={handleRentItem} /> : <HomePage onNavigate={handleNavigate} onSelectItem={handleSelectItem} onRentItem={handleRentItem} />)}
-        {currentTab === 'discover' && <DiscoverPage initialCategory={discoverInitialCategory} initialQuery={discoverInitialQuery} onSelectItem={handleSelectItem} onRentItem={handleRentItem} />}
+        {currentTab === 'discover' && (useItemDetailRedesign ? <DiscoverRedesign initialCategory={discoverInitialCategory} initialQuery={discoverInitialQuery} onSelectItem={handleSelectItem} onRentItem={handleRentItem} /> : <DiscoverPage initialCategory={discoverInitialCategory} initialQuery={discoverInitialQuery} onSelectItem={handleSelectItem} onRentItem={handleRentItem} />)}
         {currentTab === 'item-detail' && selectedItem && (useItemDetailRedesign ? <ItemDetailRedesign item={selectedItem} onBack={handleBackFromItem} onBookingSuccess={() => setCurrentTab('activity')} onNavigateToOwnerHub={() => setCurrentTab('owner-hub')} onEditItem={handleEditItem} onOpenChat={(item) => handleOpenChat(item)} onOpenPublicProfile={handleOpenPublicProfile} /> : <ItemDetailPage item={selectedItem} onBack={handleBackFromItem} onNavigateToActivity={() => setCurrentTab('activity')} onNavigateToOwnerHub={() => setCurrentTab('owner-hub')} onEditItem={handleEditItem} onOpenChat={(item) => handleOpenChat(item)} onOpenPublicProfile={handleOpenPublicProfile} />)}
         {currentTab === 'item-detail' && !selectedItem && isInitialLoadDone && <div className="py-20 text-center max-w-md mx-auto space-y-3"><h2 className="text-lg font-bold text-slate-900 dark:text-white">آگهی پیدا نشد</h2><p className="text-sm text-slate-500 dark:text-slate-400">این آگهی دیگر در دسترس نیست یا شناسه آن معتبر نیست.</p><button type="button" onClick={() => handleNavigate('home')} className="btn-primary px-4 py-2 text-xs font-bold cursor-pointer">بازگشت به خانه</button></div>}
         {currentTab === 'public-profile' && publicProfileUsername && (useItemDetailRedesign ? <PublicProfileRedesign username={publicProfileUsername} onBack={() => setCurrentTab(previousTab || 'discover')} onSelectItem={handleSelectItem} onRentItem={handleRentItem} onOpenChat={(item) => handleOpenChat(item)} /> : <PublicProfilePage username={publicProfileUsername} onBack={() => setCurrentTab(previousTab || 'discover')} onSelectItem={handleSelectItem} onRentItem={handleRentItem} onOpenChat={(item) => handleOpenChat(item)} />)}
