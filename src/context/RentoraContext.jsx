@@ -35,40 +35,19 @@ export function RentoraProvider({ children }) {
   const userIdentifier = currentUser?.uid || currentUser?.id || null;
   const usernameIdentifier = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
 
-  const getReadTimestampsKey = useCallback(() => {
-    return usernameIdentifier || userIdentifier ? `rentora_chat_reads_${usernameIdentifier || userIdentifier}` : null;
-  }, [usernameIdentifier, userIdentifier]);
-
-  const getReadTimestamps = useCallback(() => {
-    const key = getReadTimestampsKey();
-    if (!key) return {};
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : {};
-    } catch (_) {
-      return {};
-    }
-  }, [getReadTimestampsKey]);
-
-  const markConversationAsRead = useCallback((convId) => {
+  const markConversationAsRead = useCallback(async (convId) => {
     if (!convId || !userIdentifier) return;
-    const key = getReadTimestampsKey();
-    const nowIso = new Date().toISOString();
-    if (key) {
-      try {
-        const reads = getReadTimestamps();
-        reads[convId] = nowIso;
-        localStorage.setItem(key, JSON.stringify(reads));
-      } catch (_) {}
-    }
+    try {
+      await cloudSyncService.markConversationAsRead(convId);
+    } catch (_) {}
 
     setConversations(prev => prev.map(c => {
       if (c.id === convId) {
-        return { ...c, unreadCount: 0 };
+        return { ...c, unreadCount: 0, lastReadAt: new Date().toISOString() };
       }
       return c;
     }));
-  }, [userIdentifier, getReadTimestampsKey, getReadTimestamps]);
+  }, [userIdentifier]);
 
   // Load conversations from server when authenticated
   const refreshConversations = useCallback(async () => {
@@ -78,25 +57,17 @@ export function RentoraProvider({ children }) {
     }
     try {
       const list = await cloudSyncService.fetchConversations();
-      const readMap = getReadTimestamps();
-      const myName = usernameIdentifier;
-
       const enrichedList = (list || []).map(c => {
-        const lastMsgTime = c.lastMessageAt ? new Date(c.lastMessageAt).getTime() : (c.createdAt ? new Date(c.createdAt).getTime() : 0);
-        const lastReadTime = readMap[c.id] ? new Date(readMap[c.id]).getTime() : 0;
-        const sender = (c.otherUser?.username || '').toLowerCase().replace('@', '').trim();
-        // Unread if message exists, sent by other user, and created after last read timestamp
+        const lastMsgTime = c.lastMessageAt ? new Date(c.lastMessageAt).getTime() : 0;
+        const lastReadTime = c.lastReadAt ? new Date(c.lastReadAt).getTime() : 0;
         const isUnread = Boolean(
           c.lastMessageText &&
           lastMsgTime > 0 &&
           lastMsgTime > lastReadTime &&
-          sender &&
-          sender !== myName
+          c.lastMessageSenderId &&
+          c.lastMessageSenderId !== userIdentifier
         );
-        return {
-          ...c,
-          unreadCount: isUnread ? 1 : 0
-        };
+        return { ...c, unreadCount: isUnread ? 1 : 0 };
       });
 
       setConversations(enrichedList);

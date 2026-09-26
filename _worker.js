@@ -1748,6 +1748,8 @@ export default {
             c.last_message_at,
             c.created_at,
             c.updated_at,
+            cr.read_at AS current_user_read_at,
+            (SELECT sender_user_id FROM messages lm WHERE lm.conversation_id = c.id ORDER BY lm.created_at DESC LIMIT 1) AS last_message_sender_user_id,
             l.title AS listing_title,
             l.price_per_day,
             l.location AS listing_location,
@@ -1770,6 +1772,7 @@ export default {
           JOIN users ou ON ou.id = c.owner_user_id
           JOIN users ru ON ru.id = c.renter_user_id
           LEFT JOIN rentals r ON r.id = c.rental_id
+          LEFT JOIN conversation_reads cr ON cr.conversation_id = c.id AND cr.user_id = ?1
           WHERE (c.owner_user_id = ?1 OR c.renter_user_id = ?1)
             AND c.status != 'archived'
           ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
@@ -1816,6 +1819,8 @@ export default {
             } : null,
             lastMessageText: row.last_message_text || '',
             lastMessageAt: row.last_message_at || row.created_at,
+            lastReadAt: row.current_user_read_at || null,
+            lastMessageSenderId: row.last_message_sender_user_id || null,
             createdAt: row.created_at,
             updatedAt: row.updated_at
           };
@@ -1831,6 +1836,24 @@ export default {
         };
         if (origin && isOriginAllowed(origin, env)) { headers['Access-Control-Allow-Origin'] = origin; headers['Vary'] = 'Origin'; }
         return new Response(JSON.stringify({ success: true, conversations }), { status: 200, headers });
+      }
+
+      if (method === 'POST' && path.startsWith('/api/conversations/') && path.endsWith('/read')) {
+        const convId = path.slice('/api/conversations/'.length, -'/read'.length).trim();
+        if (!convId) return errorResponse('Missing conversation ID', 400, env, undefined, origin);
+        const { user } = await requireUser(request, env);
+        const conv = await env.RENTORA_DB.prepare('SELECT id, owner_user_id, renter_user_id FROM conversations WHERE id=?1 LIMIT 1').bind(convId).first();
+        if (!conv) return errorResponse('Conversation not found', 404, env, undefined, origin);
+        if (conv.owner_user_id !== user.id && conv.renter_user_id !== user.id && !(isAdmin(user.pi_uid, env) && user.role === 'admin')) {
+          return errorResponse('Access denied to conversation', 403, env, undefined, origin);
+        }
+        const readAt = now();
+        await env.RENTORA_DB.prepare(`
+          INSERT INTO conversation_reads(conversation_id, user_id, read_at, updated_at)
+          VALUES(?1, ?2, ?3, ?3)
+          ON CONFLICT(conversation_id, user_id) DO UPDATE SET read_at=excluded.read_at, updated_at=excluded.updated_at
+        `).bind(convId, user.id, readAt).run();
+        return jsonResponse({ success: true, conversationId: convId, readAt }, 200, env, origin);
       }
 
       if (method === 'POST' && path === '/api/conversations') {
@@ -1931,7 +1954,7 @@ export default {
           FROM messages m
           JOIN users u ON u.id = m.sender_user_id
           WHERE m.conversation_id = ?1
-          ORDER BY m.created_at ASC
+          ORDER BY m.created_at DESC
           LIMIT 200
         `).bind(convId).all();
 
@@ -1953,7 +1976,7 @@ export default {
           conversationId: convId,
           type,
           isPostBookingUnlocked: isPaid,
-          messages: (rows.results || []).map(m => ({
+          messages: (rows.results || []).reverse().map(m => ({
             id: m.id,
             conversationId: m.conversation_id,
             senderUid: m.sender_pi_uid,

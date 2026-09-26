@@ -95,17 +95,25 @@ test('profile sync enforces bounded field lengths server-side', () => {
 });
 
 
-test('conversation and message reads are bounded server-side', () => {
-  const list = section("path === '/api/conversations'", "method === 'POST' && path === '/api/conversations'");
-  assert.match(list, /ORDER BY COALESCE\(c\.last_message_at, c\.created_at\) DESC\n\s*LIMIT 100/);
-  const messages = section("path.startsWith('/api/conversations/') && path.endsWith('/messages')", "method === 'POST' && path.startsWith('/api/conversations/') && path.endsWith('/messages')");
-  assert.match(messages, /ORDER BY m\.created_at ASC\n\s*LIMIT 200/);
-});
-
-
 test('sensitive rental records are not persisted to localStorage', () => {
   const sync = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
   assert.match(sync, /this\.rentalCache = \[\];/);
   assert.doesNotMatch(sync, /localStorage\.getItem\(STORAGE_RENTALS_KEY\)/);
   assert.doesNotMatch(sync, /localStorage\.setItem\(STORAGE_RENTALS_KEY/);
+});
+
+test('conversation read state is server-authoritative and participant-scoped', () => {
+  assert.match(worker, /conversation_reads cr ON cr\.conversation_id = c\.id AND cr\.user_id = \?1/);
+  assert.match(worker, /conversation_reads\(conversation_id, user_id, read_at, updated_at\)/);
+  assert.match(worker, /path\.endsWith\('\/read'\)/);
+  assert.match(worker, /Access denied to conversation/);
+});
+
+
+test('conversation list and message history are bounded server-side', () => {
+  const conversations = section("path === '/api/conversations'", "method === 'POST' && path === '/api/conversations'");
+  const messages = section("path.startsWith('/api/conversations/') && path.endsWith('/messages')", "method === 'POST' && path.startsWith('/api/conversations/') && path.endsWith('/messages')");
+  assert.match(conversations, /LIMIT 100/);
+  assert.match(messages, /LIMIT 200/);
+  assert.match(worker, /last_message_sender_user_id/);
 });

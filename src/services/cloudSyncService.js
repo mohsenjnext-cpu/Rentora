@@ -643,6 +643,27 @@ export class CloudSyncService {
   // SECURE CONVERSATION & MESSAGING API CLIENT
   // =========================================================================
 
+  async markConversationAsRead(conversationId) {
+    if (!conversationId) throw new Error('conversationId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/conversations/${encodeURIComponent(conversationId)}/read`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify({})
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'خطا در ثبت وضعیت خوانده‌شدن گفتگو');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+
+
   async fetchConversations() {
     const apiBase = getApiBaseUrl();
     if (!apiBase) return [];
