@@ -1702,11 +1702,11 @@ export default {
           return errorResponse('Payment intent is not approved for completion', 409, env, undefined, origin);
         }
 
-        const paymentResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}`);
+        const paymentResponse = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
         const payment = await paymentResponse.json().catch(() => ({}));
         if (!paymentResponse.ok) return errorResponse('Unable to verify Pi payment before completion', 502, env, undefined, origin);
 
-        const status = validatePiPayment(payment, { ...intent, pi_payment_id: body.paymentId }, user);
+        const status = validatePiPayment(payment, { ...intent, pi_payment_id: paymentId }, user);
         if (!['approved','completed','complete'].includes(status)) {
           return errorResponse(`Pi payment cannot be completed from status ${status || 'unknown'}`, 409, env, undefined, origin);
         }
@@ -1719,15 +1719,15 @@ export default {
         }
         const existingTransaction = await env.RENTORA_DB.prepare(
           'SELECT payment_intent_id, pi_payment_id, pi_txid FROM transactions WHERE pi_payment_id=?1 OR pi_txid=?2 LIMIT 1'
-        ).bind(body.paymentId, body.txid).first().catch(() => null);
+        ).bind(paymentId, body.txid).first().catch(() => null);
         if (existingTransaction && String(existingTransaction.payment_intent_id) !== String(intent.id)) {
           return errorResponse('Transaction is already bound to another payment intent', 409, env, undefined, origin);
         }
         if (existingTransaction && String(existingTransaction.payment_intent_id) === String(intent.id)) {
-          return jsonResponse({ completed: true, paymentId: intent.pi_payment_id || body.paymentId, txid: intent.pi_txid || body.txid, idempotent: true }, 200, env, origin);
+          return jsonResponse({ completed: true, paymentId: intent.pi_payment_id || paymentId, txid: intent.pi_txid || body.txid, idempotent: true }, 200, env, origin);
         }
 
-        const completionResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}/complete`, {
+        const completionResponse = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, {
           method: 'POST',
           body: JSON.stringify({ txid: body.txid })
         });
@@ -1737,9 +1737,9 @@ export default {
         }
 
         await env.RENTORA_DB.batch([
-          env.RENTORA_DB.prepare(`UPDATE payment_intents SET pi_payment_id=?1,pi_txid=?2,status='completed',updated_at=?3 WHERE id=?4 AND status IN ('approved','completed')`).bind(body.paymentId, body.txid, now(), intent.id),
+          env.RENTORA_DB.prepare(`UPDATE payment_intents SET pi_payment_id=?1,pi_txid=?2,status='completed',updated_at=?3 WHERE id=?4 AND status IN ('approved','completed')`).bind(paymentId, body.txid, now(), intent.id),
           env.RENTORA_DB.prepare(`UPDATE rentals SET payment_status='completed',status='confirmed',updated_at=?1 WHERE id=?2`).bind(now(), intent.rental_id),
-          env.RENTORA_DB.prepare(`INSERT INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)`).bind(`tx_${crypto.randomUUID()}`, intent.id, body.paymentId, body.txid, user.id, intent.amount, now())
+          env.RENTORA_DB.prepare(`INSERT INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)`).bind(`tx_${crypto.randomUUID()}`, intent.id, paymentId, body.txid, user.id, intent.amount, now())
         ]);
         await env.RENTORA_KV.put(`payment-complete:${intent.id}`, JSON.stringify({ paymentId: paymentId, txid: body.txid, at: now() }), { expirationTtl: 60 * 60 * 24 * 30 });
         return jsonResponse({ completed: true, paymentId: paymentId, txid: body.txid, data: completion }, 200, env, origin);
