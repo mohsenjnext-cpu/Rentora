@@ -1827,6 +1827,7 @@ export default {
         const listingStatus = String(item?.status || 'active').trim().toLowerCase();
         if (!listingId || listingId.length > 128 || !title) return errorResponse('Invalid listing', 400, env, undefined, origin);
         if (title.length > 200 || description.length > 5000 || category.length > 100 || location.length > 200) return errorResponse('Listing field length exceeds the allowed limit', 400, env, undefined, origin);
+        if (typeof item?.title !== 'string' || (item?.description !== undefined && typeof item.description !== 'string') || (item?.category !== undefined && item.category !== null && typeof item.category !== 'string') || (item?.location !== undefined && item.location !== null && typeof item.location !== 'string')) return errorResponse('Invalid listing field type', 400, env, undefined, origin);
         if (!['draft','active','paused','deleted'].includes(listingStatus)) return errorResponse('Invalid listing status', 400, env, undefined, origin);
         const cInfo = item.contactInfo || (item.phoneContact ? { contactPhone: item.phoneContact } : null);
         const sanitizedItem = sanitizeListingPublicMetadata(item);
