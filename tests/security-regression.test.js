@@ -80,3 +80,10 @@ test('frontend auth bridge uses HttpOnly cookie sessions instead of browser-stor
   assert.match(piAuthContext, /headers\.set\('X-Rentora-Client', 'web'\)/);
   assert.match(piAuthContext, /localStorage\.removeItem\('rentora_live_v1_session'\)/);
 });
+
+test('legacy rental sync rejects malformed and past dates before persistence', () => {
+  const rentalSync = section("path === '/api/sync/rental'", "path === '/api/sync/rental/status'");
+  assert.match(rentalSync, /Invalid rental dates/);
+  assert.match(rentalSync, /Rental end date must be after start date/);
+  assert.match(rentalSync, /Rental start date cannot be in the past/);
+});
