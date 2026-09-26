@@ -17,7 +17,7 @@ export default function BottomNav({ currentTab, onNavigate }) {
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none pb-2.5 px-3">
+    <nav aria-label={t('navHome')} className="md:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none pb-2.5 px-3">
       <div className="max-w-md mx-auto h-[62px] rounded-[22px] bg-white/96 dark:bg-[#151426]/96 backdrop-blur-xl border border-slate-200/70 dark:border-slate-700/70 shadow-[0_10px_35px_rgba(30,30,47,0.14)] dark:shadow-[0_10px_35px_rgba(0,0,0,0.35)] pointer-events-auto px-1.5">
         <div className="h-full grid grid-cols-4 gap-1">
           {navItems.map((item) => {
@@ -28,6 +28,8 @@ export default function BottomNav({ currentTab, onNavigate }) {
                 key={item.id}
                 type="button"
                 onClick={() => onNavigate(item.id)}
+                aria-current={isActive ? 'page' : undefined}
+                aria-label={item.label}
                 className={`relative flex flex-col items-center justify-center gap-1 rounded-[17px] transition-all duration-200 active:scale-95 cursor-pointer ${isActive ? 'text-[#26215C] dark:text-[#EEEDFE]' : 'text-[#8A8A9B] dark:text-slate-500'}`}
               >
                 {isActive && <span className="absolute inset-x-3 top-1.5 h-8 rounded-[13px] bg-[#EEEDFE] dark:bg-[#292550]" />}

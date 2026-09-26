@@ -61,7 +61,7 @@ export default function Sidebar({
     const Icon = item.icon;
     const active = currentTab === item.id;
     return (
-      <button type="button" onClick={() => handleNavClick(item.id)}
+      <button type="button" onClick={() => handleNavClick(item.id)} aria-current={active ? 'page' : undefined}
         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer ${
           active
             ? 'bg-[var(--purple-tint)] text-[var(--primary-dark)] dark:text-[var(--purple-accent)] font-bold shadow-sm'
@@ -78,7 +78,7 @@ export default function Sidebar({
       mobile ? (dir === 'rtl' ? 'border-r' : 'border-l') : (dir === 'rtl' ? 'border-l' : 'border-r')
     }`}>
       <div className="h-16 px-4 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between shrink-0">
-        <button type="button" onClick={() => handleNavClick('home')} className="flex items-center gap-2.5 cursor-pointer">
+        <button type="button" onClick={() => handleNavClick('home')} aria-label={t('navHome')} aria-current={currentTab === 'home' ? 'page' : undefined} className="flex items-center gap-2.5 cursor-pointer">
           <div className="w-9 h-9 rounded-xl bg-[var(--primary-dark)] dark:bg-[var(--primary-mid)] flex items-center justify-center text-white p-1.5 shadow-sm">
             <svg viewBox="0 0 100 100" fill="none" className="w-full h-full">
               <circle cx="50" cy="38" r="22" stroke="currentColor" strokeWidth="6"/>
@@ -89,7 +89,7 @@ export default function Sidebar({
           <span className="font-bold text-base text-[var(--primary-dark)] dark:text-white">{t('appName')}</span>
         </button>
         {mobile && (
-          <button type="button" onClick={() => setMobileOpen(false)} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer" aria-label="Close">
+          <button type="button" onClick={() => setMobileOpen(false)} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer" aria-label={l('بستن منو','Close menu','إغلاق القائمة','关闭菜单')}>
             <X className="w-5 h-5" />
           </button>
         )}
@@ -139,7 +139,7 @@ export default function Sidebar({
         </button>
         {navItems.map(item => <NavButton key={item.id} item={item} />)}
 
-        <button type="button" onClick={() => { onOpenChat?.(); setMobileOpen(false); }}
+        <button type="button" onClick={() => { onOpenChat?.(); setMobileOpen(false); }} aria-label={t('chatTitle')} aria-current={currentTab === 'chat' ? 'page' : undefined}
           className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer ${
             currentTab === 'chat' ? 'bg-[var(--purple-tint)] text-[var(--primary-dark)] dark:text-[var(--purple-accent)] font-bold' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-white/5'
           }`}>
@@ -147,7 +147,7 @@ export default function Sidebar({
           {totalUnreadCount > 0 && <span className="min-w-[18px] h-[18px] rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center px-1">{totalUnreadCount}</span>}
         </button>
 
-        {isAdmin && <button type="button" onClick={() => handleNavClick('admin')}
+        {isAdmin && <button type="button" onClick={() => handleNavClick('admin')} aria-current={currentTab === 'admin' ? 'page' : undefined}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs cursor-pointer ${
             currentTab === 'admin' ? 'bg-[var(--primary-dark)] text-white font-bold' : 'text-[var(--primary-mid)] hover:bg-[var(--purple-tint)] dark:hover:bg-[#1E1B3D]'
           }`}>
