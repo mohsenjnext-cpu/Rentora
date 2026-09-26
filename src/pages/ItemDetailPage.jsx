@@ -36,6 +36,7 @@ export default function ItemDetailPage({
   });
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [reviewsError, setReviewsError] = useState('');
+  const [reviewRetryNonce, setReviewRetryNonce] = useState(0);
   const [detailItem, setDetailItem] = useState(initialItem || null);
   const [detailLoading, setDetailLoading] = useState(!initialItem && !!itemId);
   const [detailError, setDetailError] = useState('');
@@ -91,7 +92,7 @@ export default function ItemDetailPage({
         if (mounted) setLoadingReviews(false);
       });
     return () => { mounted = false; };
-  }, [detailItem?.id, fetchListingReviews]);
+  }, [detailItem?.id, fetchListingReviews, reviewRetryNonce]);
 
   useEffect(() => {
     setActiveImageIndex(0);
@@ -380,7 +381,12 @@ export default function ItemDetailPage({
             {loadingReviews ? (
               <div className="rentora-card p-5 flex justify-center items-center gap-2 text-xs text-slate-400"><Loader2 className="w-4 h-4 animate-spin text-[#534AB7]" />{localized('در حال بارگذاری نظرات...', 'Loading reviews...', 'جارٍ تحميل التقييمات...', '正在加载评价...')}</div>
             ) : reviewsError ? (
-              <div className="rentora-card p-5 text-center text-xs text-rose-500 dark:text-rose-300">{reviewsError}</div>
+              <div className="rentora-card p-5 text-center space-y-3">
+                <p className="text-xs text-rose-500 dark:text-rose-300" role="alert">{reviewsError}</p>
+                <button type="button" onClick={() => setReviewRetryNonce(v => v + 1)} className="btn-secondary px-3 py-2 text-xs font-bold cursor-pointer">
+                  {localized('تلاش مجدد', 'Try again', 'حاول مرة أخرى', '重试')}
+                </button>
+              </div>
             ) : totalReviews === 0 ? (
               <div className="rentora-card p-5 text-center text-xs text-slate-400">{t('itemNoReviews')}</div>
             ) : (
