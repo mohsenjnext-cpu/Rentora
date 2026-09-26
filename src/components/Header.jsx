@@ -73,6 +73,8 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
             <button
               type="button"
               onClick={() => onNavigate('home')}
+              aria-label={t('navHome')}
+              aria-current={currentPage === 'home' ? 'page' : undefined}
               className="flex items-center gap-2 focus:outline-none cursor-pointer"
             >
               <div className="w-8 h-8 rounded-lg bg-[#26215C] dark:bg-[#534AB7] flex items-center justify-center text-white p-1.5 shrink-0 shadow-xs">
@@ -177,6 +179,7 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
                 isRefreshing ? 'opacity-60' : ''
               }`}
               title={l('به‌روزرسانی داده‌ها', 'Refresh Data', 'تحديث البيانات', '刷新数据')}
+              aria-label={l('به‌روزرسانی داده‌ها', 'Refresh data', 'تحديث البيانات', '刷新数据')}
             >
               <RotateCw className={`w-4 h-4 text-[#534AB7] dark:text-[#AFA9EC] stroke-[2] ${isRefreshing ? 'animate-spin text-[#26215C]' : ''}`} />
             </button>
@@ -216,7 +219,7 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
               type="button"
               onClick={toggleTheme}
               className="p-2 rounded-lg bg-slate-100 dark:bg-[#1C1B30] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition cursor-pointer"
-              aria-label="Toggle Theme"
+              aria-label={l('تغییر پوسته', 'Toggle theme', 'تبديل المظهر', '切换主题')}
             >
               {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400 stroke-[1.8]" /> : <Moon className="w-4 h-4 text-slate-700 stroke-[1.8]" />}
             </button>
@@ -226,6 +229,8 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
               <button
                 type="button"
                 onClick={() => onNavigate('profile')}
+                aria-label={t('navProfile')}
+                aria-current={currentPage === 'profile' ? 'page' : undefined}
                 className="flex items-center gap-1.5 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
@@ -268,7 +273,7 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
           type="button"
           onClick={onOpenSidebar}
           className="p-1.5 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-          aria-label="Open Menu"
+          aria-label={l('باز کردن منو', 'Open menu', 'فتح القائمة', '打开菜单')}
         >
           <Menu className="w-5 h-5 stroke-[1.8]" />
         </button>
@@ -299,7 +304,7 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
             type="button"
             onClick={handleManualRefresh}
             className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-            aria-label="Refresh App"
+            aria-label={l('به‌روزرسانی برنامه', 'Refresh app', 'تحديث التطبيق', '刷新应用')}
           >
             <RotateCw className={`w-4 h-4 text-[#534AB7] stroke-[2] ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
@@ -324,6 +329,8 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
           <button
             type="button"
             onClick={() => isAuthenticated ? onNavigate('profile') : setAuthModalOpen(true)}
+            aria-label={isAuthenticated ? t('navProfile') : t('navLogin')}
+            aria-current={isAuthenticated && currentPage === 'profile' ? 'page' : undefined}
             className="w-7 h-7 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer flex items-center justify-center bg-slate-100 dark:bg-slate-800"
           >
             {isAuthenticated && currentUser?.avatar ? (
