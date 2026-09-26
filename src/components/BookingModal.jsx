@@ -29,7 +29,6 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
   const { lang, dir, t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
   const {
-    calculatePricing,
     executePiPaymentForRental,
     fetchRentalContact
   } = useRentora();
@@ -55,11 +54,15 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [serverQuote, setServerQuote] = useState(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+  const [quoteError, setQuoteError] = useState('');
+  const [quoteRetryNonce, setQuoteRetryNonce] = useState(0);
 
   useEffect(() => {
     if (isOpen) {
       setDates(getInitialDates());
       setErrorMessage('');
+      setQuoteError('');
+      setServerQuote(null);
       setConfirmedBookingData(null);
       setAgreeTerms(false);
     }
@@ -76,6 +79,8 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
     let isMounted = true;
     setIsLoadingQuote(true);
     setErrorMessage('');
+    setQuoteError('');
+    setServerQuote(null);
 
     cloudSyncService.createRentalQuote({
       listingId: item.id,
@@ -92,43 +97,28 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
         if (isMounted) {
           setIsLoadingQuote(false);
           setServerQuote(null);
+          setQuoteError(err?.message || l(
+            'دریافت پیش‌فاکتور از سرور ناموفق بود. دوباره تلاش کنید.',
+            'Unable to load the server quote. Try again.',
+            'تعذر تحميل عرض السعر من الخادم. حاول مرة أخرى.',
+            '无法加载服务器报价，请重试。'
+          ));
         }
       });
 
     return () => { isMounted = false; };
-  }, [isOpen, item?.id, dates.startDate, dates.endDate]);
+  }, [isOpen, item?.id, dates.startDate, dates.endDate, quoteRetryNonce]);
 
   if (!isOpen || !item) return null;
 
-  const dailyPrice = serverQuote?.pricePerDay ?? Number(item.pricePerDay ?? item.price_per_day ?? item.dailyRate ?? item.price ?? 0);
-  const depositAmount = serverQuote?.depositAmount ?? Number(item.deposit ?? item.deposit_amount ?? item.securityDeposit ?? 0);
-
-  const fallbackPricing = calculatePricing({
-    pricePerDay: dailyPrice,
-    dailyRate: dailyPrice,
-    startDate: dates.startDate,
-    endDate: dates.endDate,
-    securityDeposit: depositAmount,
-    ownerUsername: item.ownerUsername || item.owner_username
-  });
-
-  const daysCount = serverQuote?.daysCount ?? fallbackPricing.daysCount;
-  const rentoraFee = serverQuote?.platformFee ?? (fallbackPricing.rentoraFee !== undefined ? fallbackPricing.rentoraFee : (fallbackPricing.totalPlatformFee || 0));
-  const rentalTotal = serverQuote?.baseRentalAmount ?? (fallbackPricing.rentalTotal !== undefined ? fallbackPricing.rentalTotal : fallbackPricing.baseRentalAmount);
-  const deposit = serverQuote?.depositAmount ?? (fallbackPricing.deposit !== undefined ? fallbackPricing.deposit : depositAmount);
-  const totalObligation = rentalTotal + deposit;
-  const platformFeePercentage = fallbackPricing.platformFeePercentage || 5;
-
-  const pricing = {
-    ...fallbackPricing,
-    daysCount,
-    platformFeePercentage,
-    rentoraFee,
-    rentalTotal,
-    deposit,
-    totalObligation
-  };
-
+  const pricingReady = Boolean(serverQuote?.quoteId);
+  const dailyPrice = serverQuote?.pricePerDay ?? null;
+  const daysCount = serverQuote?.daysCount ?? null;
+  const rentoraFee = serverQuote?.platformFee ?? null;
+  const rentalTotal = serverQuote?.baseRentalAmount ?? null;
+  const deposit = serverQuote?.depositAmount ?? null;
+  const totalObligation = rentalTotal !== null && deposit !== null ? rentalTotal + deposit : null;
+  const platformFeePercentage = serverQuote?.platformFeePercentage ?? null;
   const handleCreateBooking = async (e) => {
     e.preventDefault();
     setErrorMessage('');
@@ -146,6 +136,16 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
         'You cannot rent your own listing.',
         'لا يمكنك استئجار غرضك الخاص.',
         '您无法租赁自己发布的物品。'
+      ));
+      return;
+    }
+
+    if (!pricingReady) {
+      setQuoteError(l(
+        'برای ادامه، ابتدا پیش‌فاکتور معتبر از سرور دریافت کنید.',
+        'A valid server quote is required before continuing.',
+        'يلزم الحصول على عرض سعر صالح من الخادم قبل المتابعة.',
+        '继续前必须先获取有效的服务器报价。'
       ));
       return;
     }
@@ -173,18 +173,10 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
     setIsSubmitting(true);
 
     try {
-      // 1. Authoritative Server Rental Creation (using Quote or Server calculation)
+      // 1. Create the rental only from the authoritative server quote.
       let persistedRental;
       try {
-        if (serverQuote?.quoteId) {
-          persistedRental = await cloudSyncService.createRental({ quoteId: serverQuote.quoteId });
-        } else {
-          persistedRental = await cloudSyncService.createRental({
-            listingId: item.id,
-            startDate: dates.startDate,
-            endDate: dates.endDate
-          });
-        }
+        persistedRental = await cloudSyncService.createRental({ quoteId: serverQuote.quoteId });
       } catch (createErr) {
         if (createErr?.status === 409) {
           throw new Error(l(
@@ -308,13 +300,14 @@ export default function BookingModal({ item, isOpen, onClose, onBookingSuccess }
             </div>
           ) : (
             <form onSubmit={handleCreateBooking} className="space-y-4">
-              <div className="p-3 rounded-xl rentora-card flex items-center gap-3"><img src={item.images?.[0] || 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80'} alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0" /><div className="min-w-0 flex-1"><h4 className="font-bold text-xs text-slate-900 dark:text-white truncate">{item.title}</h4><div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5"><span className="font-mono text-[#0F6E56] dark:text-[#48D2A8] font-bold">{dailyPrice} π / {l('روز', 'day', 'يوم', '天')}</span><span>•</span><span className="truncate">{item.location || 'ایران'}</span></div></div></div>
+              <div className="p-3 rounded-xl rentora-card flex items-center gap-3"><img src={item.images?.[0] || 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80'} alt="" className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0" /><div className="min-w-0 flex-1"><h4 className="font-bold text-xs text-slate-900 dark:text-white truncate">{item.title}</h4><div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5"><span className="font-mono text-[#0F6E56] dark:text-[#48D2A8] font-bold">{dailyPrice ?? '—'} π / {l('روز', 'day', 'يوم', '天')}</span><span>•</span><span className="truncate">{item.location || 'ایران'}</span></div></div></div>
+              {quoteError && <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn"><AlertCircle className="w-4 h-4 shrink-0" /><span>{quoteError}</span><button type="button" onClick={() => setQuoteRetryNonce(v => v + 1)} className="underline shrink-0">{l('تلاش مجدد', 'Try again', 'حاول مرة أخرى', '重试')}</button></div>}
               {errorMessage && <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn"><AlertCircle className="w-4 h-4 shrink-0" /><span>{errorMessage}</span></div>}
               <div className="space-y-2"><label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-[#534AB7]" /><span>{t('bookingDatesLabel')}</span></label><div className="grid grid-cols-2 gap-2.5"><div><span className="text-[10px] text-slate-400 block mb-0.5">{t('bookingStartDate')}</span><input type="date" value={dates.startDate} min={new Date().toISOString().split('T')[0]} onChange={(e) => setDates(prev => ({ ...prev, startDate: e.target.value }))} className="w-full p-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono" /></div><div><span className="text-[10px] text-slate-400 block mb-0.5">{t('bookingEndDate')}</span><input type="date" value={dates.endDate} min={dates.startDate} onChange={(e) => setDates(prev => ({ ...prev, endDate: e.target.value }))} className="w-full p-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono" /></div></div></div>
-              <div className="p-3.5 rounded-xl rentora-card space-y-2 border border-slate-150 dark:border-slate-800"><div className="flex justify-between items-center text-xs font-bold text-slate-800 dark:text-slate-200 pb-1.5 border-b border-slate-150 dark:border-slate-800"><span>{t('priceBreakdown')}</span><span className="text-[#534AB7] dark:text-[#AFA9EC] font-bold font-mono">{daysCount} {l('روز', 'days', 'أيام', '天')}</span></div><div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-300"><div><span>{l(`مبلغ اجاره (${daysCount} روز × ${dailyPrice} π):`, `Rental Total (${daysCount} days):`, `إجمالي الإيجار (${daysCount} أيام):`, `租金总额 (${daysCount} 天):`)}</span><span className="text-[10px] text-slate-400 block">{l('➔ تسویه مستقیم با مالک در محل تحویل', '➔ Direct P2P payment at pickup', '➔ دفع مباشر للمؤجر عند الاستلام', '➔ 线下当面直接向物主结清')}</span></div><span className="font-mono font-bold text-slate-900 dark:text-white">{rentalTotal} π</span></div>{deposit > 0 && <div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-300"><div><span>{t('securityDeposit')}:</span><span className="text-[10px] text-slate-400 block">{l('➔ امانت نقدی مستقیم - عودت در زمان بازگشت کالا', '➔ Direct P2P deposit - returned at handover', '➔ تأمين نقدي يُعاد مباشرة عند الإرجاع', '➔ 线下当面押金 - 完好归还时退回')}</span></div><span className="font-mono font-bold text-slate-900 dark:text-white">{deposit} π</span></div>}<div className="flex justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-800 font-medium"><span>{l('تعهد تسویه مستقیم با مالک:', 'Total direct P2P obligation:', 'إجمالي المستحق للمؤجر:', '与物主线下应结总额：')}</span><span className="font-mono font-bold text-slate-700 dark:text-slate-200">{totalObligation} π</span></div><div className="flex justify-between text-[11px] text-[#534AB7] dark:text-[#AFA9EC] font-semibold pt-2 border-t border-slate-200 dark:border-slate-700"><div><span>{t('platformFee')} ({platformFeePercentage}٪):</span><span className="text-[10px] text-slate-400 block">{l('➔ پرداخت آنلاین با کیف پول پای (تنها پرداخت آنلاین)', '➔ Paid online via Pi Wallet (Only online fee)', '➔ دفع أونلاين عبر محفظة باي', '➔ 通过 Pi 钱包在线支付（唯一在线费用）')}</span></div><span className="font-mono font-black text-[#0F6E56] dark:text-[#48D2A8] text-xs">{rentoraFee} π</span></div></div>
+              <div className="p-3.5 rounded-xl rentora-card space-y-2 border border-slate-150 dark:border-slate-800"><div className="flex justify-between items-center text-xs font-bold text-slate-800 dark:text-slate-200 pb-1.5 border-b border-slate-150 dark:border-slate-800"><span>{t('priceBreakdown')}</span><span className="text-[#534AB7] dark:text-[#AFA9EC] font-bold font-mono">{daysCount ?? '—'} {l('روز', 'days', 'أيام', '天')}</span></div><div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-300"><div><span>{l(`مبلغ اجاره (${daysCount ?? '—'} روز × ${dailyPrice ?? '—'} π):`, `Rental Total (${daysCount ?? '—'} days):`, `إجمالي الإيجار (${daysCount ?? '—'} أيام):`, `租金总额 (${daysCount ?? '—'} 天):`)}</span><span className="text-[10px] text-slate-400 block">{l('➔ تسویه مستقیم با مالک در محل تحویل', '➔ Direct P2P payment at pickup', '➔ دفع مباشر للمؤجر عند الاستلام', '➔ 线下当面直接向物主结清')}</span></div><span className="font-mono font-bold text-slate-900 dark:text-white">{rentalTotal ?? '—'} π</span></div>{deposit > 0 && <div className="flex justify-between text-[11px] text-slate-600 dark:text-slate-300"><div><span>{t('securityDeposit')}:</span><span className="text-[10px] text-slate-400 block">{l('➔ امانت نقدی مستقیم - عودت در زمان بازگشت کالا', '➔ Direct P2P deposit - returned at handover', '➔ تأمين نقدي يُعاد مباشرة عند الإرجاع', '➔ 线下当面押金 - 完好归还时退回')}</span></div><span className="font-mono font-bold text-slate-900 dark:text-white">{deposit} π</span></div>}<div className="flex justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100 dark:border-slate-800 font-medium"><span>{l('تعهد تسویه مستقیم با مالک:', 'Total direct P2P obligation:', 'إجمالي المستحق للمؤجر:', '与物主线下应结总额：')}</span><span className="font-mono font-bold text-slate-700 dark:text-slate-200">{totalObligation ?? '—'} π</span></div><div className="flex justify-between text-[11px] text-[#534AB7] dark:text-[#AFA9EC] font-semibold pt-2 border-t border-slate-200 dark:border-slate-700"><div><span>{t('platformFee')} ({platformFeePercentage ?? '—'}٪):</span><span className="text-[10px] text-slate-400 block">{l('➔ پرداخت آنلاین با کیف پول پای (تنها پرداخت آنلاین)', '➔ Paid online via Pi Wallet (Only online fee)', '➔ دفع أونلاين عبر محفظة باي', '➔ 通过 Pi 钱包在线支付（唯一在线费用）')}</span></div><span className="font-mono font-black text-[#0F6E56] dark:text-[#48D2A8] text-xs">{rentoraFee ?? '—'} π</span></div></div>
               <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-900 dark:text-amber-300 leading-relaxed flex items-start gap-1.5"><ShieldCheck className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" /><span>{l('شفاف‌سازی مالی: اجاره و ودیعه مستقیماً بین مالک و مستأجر تسویه می‌شود و توسط رنتورا نگهداری نمی‌شود.', 'Financial Notice: Rental and deposit are settled directly between owner and renter and are not held by Rentora.', 'توضيح مالي: يُسوى الإيجار والتأمين مباشرة بين المؤجر والمستأجر ولا تحتفظ بها رنتورا.', '资金说明：租金与押金均由物主与租客当面直接结清，Rentora 不持有任何托管资金。')}</span></div>
               <label className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300 cursor-pointer"><input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} className="mt-0.5 rounded accent-[#26215C] dark:accent-[#534AB7] cursor-pointer" /><span>{l('قوانین تحویل مستقیم حضوری و پرداخت کارمزد پلتفرم را تایید می‌کنم.', 'I accept direct handover rules and platform fee payment.', 'أوافق على قواعد التسليم المباشر ودفع عمولة المنصة.', '我确认知晓当面交接规则并同意支付平台服务费。')}</span></label>
-              <button type="submit" disabled={isSubmitting} className="btn-primary w-full py-2.5 text-xs font-bold cursor-pointer flex items-center justify-center gap-2 shadow-sm"><Coins className="w-4 h-4 text-amber-400" /><span>{isSubmitting ? l('در حال اتصال به کیف پول پای...', 'Connecting to Pi Wallet...', 'جارٍ الاتصال بمحفظة باي...', '正在调起 Pi 钱包支付...') : (rentoraFee === 0 ? l('تایید و ثبت رزرو رایگان', 'Confirm Free Booking', 'تأكيد الحجز المجاني', '确认免费预订') : l(`پرداخت کارمزد رنتورا با پای (${rentoraFee} π)`, `Pay Rentora Fee with Pi (${rentoraFee} π)`, `دفع عمولة رنتورا عبر باي (${rentoraFee} π)`, `通过 Pi 支付平台费 (${rentoraFee} π)`))}</span></button>
+              <button type="submit" disabled={isSubmitting || isLoadingQuote || !pricingReady} className="btn-primary w-full py-2.5 text-xs font-bold cursor-pointer flex items-center justify-center gap-2 shadow-sm"><Coins className="w-4 h-4 text-amber-400" /><span>{isSubmitting ? l('در حال اتصال به کیف پول پای...', 'Connecting to Pi Wallet...', 'جارٍ الاتصال بمحفظة باي...', '正在调起 Pi 钱包支付...') : isLoadingQuote ? l('در حال دریافت پیش‌فاکتور...', 'Loading server quote...', 'جارٍ تحميل عرض السعر...', '正在加载服务器报价...') : (rentoraFee === 0 ? l('تایید و ثبت رزرو رایگان', 'Confirm Free Booking', 'تأكيد الحجز المجاني', '确认免费预订') : l(`پرداخت کارمزد رنتورا با پای (${rentoraFee} π)`, `Pay Rentora Fee with Pi (${rentoraFee} π)`, `دفع عمولة رنتورا عبر باي (${rentoraFee} π)`, `通过 Pi 支付平台费 (${rentoraFee} π)`))}</span></button>
             </form>
           )}
         </div>
