@@ -48,6 +48,50 @@ function MainApp() {
   const [directBookingItem, setDirectBookingItem] = useState(null);
   const [isDirectBookingOpen, setIsDirectBookingOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const navigationHistoryReady = React.useRef(false);
+
+  const getNavigationState = () => ({
+    currentTab,
+    previousTab,
+    selectedItemId,
+    editingItemId: editingItem?.id || null,
+    publicProfileUsername,
+    discoverInitialCategory,
+    discoverInitialQuery,
+  });
+
+  const pushNavigationState = (nextState) => {
+    if (typeof window === 'undefined' || !navigationHistoryReady.current) return;
+    window.history.pushState(nextState, '', window.location.href);
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const initialState = getNavigationState();
+    window.history.replaceState(initialState, '', window.location.href);
+    navigationHistoryReady.current = true;
+
+    const handlePopState = (event) => {
+      const state = event.state;
+      if (!state?.currentTab) return;
+
+      setCurrentTab(state.currentTab);
+      setPreviousTab(state.previousTab || 'discover');
+      setSelectedItemId(state.selectedItemId || null);
+      setSelectedItem((items || []).find(item => item.id === state.selectedItemId) || null);
+      setEditingItem((items || []).find(item => item.id === state.editingItemId) || null);
+      setPublicProfileUsername(state.publicProfileUsername || null);
+      setDiscoverInitialCategory(state.discoverInitialCategory || 'all');
+      setDiscoverInitialQuery(state.discoverInitialQuery || '');
+      setDirectBookingItem(null);
+      setIsDirectBookingOpen(false);
+      setMobileSidebarOpen(false);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [items]);
 
   // Modals States
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
@@ -78,6 +122,12 @@ function MainApp() {
     if (params.query !== undefined) setDiscoverInitialQuery(params.query);
     if (tab !== 'list-item') setEditingItem(null);
     setCurrentTab(tab);
+    pushNavigationState({
+      ...getNavigationState(),
+      currentTab: tab,
+      discoverInitialCategory: params.category || discoverInitialCategory,
+      discoverInitialQuery: params.query !== undefined ? params.query : discoverInitialQuery,
+    });
   };
 
   useEffect(() => {
@@ -91,6 +141,13 @@ function MainApp() {
     setSelectedItemId(item?.id || null);
     setPreviousTab(currentTab);
     setCurrentTab('item-detail');
+    pushNavigationState({
+      ...getNavigationState(),
+      currentTab: 'item-detail',
+      previousTab: currentTab,
+      selectedItemId: item?.id || null,
+      editingItemId: null,
+    });
   };
 
   const handleEditItem = (item) => {
@@ -98,6 +155,13 @@ function MainApp() {
     setEditingItem(item);
     setPreviousTab(currentTab);
     setCurrentTab('list-item');
+    pushNavigationState({
+      ...getNavigationState(),
+      currentTab: 'list-item',
+      previousTab: currentTab,
+      selectedItemId: null,
+      editingItemId: item.id,
+    });
   };
 
   const handleRentItem = (item) => {
@@ -121,6 +185,14 @@ function MainApp() {
     setPublicProfileUsername(username);
     setPreviousTab(currentTab);
     setCurrentTab('public-profile');
+    pushNavigationState({
+      ...getNavigationState(),
+      currentTab: 'public-profile',
+      previousTab: currentTab,
+      publicProfileUsername: username,
+      selectedItemId: null,
+      editingItemId: null,
+    });
   };
 
   const handleOpenHelp = (tab = 'guide') => {
