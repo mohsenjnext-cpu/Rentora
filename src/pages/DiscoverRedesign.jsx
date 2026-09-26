@@ -17,7 +17,7 @@ export default function DiscoverRedesign({ initialCategory = 'all', initialQuery
   const [category, setCategory] = useState(initialCategory);
   const [condition, setCondition] = useState('all');
   const [city, setCity] = useState('');
-  const [maxPrice, setMaxPrice] = useState(100);
+  const [maxPrice, setMaxPrice] = useState('');
   const [sort, setSort] = useState('newest');
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -31,7 +31,7 @@ export default function DiscoverRedesign({ initialCategory = 'all', initialQuery
     if (!item || (item.status && item.status !== 'active')) return false;
     if (category !== 'all' && item.category !== category) return false;
     if (condition !== 'all' && item.condition !== condition) return false;
-    if (item.pricePerDay && item.pricePerDay > maxPrice) return false;
+    if (maxPrice !== '' && item.pricePerDay && Number(item.pricePerDay) > Number(maxPrice)) return false;
     const location = String(item.location || '').toLowerCase();
     if (city.trim() && !location.includes(city.trim().toLowerCase())) return false;
     const q = query.trim().toLowerCase();
@@ -45,9 +45,9 @@ export default function DiscoverRedesign({ initialCategory = 'all', initialQuery
   }), [items, query, category, condition, city, maxPrice, sort]);
 
   const clearFilters = () => {
-    setQuery(''); setCategory('all'); setCondition('all'); setCity(''); setMaxPrice(100); setSort('newest');
+    setQuery(''); setCategory('all'); setCondition('all'); setCity(''); setMaxPrice(''); setSort('newest');
   };
-  const filteredState = query || category !== 'all' || condition !== 'all' || city || maxPrice < 100;
+  const filteredState = query || category !== 'all' || condition !== 'all' || city || maxPrice !== '';
 
   return (
     <main className="space-y-5 pb-16" dir="inherit">
@@ -98,7 +98,7 @@ export default function DiscoverRedesign({ initialCategory = 'all', initialQuery
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-2">{categories.map(([id, label, Icon]) => <button key={id} type="button" onClick={() => setCategory(id)} aria-pressed={category === id}
             className={`min-h-11 rounded-xl border px-3 text-xs font-bold flex items-center gap-2 ${category === id ? 'bg-[var(--color-rentora-primary)] text-white border-transparent' : 'border-slate-200 dark:border-slate-700 dark:text-slate-200'}`}><Icon className="h-4 w-4" />{label}</button>)}</div>
-          <div><div className="flex justify-between text-xs font-bold mb-2"><span>{t('discoverFilterMaxPrice')}</span><span>{maxPrice} π</span></div><input className="w-full" type="range" min="1" max="100" value={maxPrice} onChange={e => setMaxPrice(Number(e.target.value))} aria-label={t('discoverFilterMaxPrice')} /></div>
+          <label className="block text-xs font-bold"><span>{t('discoverFilterMaxPrice')}</span><div className="mt-2 flex items-center gap-2"><input className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-[#151426] dark:text-white" type="number" min="0" step="0.01" inputMode="decimal" value={maxPrice} onChange={e => setMaxPrice(e.target.value)} placeholder={l('بدون محدودیت', 'No limit', 'بدون حد', '不限')} aria-label={t('discoverFilterMaxPrice')} /><span className="shrink-0 text-xs text-slate-500">π</span></div></label>
           <label className="block text-xs font-bold">{t('itemCondition')}<select value={condition} onChange={e => setCondition(e.target.value)} className="mt-2 w-full min-h-11 rounded-xl border border-slate-200 bg-white px-3 dark:border-slate-700 dark:bg-[#151426] dark:text-white"><option value="all">{t('catAll')}</option><option value="like_new">{t('condLikeNew')}</option><option value="good">{t('condGood')}</option><option value="fair">{t('condFair')}</option></select></label>
           <RentoraInput id="discover-redesign-city" label={t('discoverFilterLocation')} value={city} onChange={e => setCity(e.target.value)} placeholder={l('مثال: تهران', 'e.g. Montreal', 'مثال: دبي', '例如：北京')} />
         </div>
