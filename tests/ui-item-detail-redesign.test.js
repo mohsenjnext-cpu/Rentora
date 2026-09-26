@@ -144,7 +144,7 @@ test('listing KYC badge cannot be asserted by client-supplied listing metadata',
   const rentalViewStart = worker.indexOf('function rentalView', listingViewStart);
   assert.ok(listingViewStart >= 0 && rentalViewStart > listingViewStart);
   const listingView = worker.slice(listingViewStart, rentalViewStart);
-  assert.match(listingView, /ownerMeta\.kycStatus === 'verified'/);
+  assert.match(listingView, /ownerMeta\.adminKycStatus === 'verified'/);
   assert.doesNotMatch(listingView, /meta\.ownerKYC/);
 });
 
