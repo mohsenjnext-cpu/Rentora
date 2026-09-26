@@ -1,32 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
-import { 
-  X, 
-  PlusCircle, 
-  Clock, 
-  Briefcase, 
-  LayoutDashboard, 
-  User, 
-  Settings, 
-  LogOut, 
-  ShieldCheck, 
-  ShieldAlert,
-  ReceiptText, 
-  Moon,
-  Sun,
-  Globe,
-  ChevronDown,
-  Check,
-  MessageSquare
+import {
+  X, PlusCircle, Clock, Briefcase, LayoutDashboard, User, Settings,
+  LogOut, ShieldCheck, ShieldAlert, ReceiptText, Moon, Sun, Globe,
+  ChevronDown, Check, MessageSquare, Home, Search
 } from 'lucide-react';
 
-export default function Sidebar({ 
-  currentTab = 'home', 
-  onNavigate, 
-  mobileOpen = false, 
+export default function Sidebar({
+  currentTab = 'home',
+  onNavigate,
+  mobileOpen = false,
   setMobileOpen,
   onOpenChat,
   onOpenHelp,
@@ -35,364 +21,188 @@ export default function Sidebar({
 }) {
   const { lang, dir, t, l, changeLanguage } = useLanguage();
   const { theme, toggleTheme } = useTheme();
-  const { 
-    currentUser, 
-    isAuthenticated, 
-    isAdmin, 
-    logout, 
-    setAuthModalOpen, 
-    setIsWalletModalOpen 
+  const {
+    currentUser, isAuthenticated, isAdmin, logout,
+    setAuthModalOpen, setIsWalletModalOpen
   } = usePiAuth();
   const { chats = [] } = useRentora();
-
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
   const totalUnreadCount = (chats || []).reduce((sum, c) => sum + (c.unreadCount || 0), 0);
 
-  const [langMenuOpen, setLangMenuOpen] = useState(false);
-
   useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
+    document.body.style.overflow = mobileOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
   }, [mobileOpen]);
 
-  if (!mobileOpen) return null;
-
-  const handleNavClick = (tabId, params = null) => {
-    if (typeof onNavigate === 'function') {
-      onNavigate(tabId, params || {});
-    }
-    if (typeof setMobileOpen === 'function') {
-      setMobileOpen(false);
-    }
-  };
-
-  const getLanguageLabel = (code) => {
-    switch (code) {
-      case 'fa': return 'فارسی';
-      case 'en': return 'English';
-      case 'ar': return 'العربية';
-      case 'zh': return '简体中文';
-      default: return 'فارسی';
-    }
+  const handleNavClick = (tabId, params = {}) => {
+    onNavigate?.(tabId, params);
+    setMobileOpen?.(false);
   };
 
   const handleLogout = () => {
     logout();
-    if (typeof setMobileOpen === 'function') {
-      setMobileOpen(false);
-    }
-    if (typeof onNavigate === 'function') {
-      onNavigate('home');
-    }
+    setMobileOpen?.(false);
+    onNavigate?.('home');
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex animate-fadeIn select-none">
-      
-      {/* 1. Backdrop Overlay */}
-      <div 
-        onClick={() => setMobileOpen(false)}
-        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity cursor-pointer z-40"
-      />
+  const getLanguageLabel = (code) => ({
+    fa: 'فارسی', en: 'English', ar: 'العربية', zh: '简体中文'
+  }[code] || 'فارسی');
 
-      {/* 2. Drawer Panel */}
-      <div 
-        onClick={(e) => e.stopPropagation()}
-        className={`fixed top-0 bottom-0 ${
-          dir === 'rtl' ? 'right-0' : 'left-0'
-        } w-[84vw] max-w-[320px] bg-white dark:bg-[#121124] border-l rtl:border-l-0 rtl:border-r border-slate-200/80 dark:border-slate-800/80 shadow-xl flex flex-col z-50 overflow-hidden`}
-      >
-        
-        {/* Header: Logo + Close Button */}
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
-          <div 
-            onClick={() => handleNavClick('home')}
-            className="flex items-center gap-2 cursor-pointer"
-          >
-            <div className="w-8 h-8 rounded-lg bg-[#26215C] dark:bg-[#534AB7] flex items-center justify-center text-white p-1.5 shrink-0">
-              <svg viewBox="0 0 100 100" fill="none" className="w-full h-full">
-                <circle cx="50" cy="38" r="22" stroke="#FFFFFF" strokeWidth="6"/>
-                <path d="M38 38h24M43 38v34M57 38v34" stroke="#FFFFFF" strokeWidth="6"/>
-                <circle cx="50" cy="20" r="5" fill="#FACC15"/>
-              </svg>
-            </div>
-            <span className="font-semibold text-base text-[#26215C] dark:text-white leading-none">
-              {t('appName')}
-            </span>
+  const navItems = [
+    { id: 'home', label: t('navHome'), icon: Home },
+    { id: 'discover', label: t('navDiscover'), icon: Search },
+    { id: 'owner-hub', label: t('navOwnerDashboard'), icon: Briefcase },
+    { id: 'activity', label: t('navActivity'), icon: Clock },
+    { id: 'profile', label: t('navProfile'), icon: User },
+  ];
+
+  const NavButton = ({ item }) => {
+    const Icon = item.icon;
+    const active = currentTab === item.id;
+    return (
+      <button type="button" onClick={() => handleNavClick(item.id)}
+        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer ${
+          active
+            ? 'bg-[var(--purple-tint)] text-[var(--primary-dark)] dark:text-[var(--purple-accent)] font-bold shadow-sm'
+            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-white/5'
+        }`}>
+        <Icon className="w-[17px] h-[17px] shrink-0" />
+        <span className="truncate">{item.label}</span>
+      </button>
+    );
+  };
+
+  const Panel = ({ mobile = false }) => (
+    <aside className={`rentora-sidebar-panel h-full w-[272px] bg-white/96 dark:bg-[#121124]/98 border-slate-200/80 dark:border-slate-800/80 flex flex-col shadow-sm ${
+      mobile ? 'border-s' + (dir === 'rtl' ? 'r' : 'l') : (dir === 'rtl' ? 'border-l' : 'border-r')
+    }`}>
+      <div className="h-16 px-4 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between shrink-0">
+        <button type="button" onClick={() => handleNavClick('home')} className="flex items-center gap-2.5 cursor-pointer">
+          <div className="w-9 h-9 rounded-xl bg-[var(--primary-dark)] dark:bg-[var(--primary-mid)] flex items-center justify-center text-white p-1.5 shadow-sm">
+            <svg viewBox="0 0 100 100" fill="none" className="w-full h-full">
+              <circle cx="50" cy="38" r="22" stroke="currentColor" strokeWidth="6"/>
+              <path d="M38 38h24M43 38v34M57 38v34" stroke="currentColor" strokeWidth="6"/>
+              <circle cx="50" cy="20" r="5" fill="#FACC15"/>
+            </svg>
           </div>
-
-          <button
-            type="button"
-            onClick={() => setMobileOpen(false)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-800 dark:hover:text-white transition cursor-pointer"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5 stroke-[1.8]" />
+          <span className="font-bold text-base text-[var(--primary-dark)] dark:text-white">{t('appName')}</span>
+        </button>
+        {mobile && (
+          <button type="button" onClick={() => setMobileOpen(false)} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer" aria-label="Close">
+            <X className="w-5 h-5" />
           </button>
-        </div>
-
-        {/* User Status Card */}
-        <div className="p-3.5 bg-slate-50/70 dark:bg-[#16152B]/70 border-b border-slate-100 dark:border-slate-800/80">
-          {isAuthenticated ? (
-            <div className="space-y-2.5">
-              <div 
-                onClick={() => handleNavClick('profile')}
-                className="flex items-center gap-3 cursor-pointer group"
-              >
-                <img
-                  src={currentUser?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser?.username}`}
-                  alt={currentUser?.username}
-                  className="w-10 h-10 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0 group-hover:border-[#534AB7] transition"
-                />
-                <div className="min-w-0 flex-1">
-                  <h4 className="font-semibold text-xs text-slate-900 dark:text-white truncate group-hover:text-[#534AB7] transition" dir="ltr">
-                    @{currentUser?.username}
-                  </h4>
-                  {currentUser?.kycStatus === 'verified' ? (
-                    <div className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md mt-0.5 badge-trust">
-                      <ShieldCheck className="w-3 h-3 stroke-[2]" />
-                      <span>{t('badgeKycVerified')}</span>
-                    </div>
-                  ) : (
-                    <div className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md mt-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500">
-                      <ShieldAlert className="w-3 h-3 stroke-[2]" />
-                      <span>{l('احراز نشده', 'Unverified', 'غير موثق', '未认证')}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Pi Ledger Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsWalletModalOpen(true);
-                  setMobileOpen(false);
-                }}
-                className="w-full py-2 px-3 rounded-lg bg-white dark:bg-[#1D1C36] border border-slate-200/80 dark:border-slate-700/80 hover:border-[#534AB7] flex items-center justify-between text-xs transition cursor-pointer"
-              >
-                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-medium">
-                  <ReceiptText className="w-3.5 h-3.5 text-[#534AB7] stroke-[1.8]" />
-                  <span>{l('فعالیت‌های پای (Pi Activity)', 'Pi Activity & Ledger', 'نشاطات باي', 'Pi 交易账本')}</span>
-                </div>
-                <span className="text-[10px] text-slate-400">❯</span>
-              </button>
-            </div>
-          ) : (
-            <div className="text-center py-2 space-y-2">
-              <p className="text-xs text-slate-500 font-medium">
-                {l('برای ثبت آگهی و رزرو وارد شوید', 'Sign in to post and rent', 'سجل الدخول للنشر والحجز', '登录以发布或租用装备')}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthModalOpen(true);
-                  setMobileOpen(false);
-                }}
-                className="btn-primary w-full py-2 px-3 text-xs font-semibold cursor-pointer"
-              >
-                {t('navLogin')}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Main Menu Items */}
-        <div className="p-3 overflow-y-auto flex-1 space-y-1 text-xs font-medium">
-          
-          {/* 1. ثبت آگهی کالا */}
-          <button
-            type="button"
-            onClick={() => handleNavClick('list-item')}
-            className="btn-primary w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-all cursor-pointer mb-2 font-bold shadow-xs"
-          >
-            <PlusCircle className="w-4 h-4 stroke-[2]" />
-            <span>{t('navListItem')}</span>
-          </button>
-
-          {/* 2. پنل موجر / کالاهای من */}
-          <button
-            type="button"
-            onClick={() => handleNavClick('owner-hub')}
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors cursor-pointer ${
-              currentTab === 'owner-hub'
-                ? 'bg-[#EEEDFE] text-[#26215C] dark:bg-[#1E1B3D] dark:text-[#EEEDFE] font-bold'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#1C1B30]'
-            }`}
-          >
-            <Briefcase className="w-4 h-4 stroke-[1.8]" />
-            <span>{t('navOwnerDashboard')}</span>
-          </button>
-
-          {/* 3. سفارشات و رزروهای من */}
-          <button
-            type="button"
-            onClick={() => handleNavClick('activity')}
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors cursor-pointer ${
-              currentTab === 'activity'
-                ? 'bg-[#EEEDFE] text-[#26215C] dark:bg-[#1E1B3D] dark:text-[#EEEDFE] font-bold'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#1C1B30]'
-            }`}
-          >
-            <Clock className="w-4 h-4 stroke-[1.8]" />
-            <span>{t('navActivity')}</span>
-          </button>
-
-          {/* 4. پیام‌ها و گفتگوها */}
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof onOpenChat === 'function') onOpenChat();
-              if (typeof setMobileOpen === 'function') setMobileOpen(false);
-            }}
-            className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#1C1B30] transition-colors cursor-pointer"
-          >
-            <div className="flex items-center gap-2.5">
-              <MessageSquare className="w-4 h-4 stroke-[1.8] text-[#534AB7]" />
-              <span>{t('chatTitle')}</span>
-            </div>
-            {totalUnreadCount > 0 && (
-              <span className="min-w-[18px] h-[18px] rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center px-1">
-                {totalUnreadCount}
-              </span>
-            )}
-          </button>
-
-          {/* 5. حساب کاربری و پروفایل */}
-          <button
-            type="button"
-            onClick={() => handleNavClick('profile')}
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors cursor-pointer ${
-              currentTab === 'profile'
-                ? 'bg-[#EEEDFE] text-[#26215C] dark:bg-[#1E1B3D] dark:text-[#EEEDFE] font-bold'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#1C1B30]'
-            }`}
-          >
-            <User className="w-4 h-4 stroke-[1.8]" />
-            <span>{t('navProfile')}</span>
-          </button>
-
-          {/* 5. پنل مدیریت رنتورا (Only visible to authorized admins) */}
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => handleNavClick('admin')}
-              className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors cursor-pointer ${
-                currentTab === 'admin'
-                  ? 'bg-[#26215C] text-white font-bold'
-                  : 'text-[#534AB7] dark:text-[#AFA9EC] hover:bg-[#EEEDFE] dark:hover:bg-[#1E1B3D]'
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4 stroke-[1.8]" />
-              <span>{t('navAdmin')}</span>
-            </button>
-          )}
-
-          {/* Divider */}
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 my-2"></div>
-
-          {/* 6. تنظیمات (Central Settings Hub) */}
-          <button
-            type="button"
-            onClick={() => handleNavClick('settings')}
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors cursor-pointer ${
-              currentTab === 'settings'
-                ? 'bg-[#EEEDFE] text-[#26215C] dark:bg-[#1E1B3D] dark:text-[#EEEDFE] font-bold'
-                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-[#1C1B30]'
-            }`}
-          >
-            <Settings className="w-4 h-4 stroke-[1.8]" />
-            <span>{t('navSettings')}</span>
-          </button>
-
-          {/* 7. خروج از حساب (Logout) */}
-          {isAuthenticated && (
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer font-semibold mt-1"
-            >
-              <LogOut className="w-4 h-4 stroke-[1.8]" />
-              <span>{t('navLogout')}</span>
-            </button>
-          )}
-
-        </div>
-
-        {/* Footer: Language Switcher Dropdown (fa, en, ar, zh) + Theme Toggle */}
-        <div className="p-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/70 dark:bg-[#16152B]/70 relative">
-          
-          {/* Language Switcher Dropdown */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setLangMenuOpen(!langMenuOpen)}
-              className="px-2.5 py-1.5 rounded-lg bg-white dark:bg-[#1D1C36] border border-slate-200/80 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-            >
-              <Globe className="w-3.5 h-3.5 text-[#534AB7] stroke-[1.8]" />
-              <span>{getLanguageLabel(lang)}</span>
-              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${langMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {/* Language Picker Dropdown */}
-            {langMenuOpen && (
-              <div 
-                className="absolute bottom-11 right-0 rtl:right-0 rtl:left-auto ltr:left-0 ltr:right-auto w-36 bg-white dark:bg-[#1C1B30] border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1 z-50 text-xs font-semibold animate-fadeIn"
-              >
-                <button
-                  type="button"
-                  onClick={() => { changeLanguage('fa'); setLangMenuOpen(false); }}
-                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-right cursor-pointer"
-                >
-                  <span>فارسی</span>
-                  {lang === 'fa' && <Check className="w-3.5 h-3.5 text-[#534AB7]" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { changeLanguage('en'); setLangMenuOpen(false); }}
-                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-left cursor-pointer"
-                >
-                  <span>English</span>
-                  {lang === 'en' && <Check className="w-3.5 h-3.5 text-[#534AB7]" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { changeLanguage('ar'); setLangMenuOpen(false); }}
-                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-right cursor-pointer"
-                >
-                  <span>العربية</span>
-                  {lang === 'ar' && <Check className="w-3.5 h-3.5 text-[#534AB7]" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { changeLanguage('zh'); setLangMenuOpen(false); }}
-                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-left cursor-pointer"
-                >
-                  <span>简体中文</span>
-                  {lang === 'zh' && <Check className="w-3.5 h-3.5 text-[#534AB7]" />}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Theme Toggle Icon */}
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="p-2 rounded-lg bg-white dark:bg-[#1D1C36] border border-slate-200/80 dark:border-slate-700/80 text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition cursor-pointer"
-            aria-label="Toggle Theme"
-          >
-            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400 stroke-[1.8]" /> : <Moon className="w-4 h-4 text-slate-700 stroke-[1.8]" />}
-          </button>
-
-        </div>
-
+        )}
       </div>
-    </div>
+
+      <div className="p-3 border-b border-slate-100 dark:border-slate-800/80 shrink-0">
+        {isAuthenticated ? (
+          <div className="rentora-sidebar-user rounded-2xl p-3 bg-slate-50 dark:bg-[#18172B]">
+            <button type="button" onClick={() => handleNavClick('profile')} className="w-full flex items-center gap-3 text-start cursor-pointer">
+              <img
+                src={currentUser?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser?.username}`}
+                alt={currentUser?.username || ''}
+                className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-bold truncate" dir="ltr">@{currentUser?.username}</span>
+                <span className={`inline-flex items-center gap-1 mt-1 text-[9px] font-semibold ${
+                  currentUser?.kycStatus === 'verified' ? 'text-[var(--trust-text)]' : 'text-slate-500'
+                }`}>
+                  {currentUser?.kycStatus === 'verified'
+                    ? <ShieldCheck className="w-3 h-3" />
+                    : <ShieldAlert className="w-3 h-3" />}
+                  {currentUser?.kycStatus === 'verified'
+                    ? t('badgeKycVerified')
+                    : l('احراز نشده','Unverified','غير موثق','未认证')}
+                </span>
+              </span>
+            </button>
+            <button type="button" onClick={() => { setIsWalletModalOpen(true); setMobileOpen(false); }}
+              className="mt-2.5 w-full flex items-center justify-between px-2.5 py-2 rounded-xl bg-white dark:bg-[#211F39] border border-slate-200/80 dark:border-slate-700/80 text-[10px] font-semibold cursor-pointer hover:border-[var(--primary-mid)]">
+              <span className="flex items-center gap-2"><ReceiptText className="w-3.5 h-3.5 text-[var(--primary-mid)]"/>{l('فعالیت‌های پای','Pi Activity & Ledger','نشاطات باي','Pi 交易账本')}</span>
+              <span className="text-slate-400">›</span>
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-2xl p-3 bg-slate-50 dark:bg-[#18172B] text-center">
+            <p className="text-[10px] text-slate-500 mb-2">{l('برای ثبت آگهی و رزرو وارد شوید','Sign in to post and rent','سجل الدخول للنشر والحجز','登录以发布或租用装备')}</p>
+            <button type="button" onClick={() => { setAuthModalOpen(true); setMobileOpen(false); }} className="btn-primary w-full py-2 text-xs cursor-pointer">{t('navLogin')}</button>
+          </div>
+        )}
+      </div>
+
+      <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+        <button type="button" onClick={() => handleNavClick('list-item')}
+          className="btn-primary w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold mb-2 cursor-pointer shadow-sm">
+          <PlusCircle className="w-4 h-4"/>{t('navListItem')}
+        </button>
+        {navItems.map(item => <NavButton key={item.id} item={item} />)}
+
+        <button type="button" onClick={() => { onOpenChat?.(); setMobileOpen(false); }}
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer ${
+            currentTab === 'chat' ? 'bg-[var(--purple-tint)] text-[var(--primary-dark)] dark:text-[var(--purple-accent)] font-bold' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-white/5'
+          }`}>
+          <span className="flex items-center gap-3"><MessageSquare className="w-[17px] h-[17px] text-[var(--primary-mid)]"/>{t('chatTitle')}</span>
+          {totalUnreadCount > 0 && <span className="min-w-[18px] h-[18px] rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center px-1">{totalUnreadCount}</span>}
+        </button>
+
+        {isAdmin && <button type="button" onClick={() => handleNavClick('admin')}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs cursor-pointer ${
+            currentTab === 'admin' ? 'bg-[var(--primary-dark)] text-white font-bold' : 'text-[var(--primary-mid)] hover:bg-[var(--purple-tint)] dark:hover:bg-[#1E1B3D]'
+          }`}>
+          <LayoutDashboard className="w-[17px] h-[17px]"/>{t('navAdmin')}
+        </button>}
+
+        <div className="my-2 border-t border-slate-100 dark:border-slate-800/80" />
+
+        <NavButton item={{ id: 'settings', label: t('navSettings'), icon: Settings }} />
+
+        {isAuthenticated && <button type="button" onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer">
+          <LogOut className="w-[17px] h-[17px]"/>{t('navLogout')}
+        </button>}
+      </nav>
+
+      <div className="p-3 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/80 dark:bg-[#16152B]/80 flex items-center justify-between shrink-0">
+        <div className="relative">
+          <button type="button" onClick={() => setLangMenuOpen(v => !v)}
+            className="px-2.5 py-2 rounded-xl bg-white dark:bg-[#211F39] border border-slate-200 dark:border-slate-700 text-[10px] font-semibold flex items-center gap-1.5 cursor-pointer">
+            <Globe className="w-3.5 h-3.5 text-[var(--primary-mid)]"/>{getLanguageLabel(lang)}
+            <ChevronDown className={`w-3 h-3 transition-transform ${langMenuOpen ? 'rotate-180' : ''}`}/>
+          </button>
+          {langMenuOpen && <div className="absolute bottom-12 start-0 w-36 rounded-xl bg-white dark:bg-[#1C1B30] border border-slate-200 dark:border-slate-700 shadow-xl py-1 z-50">
+            {[
+              ['fa','فارسی'],['en','English'],['ar','العربية'],['zh','简体中文']
+            ].map(([code,label]) => (
+              <button key={code} type="button" onClick={() => { changeLanguage(code); setLangMenuOpen(false); }}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
+                <span>{label}</span>{lang === code && <Check className="w-3.5 h-3.5 text-[var(--primary-mid)]"/>}
+              </button>
+            ))}
+          </div>}
+        </div>
+        <button type="button" onClick={toggleTheme} className="p-2 rounded-xl bg-white dark:bg-[#211F39] border border-slate-200 dark:border-slate-700 cursor-pointer" aria-label="Toggle Theme">
+          {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400"/> : <Moon className="w-4 h-4 text-slate-700"/>}
+        </button>
+      </div>
+    </aside>
+  );
+
+  return (
+    <>
+      <div className="hidden md:block fixed inset-y-0 start-0 z-40">
+        <Panel />
+      </div>
+
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
+          <div className={`absolute inset-y-0 ${dir === 'rtl' ? 'right-0' : 'left-0'} shadow-2xl animate-fadeIn`}>
+            <Panel mobile />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
