@@ -26,7 +26,11 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [selectedCondition, setSelectedCondition] = useState('all');
   const [selectedCity, setSelectedCity] = useState('');
-  const priceCap = useMemo(() => {\n    const prices = (items || []).map(item => Number(item.pricePerDay)).filter(Number.isFinite);\n    return Math.max(1, Math.ceil(Math.max(...prices, 1)));\n  }, [items]);\n  const [maxPrice, setMaxPrice] = useState(null);
+  const priceCap = useMemo(() => {
+    const prices = (items || []).map(item => Number(item.pricePerDay)).filter(Number.isFinite);
+    return Math.max(1, Math.ceil(Math.max(...prices, 1)));
+  }, [items]);
+  const [maxPrice, setMaxPrice] = useState(null);
   const [sortBy, setSortBy] = useState('newest');
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
