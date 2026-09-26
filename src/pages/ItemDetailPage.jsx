@@ -283,8 +283,8 @@ export default function ItemDetailPage({
           {ownerItems.length > 0 && (
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="font-black text-sm sm:text-base text-slate-900 dark:text-white">{localized('آگهی‌های دیگر این مالک', 'More from this owner', 'إعلانات أخرى لهذا المالك', '该物主的其他商品')}}</h2>
-                <button type="button" onClick={() => onOpenPublicProfile?.(item.ownerUsername)} className="text-xs font-bold text-[#534AB7] hover:underline cursor-pointer">{localized('مشاهده پروفایل', 'View profile', 'عرض الملف', '查看主页')}}</button>
+                <h2 className="font-black text-sm sm:text-base text-slate-900 dark:text-white">{localized('آگهی‌های دیگر این مالک', 'More from this owner', 'إعلانات أخرى لهذا المالك', '该物主的其他商品')}</h2>
+                <button type="button" onClick={() => onOpenPublicProfile?.(item.ownerUsername)} className="text-xs font-bold text-[#534AB7] hover:underline cursor-pointer">{localized('مشاهده پروفایل', 'View profile', 'عرض الملف', '查看主页')}</button>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {ownerItems.map((other) => (
