@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1900" viewBox="0 0 1440 1900">
+<rect width="1440" height="1900" fill="#f8f8fc"/>
+<rect x="0" y="0" width="250" height="1900" fill="#16152b"/>
+<text x="40" y="70" fill="#fff" font-family="Arial" font-size="28" font-weight="700">Rentora</text>
+<text x="40" y="135" fill="#aaa7c7" font-family="Arial" font-size="16">خانه</text><text x="40" y="185" fill="#aaa7c7" font-family="Arial" font-size="16">کشف</text><text x="40" y="235" fill="#fff" font-family="Arial" font-size="16" font-weight="700">جزئیات کالا</text><text x="40" y="285" fill="#aaa7c7" font-family="Arial" font-size="16">فعالیت</text><text x="40" y="335" fill="#aaa7c7" font-family="Arial" font-size="16">پروفایل</text>
+<rect x="250" y="0" width="1190" height="80" fill="#fff" stroke="#e5e7eb"/>
+<text x="285" y="50" fill="#111827" font-family="Arial" font-size="18" font-weight="700">جزئیات آگهی</text><text x="1240" y="50" fill="#534ab7" font-family="Arial" font-size="15">اعلان‌ها   چت   پروفایل</text>
+<g transform="translate(300 115)">
+<text x="0" y="25" fill="#64748b" font-family="Arial" font-size="14">← بازگشت به کشف</text>
+<rect x="0" y="55" width="760" height="475" rx="24" fill="#dddff0"/>
+<text x="380" y="300" text-anchor="middle" fill="#777" font-family="Arial" font-size="24">تصویر واقعی آگهی</text>
+<rect x="20" y="20" width="120" height="34" rx="17" fill="#eaf8f3"/><text x="38" y="43" fill="#0f6e56" font-family="Arial" font-size="13" font-weight="700">✓ احراز هویت</text>
+<rect x="790" y="55" width="300" height="475" rx="24" fill="#fff" stroke="#e5e7eb"/>
+<text x="815" y="100" fill="#64748b" font-family="Arial" font-size="13">ابزار نجاری · تورنتو</text>
+<text x="815" y="145" fill="#111827" font-family="Arial" font-size="27" font-weight="700">دریل حرفه‌ای</text>
+<text x="815" y="180" fill="#b45309" font-family="Arial" font-size="15">★ 4.9 · 18 نظر</text>
+<line x1="815" y1="205" x2="1065" y2="205" stroke="#e5e7eb"/>
+<text x="815" y="245" fill="#64748b" font-family="Arial" font-size="13">مالک</text><text x="815" y="275" fill="#111827" font-family="Arial" font-size="17" font-weight="700">@owner</text><text x="815" y="300" fill="#0f6e56" font-family="Arial" font-size="12">KYC تایید شده</text>
+<rect x="815" y="330" width="240" height="58" rx="14" fill="#eeedfe"/><text x="835" y="355" fill="#534ab7" font-family="Arial" font-size="13">قیمت روزانه</text><text x="835" y="380" fill="#111827" font-family="Arial" font-size="20" font-weight="700">12 π / روز</text>
+<rect x="815" y="405" width="240" height="50" rx="14" fill="#26215c"/><text x="875" y="437" fill="#fff" font-family="Arial" font-size="15" font-weight="700">رزرو و دریافت قیمت دقیق</text>
+<text x="0" y="585" fill="#111827" font-family="Arial" font-size="22" font-weight="700">توضیحات و ویژگی‌ها</text>
+<rect x="0" y="610" width="1090" height="135" rx="18" fill="#fff" stroke="#e5e7eb"/><text x="25" y="650" fill="#475569" font-family="Arial" font-size="14">توضیحات واقعی آگهی در این بخش نمایش داده می‌شود.</text><text x="25" y="690" fill="#475569" font-family="Arial" font-size="14">وضعیت کالا، مشخصات، محل تحویل و شرایط استفاده باید واضح باشند.</text>
+<rect x="0" y="775" width="1090" height="105" rx="18" fill="#f1f5f9"/><text x="25" y="815" fill="#111827" font-family="Arial" font-size="14" font-weight="700">🔒 ارتباط و تحویل امن</text><text x="25" y="845" fill="#64748b" font-family="Arial" font-size="12">هماهنگی تماس و تحویل طبق جریان امن Rentora انجام می‌شود.</text>
+<text x="0" y="935" fill="#111827" font-family="Arial" font-size="22" font-weight="700">نظرات کاربران</text>
+<rect x="0" y="960" width="1090" height="150" rx="18" fill="#fff" stroke="#e5e7eb"/><text x="25" y="1000" fill="#b45309" font-family="Arial" font-size="16">★ 4.9</text><text x="25" y="1040" fill="#475569" font-family="Arial" font-size="13">18 نظر تاییدشده</text><text x="25" y="1075" fill="#64748b" font-family="Arial" font-size="12">نظرها بعد از معامله واقعی نمایش داده می‌شوند.</text>
+<text x="0" y="1165" fill="#111827" font-family="Arial" font-size="20" font-weight="700">موبایل</text>
+<rect x="0" y="1195" width="360" height="570" rx="28" fill="#fff" stroke="#cbd5e1"/>
+<rect x="18" y="1213" width="324" height="180" rx="18" fill="#dddff0"/><text x="180" y="1310" text-anchor="middle" fill="#777" font-family="Arial" font-size="14">گالری</text>
+<text x="35" y="1430" fill="#111827" font-family="Arial" font-size="19" font-weight="700">دریل حرفه‌ای</text><text x="35" y="1455" fill="#64748b" font-family="Arial" font-size="11">ابزار نجاری · تورنتو · ★ 4.9</text>
+<rect x="25" y="1480" width="310" height="65" rx="15" fill="#f5f3ff"/><text x="45" y="1505" fill="#534ab7" font-family="Arial" font-size="12">مالک احراز شده</text><text x="45" y="1530" fill="#111827" font-family="Arial" font-size="14" font-weight="700">@owner</text>
+<text x="35" y="1580" fill="#475569" font-family="Arial" font-size="12">توضیحات کوتاه و ویژگی‌ها</text><text x="35" y="1610" fill="#64748b" font-family="Arial" font-size="11">امنیت، تحویل و امتیاز در دسترس.</text>
+<rect x="18" y="1680" width="324" height="62" rx="16" fill="#26215c"/><text x="180" y="1718" text-anchor="middle" fill="#fff" font-family="Arial" font-size="14" font-weight="700">رزرو و دریافت قیمت دقیق</text>
+</g></svg>
