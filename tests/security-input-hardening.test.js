@@ -87,3 +87,15 @@ test('listing text fields reject non-string values', () => {
   assert.match(worker, /typeof item\.category !== 'string'/);
   assert.match(worker, /typeof item\.location !== 'string'/);
 });
+test('cross-tab broadcasts are invalidation signals, not client-side data authority', () => {
+  const handler = cloudSync.slice(
+    cloudSync.indexOf('handleIncomingBroadcast(payload)'),
+    cloudSync.indexOf('getAuthHeaders()', cloudSync.indexOf('handleIncomingBroadcast(payload)'))
+  );
+  assert.match(handler, /fetchSharedData\(true\)\.catch\(\(\) => \{\}\)/);
+  assert.doesNotMatch(handler, /saveCachedItems\(updated\)/);
+  assert.doesNotMatch(handler, /saveCachedUsers\(updated\)/);
+  assert.doesNotMatch(handler, /notifySubscribers\('ITEM_ADDED'/);
+  assert.doesNotMatch(handler, /notifySubscribers\('USER_SYNC'/);
+  assert.doesNotMatch(handler, /notifySubscribers\('RENTAL_SYNC'/);
+});
