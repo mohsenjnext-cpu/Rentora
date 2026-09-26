@@ -6,6 +6,7 @@ const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8'
 const rentoraContext = fs.readFileSync(new URL('../src/context/RentoraContext.jsx', import.meta.url), 'utf8');
 const piAuthContext = fs.readFileSync(new URL('../src/context/PiAuthContext.jsx', import.meta.url), 'utf8');
 const cloudSync = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
+const gateway = fs.readFileSync(new URL('../worker-gateway2.js', import.meta.url), 'utf8');
 
 function section(start, end) {
   const from = worker.indexOf(start);
@@ -28,7 +29,7 @@ test('conversation messages use a constrained server-side message type', () => {
   const route = section("path.startsWith('/api/conversations/') && path.endsWith('/messages')", "path.startsWith('/api/conversations/') && path.endsWith('/read')");
   assert.match(route, /requireString\(body\?\.text, 'text', 2000, \{ required: true \}\)/);
   assert.match(route, /requireEnum\(body\?\.messageType \|\| 'text', 'messageType', \['text'\]\)/);
-  assert.match(route, /\.bind\(messageId, convId, user\.pi_uid, user\.username, rawText, messageType, now\(\)\)/);
+  assert.match(route, /\.bind\(msgId, convId, user\.id, rawText, finalType, now\(\)\)/);
 });
 
 test('review text is type-checked and bounded', () => {
@@ -156,6 +157,7 @@ test('payout and quote identifiers reject coercive or malformed sensitive inputs
 
 test('payment intents and conversation/report route identifiers are type-checked and bounded', () => {
   assert.match(worker, /const rentalId = requireString\(body\?\.rentalId, 'rentalId', 128, \{ required: true \}\)/);
+  assert.match(worker, /\.bind\(rentalId, user\.id\)/);
   assert.match(worker, /Invalid conversation ID/);
   assert.match(worker, /Invalid report ID/);
   assert.match(worker, /requireEnum\(body\?\.status \|\| 'resolved', 'status', \['resolved', 'dismissed', 'reviewing'\]\)/);
