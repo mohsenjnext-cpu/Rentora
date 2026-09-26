@@ -12,7 +12,7 @@ test('Wallet modal does not present A2U-disabled balance as withdrawable', () =>
 });
 
 test('Wallet modal does not expose a user withdrawal action', () => {
-  assert.doesNotMatch(file, /wallet\\/withdraw/);
+  assert.doesNotMatch(file, /wallet\/withdraw/);
   assert.doesNotMatch(file, /Withdraw Funds/);
   assert.doesNotMatch(file, /برداشت وجه/);
 });
