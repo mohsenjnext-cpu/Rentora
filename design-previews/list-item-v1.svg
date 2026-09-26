@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1100" viewBox="0 0 1440 1100">
+<rect width="1440" height="1100" fill="#f8f8fc"/>
+<rect x="0" y="0" width="232" height="1100" fill="#17162b"/>
+<text x="32" y="48" font-family="Arial" font-size="24" font-weight="700" fill="#fff">Rentora</text>
+<rect x="24" y="92" width="184" height="42" rx="12" fill="#534AB7"/><text x="44" y="119" font-family="Arial" font-size="14" font-weight="700" fill="#fff">+ List an item</text>
+<g font-family="Arial" font-size="14" fill="#d8d6e8"><text x="36" y="190">Home</text><text x="36" y="238">Discover</text><text x="36" y="286">Owner Hub</text><text x="36" y="334">Activity</text><text x="36" y="382">Profile</text></g>
+<rect x="232" y="0" width="1208" height="76" fill="#fff" stroke="#e5e5ee"/>
+<text x="270" y="47" font-family="Arial" font-size="22" font-weight="700" fill="#202033">List an item</text>
+<text x="1260" y="46" font-family="Arial" font-size="13" fill="#777">Save draft</text>
+<text x="1320" y="46" font-family="Arial" font-size="13" font-weight="700" fill="#534AB7">Publish</text>
+
+<text x="270" y="120" font-family="Arial" font-size="13" fill="#777">Create a clear listing. Public details stay focused, private handover details stay protected.</text>
+
+<rect x="270" y="150" width="770" height="900" rx="20" fill="#fff" stroke="#e3e3ec"/>
+<text x="300" y="195" font-family="Arial" font-size="18" font-weight="700" fill="#202033">Item basics</text>
+<text x="300" y="226" font-family="Arial" font-size="12" fill="#777">The essentials renters need to understand your item.</text>
+
+<text x="300" y="270" font-family="Arial" font-size="12" font-weight="700" fill="#333">Title *</text>
+<rect x="300" y="282" width="710" height="44" rx="10" fill="#fafafd" stroke="#dcdce8"/>
+<text x="316" y="309" font-family="Arial" font-size="13" fill="#999">e.g. Makita cordless drill 18V</text>
+
+<text x="300" y="365" font-family="Arial" font-size="12" font-weight="700" fill="#333">Category *</text>
+<g font-family="Arial" font-size="12" font-weight="700">
+<rect x="300" y="378" width="132" height="42" rx="10" fill="#26215C"/><text x="326" y="404" fill="#fff">Tools</text>
+<rect x="442" y="378" width="132" height="42" rx="10" fill="#f5f5fa" stroke="#ddd"/><text x="470" y="404" fill="#555">Cameras</text>
+<rect x="584" y="378" width="132" height="42" rx="10" fill="#f5f5fa" stroke="#ddd"/><text x="609" y="404" fill="#555">Camping</text>
+<rect x="726" y="378" width="132" height="42" rx="10" fill="#f5f5fa" stroke="#ddd"/><text x="754" y="404" fill="#555">Sports</text>
+<rect x="868" y="378" width="142" height="42" rx="10" fill="#f5f5fa" stroke="#ddd"/><text x="893" y="404" fill="#555">Vehicles</text></g>
+
+<text x="300" y="462" font-family="Arial" font-size="12" font-weight="700" fill="#333">Photos *</text>
+<rect x="300" y="476" width="710" height="180" rx="14" fill="#fafafd" stroke="#dcdce8" stroke-dasharray="7 6"/>
+<rect x="322" y="498" width="130" height="136" rx="10" fill="#deddec"/><rect x="466" y="498" width="130" height="136" rx="10" fill="#e8e7f2"/><rect x="610" y="498" width="130" height="136" rx="10" fill="#deddec"/>
+<rect x="754" y="498" width="130" height="136" rx="10" fill="#f2f1f7" stroke="#bbb"/>
+<text x="788" y="557" font-family="Arial" font-size="30" fill="#777">+</text><text x="775" y="585" font-family="Arial" font-size="11" fill="#777">Add photos</text>
+<text x="322" y="650" font-family="Arial" font-size="10" fill="#888">First photo = cover. Drag/reorder, remove, or replace.</text>
+
+<text x="300" y="700" font-family="Arial" font-size="12" font-weight="700" fill="#333">Description</text>
+<rect x="300" y="712" width="710" height="90" rx="10" fill="#fafafd" stroke="#dcdce8"/>
+<text x="316" y="740" font-family="Arial" font-size="12" fill="#999">Condition, included accessories, important limitations...</text>
+
+<text x="300" y="848" font-family="Arial" font-size="18" font-weight="700" fill="#202033">Rental details</text>
+<g font-family="Arial" font-size="12" font-weight="700" fill="#333">
+<text x="300" y="882">Daily price *</text><text x="660" y="882">Security deposit</text><text x="300" y="978">Location *</text></g>
+<rect x="300" y="894" width="330" height="44" rx="10" fill="#fafafd" stroke="#dcdce8"/><text x="316" y="921" font-family="Arial" font-size="13" fill="#999">0.50 π / day</text>
+<rect x="660" y="894" width="350" height="44" rx="10" fill="#fafafd" stroke="#dcdce8"/><text x="676" y="921" font-family="Arial" font-size="13" fill="#999">0 π</text>
+<rect x="300" y="990" width="710" height="44" rx="10" fill="#fafafd" stroke="#dcdce8"/><text x="316" y="1017" font-family="Arial" font-size="13" fill="#999">City / neighborhood</text>
+
+<rect x="1064" y="150" width="330" height="390" rx="20" fill="#fff" stroke="#e3e3ec"/>
+<text x="1092" y="195" font-family="Arial" font-size="18" font-weight="700" fill="#202033">Before publish</text>
+<text x="1092" y="230" font-family="Arial" font-size="12" fill="#777">A quick checklist keeps listings usable.</text>
+<g font-family="Arial" font-size="13" fill="#333"><text x="1092" y="278">✓ Clear title</text><text x="1092" y="318">✓ At least one real photo</text><text x="1092" y="358">✓ Category selected</text><text x="1092" y="398">✓ Daily price in π</text><text x="1092" y="438">✓ Pickup location</text><text x="1092" y="478">✓ Description / condition</text></g>
+<rect x="1092" y="500" width="274" height="2" fill="#ececf3"/>
+
+<rect x="1064" y="564" width="330" height="220" rx="20" fill="#f5f3ff" stroke="#d8d4fa"/>
+<text x="1092" y="610" font-family="Arial" font-size="17" font-weight="700" fill="#26215C">Trust & privacy</text>
+<text x="1092" y="644" font-family="Arial" font-size="12" fill="#555">KYC status is shown on the listing.</text>
+<text x="1092" y="674" font-family="Arial" font-size="12" fill="#555">Private contact details remain</text>
+<text x="1092" y="694" font-family="Arial" font-size="12" fill="#555">hidden until the authorized flow.</text>
+<text x="1092" y="736" font-family="Arial" font-size="11" fill="#777">Rentora does not take custody of</text>
+<text x="1092" y="754" font-family="Arial" font-size="11" fill="#777">rental/deposit funds.</text>
+
+<rect x="1064" y="808" width="330" height="242" rx="20" fill="#fff" stroke="#e3e3ec"/>
+<text x="1092" y="850" font-family="Arial" font-size="17" font-weight="700" fill="#202033">Handover</text>
+<text x="1092" y="882" font-family="Arial" font-size="12" fill="#777">Preferred contact & hours</text>
+<rect x="1092" y="900" width="274" height="42" rx="9" fill="#fafafd" stroke="#ddd"/><text x="1106" y="926" font-family="Arial" font-size="12" fill="#888">Phone / in-app chat</text>
+<rect x="1092" y="952" width="274" height="42" rx="9" fill="#fafafd" stroke="#ddd"/><text x="1106" y="978" font-family="Arial" font-size="12" fill="#888">09:00 - 21:00</text>
+</svg>
