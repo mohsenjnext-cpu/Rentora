@@ -2728,8 +2728,7 @@ export default {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
 
-        const targetType = String(body?.type || body?.targetType || 'listing').trim().toLowerCase();
-        const targetType = requireEnum(body?.targetType, 'targetType', ['listing','user','rental','message']);
+        const targetType = requireEnum(body?.type || body?.targetType || 'listing', 'targetType', ['listing','user','rental','message']);
         const targetId = requireString(body?.targetId || body?.targetUsername || body?.targetTitle, 'targetId', 128, { required: true });
         const reason = requireString(body?.reason || 'other', 'reason', 100, { required: true });
         const details = requireString(body?.details ?? body?.description ?? '', 'details', 2000);
