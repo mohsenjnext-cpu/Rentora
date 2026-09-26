@@ -631,9 +631,9 @@ async function completePayment(request, env) {
   if (typeof body?.paymentId !== 'string' || typeof body?.txid !== 'string' || typeof body?.paymentIntentId !== 'string') {
     return json({ error: 'paymentId, txid and paymentIntentId must be text values', traceId, stage: 'params_validation' }, 400, request, env);
   }
-  const paymentId = paymentId.trim();
-  const txid = txid.trim();
-  const paymentIntentId = paymentIntentId.trim();
+  const paymentId = body.paymentId.trim();
+  const txid = body.txid.trim();
+  const paymentIntentId = body.paymentIntentId.trim();
   if (!paymentId || !txid || !paymentIntentId || paymentId.length > 128 || txid.length > 256 || paymentIntentId.length > 128) {
     return json({ error: 'payment identifiers are required and bounded', traceId, stage: 'params_validation' }, 400, request, env);
   }
