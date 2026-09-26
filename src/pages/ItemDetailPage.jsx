@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
+import { cloudSyncService } from '../services/cloudSyncService';
 import BookingModal from '../components/BookingModal';
 import ReportModal from '../components/ReportModal';
 import {
@@ -10,7 +11,8 @@ import {
 } from 'lucide-react';
 
 export default function ItemDetailPage({
-  item,
+  item: initialItem,
+  itemId,
   onBack,
   onBookingSuccess,
   onOpenChat,
@@ -34,15 +36,51 @@ export default function ItemDetailPage({
   });
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [reviewsError, setReviewsError] = useState('');
-  const imagesList = Array.isArray(item?.images) ? item.images.filter(Boolean) : [];
+  const [detailItem, setDetailItem] = useState(initialItem || null);
+  const [detailLoading, setDetailLoading] = useState(!initialItem && !!itemId);
+  const [detailError, setDetailError] = useState('');
+  const imagesList = Array.isArray(detailItem?.images) ? item.images.filter(Boolean) : [];
   const hasGallery = imagesList.length > 0;
+  const localized = (fa, en, ar, zh) => l(fa, en, ar, zh);
 
   useEffect(() => {
-    if (!item?.id) return;
+    setDetailItem(initialItem || null);
+    if (initialItem) {
+      setDetailLoading(false);
+      setDetailError('');
+    }
+  }, [initialItem]);
+
+  useEffect(() => {
+    if (initialItem || !itemId) {
+      setDetailLoading(false);
+      return undefined;
+    }
+    let mounted = true;
+    setDetailLoading(true);
+    setDetailError('');
+    cloudSyncService.fetchListingById(itemId)
+      .then((loadedItem) => {
+        if (!mounted) return;
+        setDetailItem(loadedItem);
+        setDetailLoading(false);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setDetailLoading(false);
+        setDetailError(err?.status === 404
+          ? l('این آگهی دیگر وجود ندارد یا در دسترس نیست.', 'This listing no longer exists or is unavailable.', 'هذا الإعلان لم يعد موجوداً أو متاحاً.', '此商品已不存在或不可用。')
+          : l('بارگذاری آگهی ناموفق بود. لطفاً دوباره تلاش کنید.', 'Unable to load this listing. Please try again.', 'تعذر تحميل الإعلان. يرجى المحاولة مرة أخرى.', '商品加载失败，请重试。'));
+      });
+    return () => { mounted = false; };
+  }, [initialItem, itemId, l]);
+
+  useEffect(() => {
+    if (!detailItem?.id) return;
     let mounted = true;
     setLoadingReviews(true);
     setReviewsError('');
-    fetchListingReviews(item.id)
+    fetchListingReviews(detailItem.id)
       .then((data) => {
         if (mounted && data) setReviewsData(data);
       })
@@ -53,12 +91,12 @@ export default function ItemDetailPage({
         if (mounted) setLoadingReviews(false);
       });
     return () => { mounted = false; };
-  }, [item?.id, fetchListingReviews]);
+  }, [detailItem?.id, fetchListingReviews]);
 
   useEffect(() => {
     setActiveImageIndex(0);
     setGalleryOpen(false);
-  }, [item?.id]);
+  }, [detailItem?.id]);
 
   useEffect(() => {
     if (!galleryOpen) return undefined;
@@ -76,7 +114,34 @@ export default function ItemDetailPage({
     };
   }, [galleryOpen, imagesList.length]);
 
-  if (!item) return null;
+  if (detailLoading) {
+    return (
+      <div className="w-full max-w-3xl mx-auto min-h-[55vh] flex items-center justify-center pb-28" role="status" aria-live="polite">
+        <div className="rentora-card w-full max-w-md p-8 text-center space-y-3">
+          <Loader2 className="w-8 h-8 mx-auto animate-spin text-[#534AB7]" />
+          <h1 className="text-base font-black text-slate-900 dark:text-white">{localized('در حال بارگذاری آگهی...', 'Loading listing...', 'جارٍ تحميل الإعلان...', '正在加载商品...')}</h1>
+          <p className="text-xs text-slate-400">{localized('اطلاعات آگهی از سرور معتبر رنتورا دریافت می‌شود.', 'Fetching the listing from Rentora’s authoritative server.', 'جارٍ جلب بيانات الإعلان من خادم رنتورا الموثوق.', '正在从 Rentora 权威服务器获取商品信息。')}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!detailItem || detailError) {
+    return (
+      <div className="w-full max-w-3xl mx-auto min-h-[55vh] flex items-center justify-center pb-28">
+        <div className="rentora-card w-full max-w-md p-8 text-center space-y-4">
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center border border-rose-200 dark:border-rose-900"><Lock className="w-6 h-6" /></div>
+          <div className="space-y-1.5">
+            <h1 className="text-base font-black text-slate-900 dark:text-white">{localized('آگهی در دسترس نیست', 'Listing unavailable', 'الإعلان غير متاح', '商品不可用')}</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-6">{detailError || localized('اطلاعات این آگهی در حال حاضر قابل دریافت نیست.', 'This listing cannot be loaded right now.', 'لا يمكن تحميل بيانات هذا الإعلان حالياً.', '当前无法加载此商品信息。')}</p>
+          </div>
+          <button type="button" onClick={onBack} className="btn-primary px-4 py-2.5 text-xs font-bold cursor-pointer">{localized('بازگشت', 'Go back', 'رجوع', '返回')}</button>
+        </div>
+      </div>
+    );
+  }
+
+  const item = detailItem;
 
   const isFav = (favorites || []).includes(item.id);
   const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
@@ -93,7 +158,6 @@ export default function ItemDetailPage({
   const totalReviews = reviewsData.stats?.totalReviews || 0;
   const ownerItems = (items || []).filter((candidate) => candidate.id !== item.id && candidate.status === 'active' && ((item.ownerUid && candidate.ownerUid === item.ownerUid) || (item.ownerUsername && candidate.ownerUsername?.toLowerCase() === item.ownerUsername.toLowerCase()))).slice(0, 4);
 
-  const localized = (fa, en, ar, zh) => l(fa, en, ar, zh);
   const ownerInitial = (item.ownerUsername || 'R').replace('@', '').charAt(0).toUpperCase();
   const listingStatus = String(item.status || 'active').toLowerCase();
   const isExpired = Boolean(item.expiresAt && Number.isFinite(Date.parse(item.expiresAt)) && Date.parse(item.expiresAt) <= Date.now());

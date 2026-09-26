@@ -40,6 +40,7 @@ function MainApp() {
   const [currentTab, setCurrentTab] = useState('home');
   const [previousTab, setPreviousTab] = useState('discover');
   const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedItemId, setSelectedItemId] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [publicProfileUsername, setPublicProfileUsername] = useState(null);
   const [discoverInitialCategory, setDiscoverInitialCategory] = useState('all');
@@ -86,7 +87,8 @@ function MainApp() {
   }, [currentTab, isAdmin]);
 
   const handleSelectItem = (item) => {
-    setSelectedItem(item);
+    setSelectedItem(item || null);
+    setSelectedItemId(item?.id || null);
     setPreviousTab(currentTab);
     setCurrentTab('item-detail');
   };
@@ -151,7 +153,7 @@ function MainApp() {
       <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 pb-28 md:pb-12">
         {currentTab === 'home' && <HomePage onNavigate={handleNavigate} onSelectItem={handleSelectItem} onRentItem={handleRentItem} />}
         {currentTab === 'discover' && <DiscoverPage initialCategory={discoverInitialCategory} initialQuery={discoverInitialQuery} onSelectItem={handleSelectItem} onRentItem={handleRentItem} />}
-        {currentTab === 'item-detail' && selectedItem && <ItemDetailPage item={selectedItem} onSelectItem={handleSelectItem} onBack={() => setCurrentTab(previousTab || 'discover')} onNavigateToActivity={() => setCurrentTab('activity')} onNavigateToOwnerHub={() => setCurrentTab('owner-hub')} onEditItem={handleEditItem} onOpenChat={(item) => handleOpenChat(item)} onOpenPublicProfile={handleOpenPublicProfile} />}
+        {currentTab === 'item-detail' && <ItemDetailPage item={selectedItem} itemId={selectedItemId} onSelectItem={handleSelectItem} onBack={() => setCurrentTab(previousTab || 'discover')} onNavigateToActivity={() => setCurrentTab('activity')} onNavigateToOwnerHub={() => setCurrentTab('owner-hub')} onEditItem={handleEditItem} onOpenChat={(item) => handleOpenChat(item)} onOpenPublicProfile={handleOpenPublicProfile} />}
         {currentTab === 'public-profile' && publicProfileUsername && <PublicProfilePage username={publicProfileUsername} onBack={() => setCurrentTab(previousTab || 'discover')} onSelectItem={handleSelectItem} onRentItem={handleRentItem} onOpenChat={(item) => handleOpenChat(item)} />}
         {currentTab === 'list-item' && <ListItemPage itemToEdit={editingItem} onCancelEdit={() => { setEditingItem(null); setCurrentTab(previousTab || 'owner-hub'); }} onItemCreated={(newItem) => { setSelectedItem(newItem); setEditingItem(null); setCurrentTab('item-detail'); }} onItemUpdated={(updatedItem) => { setSelectedItem(updatedItem); setEditingItem(null); setCurrentTab('item-detail'); }} onNavigate={(page) => { setEditingItem(null); setCurrentTab(page); }} />}
         {currentTab === 'owner-hub' && <OwnerHubPage onNavigate={handleNavigate} onSelectItem={handleSelectItem} onEditItem={handleEditItem} />}
