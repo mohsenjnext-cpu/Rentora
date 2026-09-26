@@ -60,7 +60,6 @@ export default function ItemDetailRedesign({
       else {
         await navigator.clipboard.writeText(window.location.href);
         setCopied(true);
-        setCopied(true);
       }
     } catch (_) {}
   };
