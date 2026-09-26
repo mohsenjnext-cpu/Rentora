@@ -77,7 +77,7 @@ export default function ListItemRedesign({ itemToEdit = null, onCancelEdit, onIt
       setSuccess(true);
       if (edit) onItemUpdated?.(result || {...itemToEdit, ...payload});
       else onItemCreated?.(result);
-      setTimeout(() => onNavigate?.(edit ? 'owner-hub' : 'item-detail'), 700);
+      onNavigate?.(edit ? 'owner-hub' : 'item-detail');
     } catch (e) { setError(e.message || l('ذخیره آگهی ناموفق بود.', 'Could not save listing.', 'تعذر حفظ الإعلان.', '保存失败。')); }
     finally { setBusy(false); }
   };
