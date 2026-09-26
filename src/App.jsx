@@ -31,6 +31,7 @@ import PublicProfilePage from './pages/PublicProfilePage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import SettingsPage from './pages/SettingsPage';
 import NotificationsPage from './pages/NotificationsPage';
+import ChatPage from './pages/ChatPage';
 
 function MainApp() {
   const { dir } = useLanguage();
@@ -146,7 +147,7 @@ function MainApp() {
 
   return (
     <div className="min-h-screen bg-[#FAFAFC] dark:bg-[#0B0E17] text-[#111827] dark:text-[#F3F4F6] flex flex-col md:ps-64">
-      <Header onNavigate={handleNavigate} currentPage={currentTab} onOpenSidebar={() => setMobileSidebarOpen(true)} onOpenChat={() => handleOpenChat(null)} />
+      <Header onNavigate={handleNavigate} currentPage={currentTab} onOpenSidebar={() => setMobileSidebarOpen(true)} onOpenChat={() => handleNavigate('chat')} />
       <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-3 sm:pt-6 pb-28 md:pb-12">
         {currentTab === 'home' && <HomePage onNavigate={handleNavigate} onSelectItem={handleSelectItem} onRentItem={handleRentItem} />}
         {currentTab === 'discover' && <DiscoverPage initialCategory={discoverInitialCategory} initialQuery={discoverInitialQuery} onSelectItem={handleSelectItem} onRentItem={handleRentItem} />}
@@ -158,10 +159,11 @@ function MainApp() {
         {currentTab === 'profile' && <ProfilePage onNavigate={handleNavigate} onSelectItem={handleSelectItem} onRentItem={handleRentItem} onOpenPublicProfile={handleOpenPublicProfile} />}
         {currentTab === 'admin' && (isAdmin ? <AdminDashboardPage onNavigate={handleNavigate} onOpenPublicProfile={handleOpenPublicProfile} onEditItem={handleEditItem} /> : <div className="py-20 text-center max-w-md mx-auto space-y-4 animate-fadeIn select-none"><div className="w-14 h-14 mx-auto rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 flex items-center justify-center border border-rose-200 dark:border-rose-900 shadow-sm"><Lock className="w-7 h-7 stroke-[1.8]" /></div><div className="space-y-1"><h2 className="text-lg font-bold text-slate-900 dark:text-white">دسترسی غیرمجاز (۴۰۳)</h2><p className="text-xs text-slate-500 max-w-xs mx-auto">دسترسی به این بخش اختصاصی مدیران تاییدشده رنتورا است.</p></div><button type="button" onClick={() => handleNavigate('home')} className="btn-primary px-4 py-2 text-xs font-bold cursor-pointer">بازگشت به خانه</button></div>)}
         {currentTab === 'settings' && <SettingsPage onNavigate={handleNavigate} onOpenHelp={handleOpenHelp} onOpenSecurity={handleOpenSecurity} onOpenSupport={handleOpenSupport} />}
-        {currentTab === 'notifications' && <NotificationsPage onNavigate={handleNavigate} onOpenChat={() => handleOpenChat(null)} />}
+        {currentTab === 'notifications' && <NotificationsPage onNavigate={handleNavigate} onOpenChat={() => handleNavigate('chat')} />}
+        {currentTab === 'chat' && <ChatPage onNavigate={handleNavigate} />}
       </main>
       <Footer onNavigate={handleNavigate} onOpenHelp={handleOpenHelp} />
-      <Sidebar currentTab={currentTab} onNavigate={handleNavigate} mobileOpen={mobileSidebarOpen} setMobileOpen={setMobileSidebarOpen} onOpenChat={() => handleOpenChat(null)} onOpenHelp={handleOpenHelp} onOpenSecurity={handleOpenSecurity} onOpenSupport={handleOpenSupport} />
+      <Sidebar currentTab={currentTab} onNavigate={handleNavigate} mobileOpen={mobileSidebarOpen} setMobileOpen={setMobileSidebarOpen} onOpenChat={() => handleNavigate('chat')} onOpenHelp={handleOpenHelp} onOpenSecurity={handleOpenSecurity} onOpenSupport={handleOpenSupport} />
       <PiAuthModal />
       <WalletModal />
       <HelpCenterModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} initialTab={helpInitialTab} />

@@ -55,6 +55,7 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
       case 'admin': return t('navAdmin');
       case 'settings': return t('navSettings');
       case 'notifications': return l('اعلان‌ها', 'Notifications', 'الإشعارات', '通知');
+      case 'chat': return l('پیام‌ها', 'Messages', 'الرسائل', '消息');
       default: return t('appName');
     }
   };
