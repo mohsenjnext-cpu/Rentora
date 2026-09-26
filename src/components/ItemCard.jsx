@@ -77,7 +77,8 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
               toggleFavorite(item.id);
             }}
             className="absolute top-2 right-2 rtl:right-auto rtl:left-2 p-1.5 rounded-full bg-black/40 backdrop-blur-xs text-white hover:text-rose-400 transition cursor-pointer z-10"
-            title={t('btnFavorite')}\n            aria-label={l(isFav ? 'حذف از علاقه‌مندی‌ها' : 'افزودن به علاقه‌مندی‌ها', isFav ? 'Remove from favorites' : 'Add to favorites', isFav ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة', isFav ? '取消收藏' : '加入收藏')}
+            title={t('btnFavorite')}
+            aria-label={l(isFav ? 'حذف از علاقه‌مندی‌ها' : 'افزودن به علاقه‌مندی‌ها', isFav ? 'Remove from favorites' : 'Add to favorites', isFav ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة', isFav ? '取消收藏' : '加入收藏')}
           >
             <Heart className={`w-3.5 h-3.5 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
           </button>
@@ -120,7 +121,8 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
               e.stopPropagation();
               if (onSelect) onSelect(item);
             }}
-            aria-label={l('مدیریت آگهی', 'Manage listing', 'إدارة الإعلان', '管理发布')}\n            className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-[#1E1D33] text-slate-700 dark:text-slate-300 hover:border-[#534AB7] text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
+            aria-label={l('مدیریت آگهی', 'Manage listing', 'إدارة الإعلان', '管理发布')}
+            className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-[#1E1D33] text-slate-700 dark:text-slate-300 hover:border-[#534AB7] text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
           >
             <Settings className="w-3 h-3 text-[#534AB7]" />
             <span>{l('مدیریت آگهی', 'Manage', 'إدارة', '管理')}</span>
@@ -136,7 +138,8 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
                 onSelect(item);
               }
             }}
-            aria-label={l('رزرو این آگهی', 'Book this listing', 'حجز هذا الإعلان', '预订此发布')}\n            className="btn-primary px-2.5 py-1.5 text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
+            aria-label={l('رزرو این آگهی', 'Book this listing', 'حجز هذا الإعلان', '预订此发布')}
+            className="btn-primary px-2.5 py-1.5 text-[11px] font-bold shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
           >
             <Coins className="w-3 h-3 text-amber-400" />
             <span>{t('itemBookBtn')}</span>
