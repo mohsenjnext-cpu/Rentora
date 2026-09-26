@@ -378,9 +378,13 @@ function userView(row, env, options = {}) {
   let meta = {};
   try { meta = row.metadata ? JSON.parse(row.metadata) : {}; } catch (_) {}
   const isAdmin = adminAllowed(row.pi_uid, env) && row.role === 'admin';
-  const piKycStatus = meta.kycStatus || row.kyc_status;
-  const resolvedKycStatus = piKycStatus === 'verified' ? 'verified' : (piKycStatus === 'unverified' ? 'unverified' : 'unknown');
-  const { adminKycStatus, ...publicMeta } = meta;
+  // KYC is an explicit server/admin-reviewed state. Never derive public
+  // verification from arbitrary client metadata alone.
+  const adminKycStatus = ['verified', 'unverified', 'unknown'].includes(meta.adminKycStatus)
+    ? meta.adminKycStatus
+    : 'unknown';
+  const resolvedKycStatus = adminKycStatus;
+  const { adminKycStatus: _hiddenAdminKycStatus, kycStatus: _legacyKycStatus, ...publicMeta } = meta;
   const view = {
     ...publicMeta,
     id: row.id,
@@ -388,7 +392,7 @@ function userView(row, env, options = {}) {
     piUid: row.pi_uid,
     username: row.username,
     displayName: row.display_name || row.username,
-    avatar: row.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${row.username}`,
+    avatar: row.avatar_url || '',
     bio: meta.bio || '',
     location: meta.location || '',
     phoneMasked: meta.phoneMasked || '',
