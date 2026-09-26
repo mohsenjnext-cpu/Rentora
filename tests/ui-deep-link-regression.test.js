@@ -13,6 +13,7 @@ test('listing detail has a stable /item/:id route and restores it on direct load
   assert.match(app, /url\.pathname = `\/item\/\$\{encodeURIComponent\(item\.id\)\}`/);
   assert.match(app, /window\.history\.pushState/);
   assert.match(app, /window\.addEventListener\('popstate'/);
+  assert.match(app, /cloudSyncService\.fetchListingById\(listingId\)/);
 });
 
 test('redesigned item share uses the current canonical page URL', () => {
