@@ -23,11 +23,8 @@ test('all privileged admin routes are protected by server-side admin authorizati
     assert.match(source, route, `route should be present and guarded: ${name}`);
   }
 
-  const reconciliationIndex = source.indexOf("path === '/api/admin/reconciliation/");
-  assert.ok(reconciliationIndex >= 0, 'reconciliation retry route should exist');
-  const nextRoute = source.indexOf("\n      if (method ===", reconciliationIndex + 1);
-  const block = source.slice(reconciliationIndex, nextRoute === -1 ? source.length : nextRoute);
-  assert.match(block, /requireAdmin\(request, env\)/);
+  const reconciliationRoute = /method === 'POST' && \/\^\\\/api\\\/admin\\\/reconciliation\\\/\[\^\/\]\+\\\/retry\$\/\.test\(path\)[\\s\\S]*?requireAdmin\(request, env\)/;
+  assert.match(source, reconciliationRoute, 'reconciliation retry route should exist and be guarded');
 });
 
 test('requireAdmin requires active authentication plus allowlisted admin role', () => {
