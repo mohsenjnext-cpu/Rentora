@@ -16,7 +16,8 @@ export default function ItemDetailPage({
   onOpenChat,
   onOpenPublicProfile,
   onNavigateToOwnerHub,
-  onEditItem
+  onEditItem,
+  onSelectItem
 }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser } = usePiAuth();
@@ -33,6 +34,8 @@ export default function ItemDetailPage({
   });
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [reviewsError, setReviewsError] = useState('');
+  const imagesList = Array.isArray(item?.images) ? item.images.filter(Boolean) : [];
+  const hasGallery = imagesList.length > 0;
 
   useEffect(() => {
     if (!item?.id) return;
@@ -285,7 +288,7 @@ export default function ItemDetailPage({
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {ownerItems.map((other) => (
-                  <button key={other.id} type="button" onClick={() => window.history.pushState({}, '', window.location.href)} className="rentora-card overflow-hidden text-start cursor-pointer hover:-translate-y-0.5 transition">
+                  <button key={other.id} type="button" onClick={() => onSelectItem?.(other)} className="rentora-card overflow-hidden text-start cursor-pointer hover:-translate-y-0.5 transition">
                     {other.images?.[0] ? <img src={other.images[0]} alt={other.title} className="w-full aspect-[4/3] object-cover" /> : <div className="w-full aspect-[4/3] bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-xs text-slate-400">R</div>}
                     <div className="p-2.5"><div className="text-xs font-bold text-slate-900 dark:text-white line-clamp-2">{other.title}</div><div className="mt-1 text-[11px] font-black text-[#0F6E56]">{other.pricePerDay} π / {localized('روز', 'day', 'day', '天')}</div></div>
                   </button>
