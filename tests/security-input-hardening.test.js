@@ -103,28 +103,28 @@ test('cross-tab broadcasts are invalidation signals, not client-side data author
 
 test('admin identity is server-authoritative and never client-role authoritative', () => {
   const requireAdminSection = worker.slice(worker.indexOf('async function requireAdmin'), worker.indexOf('async function recordAdminAuditLog'));
-  assert.match(requireAdminSection, /isAdmin\\(auth\\.user\\.pi_uid, env\\)/);
-  assert.match(requireAdminSection, /auth\\.user\\.role !== 'admin'/);
-  assert.match(worker, /function isAdmin\\(uid, env\\)/);
-  assert.match(worker, /allowed\\.includes\\(id\\)/);
+  assert.match(requireAdminSection, /isAdmin\(auth\.user\.pi_uid, env\)/);
+  assert.match(requireAdminSection, /auth\.user\.role !== 'admin'/);
+  assert.match(worker, /function isAdmin\(uid, env\)/);
+  assert.match(worker, /allowed\.includes\(id\)/);
 });
 
 test('admin status and KYC mutations use strict enums', () => {
   const statusRoute = section("path.startsWith('/api/admin/users/') && path.endsWith('/status')", "path.startsWith('/api/admin/users/') && path.endsWith('/kyc')");
   const kycRoute = section("path.startsWith('/api/admin/users/') && path.endsWith('/kyc')", "path.startsWith('/api/admin/reports/')");
-  assert.match(statusRoute, /\\['active', 'suspended'\\]\\.includes\\(newStatus\\)/);
-  assert.match(kycRoute, /\\['verified', 'unverified', 'unknown'\\]\\.includes\\(newKycStatus\\)/);
+  assert.match(statusRoute, /\['active', 'suspended'\]\.includes\(newStatus\)/);
+  assert.match(kycRoute, /\['verified', 'unverified', 'unknown'\]\.includes\(newKycStatus\)/);
 });
 
 test('session cookie uses server TTL and explicit logout invalidation', () => {
-  assert.match(worker, /Max-Age=\\$\\{SESSION_TTL\\}/);
-  assert.match(worker, /rentora_session=; Max-Age=0; Path=\\/; HttpOnly; Secure; SameSite=None/);
-  assert.match(worker, /RENTORA_KV\\.delete\\(.*session:/);
+  assert.match(worker, /Max-Age=\$\{SESSION_TTL\}/);
+  assert.match(worker, /rentora_session=; Max-Age=0; Path=\/; HttpOnly; Secure; SameSite=None/);
+  assert.match(worker, /RENTORA_KV\.delete\(.*session:/);
 });
 
 test('rental creation requires a server-issued quote when quoteId is supplied', () => {
   const route = section("method === 'POST' && path === '/api/rentals'", "method === 'GET' && path.startsWith('/api/rentals/')");
-  assert.match(route, /RENTORA_KV\\.get\\(.*quote:/);
+  assert.match(route, /RENTORA_KV\.get\(.*quote:/);
   assert.match(route, /Quote does not belong to the authenticated user/);
-  assert.match(route, /quote\\.expiresAt/);
+  assert.match(route, /quote\.expiresAt/);
 });
