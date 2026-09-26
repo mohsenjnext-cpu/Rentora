@@ -21,3 +21,7 @@ if (!worker.includes("supportTickets")) throw new Error('Admin console must expo
 const admin = fs.readFileSync('src/pages/AdminDashboardRedesign.jsx', 'utf8');
 if (!admin.includes('supportTickets') || !admin.includes('updateSupportStatus')) throw new Error('Admin UI must expose and update support tickets');
 console.log('support admin regression checks passed');
+
+const gateway = fs.readFileSync('worker-gateway2.js', 'utf8');
+if (!gateway.includes("GET,POST,PATCH,OPTIONS")) throw new Error('Gateway CORS must allow PATCH requests');
+console.log('gateway PATCH CORS regression check passed');
