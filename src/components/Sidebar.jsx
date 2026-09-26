@@ -75,7 +75,7 @@ export default function Sidebar({
 
   const Panel = ({ mobile = false }) => (
     <aside className={`rentora-sidebar-panel h-full w-[272px] bg-white/96 dark:bg-[#121124]/98 border-slate-200/80 dark:border-slate-800/80 flex flex-col shadow-sm ${
-      mobile ? 'border-s' + (dir === 'rtl' ? 'r' : 'l') : (dir === 'rtl' ? 'border-l' : 'border-r')
+      mobile ? (dir === 'rtl' ? 'border-r' : 'border-l') : (dir === 'rtl' ? 'border-l' : 'border-r')
     }`}>
       <div className="h-16 px-4 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between shrink-0">
         <button type="button" onClick={() => handleNavClick('home')} className="flex items-center gap-2.5 cursor-pointer">
