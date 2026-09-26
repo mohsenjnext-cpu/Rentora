@@ -2815,9 +2815,10 @@ export default {
       if (method === 'POST' && path === '/api/rentals/quote') {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
-        const listingId = String(body.listingId || '').trim();
-        if (!listingId) return errorResponse('listingId is required', 400, env, undefined, origin);
-        if (!body.startDate || !body.endDate) return errorResponse('startDate and endDate are required', 400, env, undefined, origin);
+        const listingId = requireString(body?.listingId, 'listingId', 128, { required: true });
+        const startDate = requireString(body?.startDate, 'startDate', 64, { required: true });
+        const endDate = requireString(body?.endDate, 'endDate', 64, { required: true });
+        if (Number.isNaN(Date.parse(startDate)) || Number.isNaN(Date.parse(endDate))) return errorResponse('Invalid date format', 400, env, undefined, origin);
 
         const listing = await env.RENTORA_DB.prepare(
           `SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.id=?1 LIMIT 1`
@@ -2835,8 +2836,8 @@ export default {
           financials = calculateAuthoritativeFinancials(
             listing.price_per_day,
             listing.deposit_amount,
-            body.startDate,
-            body.endDate,
+            startDate,
+            endDate,
             Number(env.PLATFORM_FEE_RATE || 0.05),
             0.0001
           );
