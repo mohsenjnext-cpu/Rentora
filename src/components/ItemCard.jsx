@@ -31,7 +31,7 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
 
   const imageUrl = (item.images && item.images.length > 0)
     ? item.images[0]
-    : 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80';
+    : '';
 
   return (
     <div
@@ -41,12 +41,18 @@ export default function ItemCard({ item, onSelect, onRentClick }) {
       <div>
         {/* Image Container with Badges */}
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100 dark:bg-slate-800">
-          <img
-            src={imageUrl}
-            alt={item.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-            loading="lazy"
-          />
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={item.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+              loading="lazy"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-[#EEEDFE] dark:bg-[#211E45] text-[#534AB7]">
+              <Package className="w-10 h-10 stroke-[1.5]" />
+            </div>
+          )}
 
           {/* Badges in Top Corners */}
           <div className="absolute top-2 left-2 rtl:left-auto rtl:right-2 flex items-center gap-1 z-10">
