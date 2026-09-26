@@ -26,3 +26,11 @@ test('ChatPage renders the conversation report modal inside the returned tree', 
   assert.ok(reportIndex < functionEnd);
   assert.match(chat, /\{selected && <ReportModal isOpen=\{isReportOpen\}/);
 });
+
+
+test('ChatPage exposes localized labels for mobile navigation and messaging controls', () => {
+  assert.ok(chat.includes("aria-label={l('بازگشت به گفتگوها', 'Back to conversations', 'العودة إلى المحادثات', '返回会话列表')}"));
+  assert.ok(chat.includes("aria-label={l('جستجوی گفتگوها', 'Search conversations', 'البحث في المحادثات', '搜索会话')}"));
+  assert.ok(chat.includes("aria-label={l('نوشتن پیام', 'Write a message', 'كتابة رسالة', '输入消息')}"));
+  assert.ok(chat.includes("aria-label={l('ارسال پیام', 'Send message', 'إرسال الرسالة', '发送消息')}"));
+});
