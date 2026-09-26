@@ -11,6 +11,23 @@ const PAYMENT_INTENT_TTL = 60 * 30;
 const MAX_BODY_BYTES = 16 * 1024;
 
 function now() { return new Date().toISOString(); }
+function requireString(value, field, maxLength, { required = false } = {}) {
+  if (value == null) {
+    if (required) throw Object.assign(new Error(field + ' is required'), { status: 400 });
+    return '';
+  }
+  if (typeof value !== 'string') throw Object.assign(new Error(field + ' must be text'), { status: 400 });
+  const out = value.trim();
+  if (required && !out) throw Object.assign(new Error(field + ' is required'), { status: 400 });
+  if (out.length > maxLength) throw Object.assign(new Error(field + ' is too long'), { status: 400 });
+  return out;
+}
+function requireEnum(value, field, allowed) {
+  const out = requireString(value, field, 100, { required: true });
+  if (!allowed.includes(out)) throw Object.assign(new Error('Invalid ' + field), { status: 400 });
+  return out;
+}
+
 function cleanUsername(value) { return String(value || '').replace(/^@/, '').trim().toLowerCase(); }
 function parseAllowedOrigins(env) {
   return String(env?.CORS_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -2679,8 +2696,8 @@ export default {
         const limit = await enforceRateLimit(request, env, 'support_tickets', 5, 300, user.id);
         if (!limit.allowed) return errorResponse('Too many support requests. Please retry later.', 429, env, { retryAfter: limit.retryAfter }, origin);
         const body = await readJson(request);
-        const subject = String(body?.subject || '').trim();
-        const message = String(body?.message || '').trim();
+        const subject = requireString(body?.subject || '', 'subject', 160);
+        const message = requireString(body?.message || '', 'message', 4000, { required: true });
         if (subject.length > 160) return errorResponse('Subject too long (max 160 characters)', 400, env, undefined, origin);
         if (!message) return errorResponse('Message is required', 400, env, undefined, origin);
         if (message.length > 4000) return errorResponse('Message too long (max 4000 characters)', 400, env, undefined, origin);
@@ -2712,9 +2729,10 @@ export default {
         const body = await readJson(request);
 
         const targetType = String(body?.type || body?.targetType || 'listing').trim().toLowerCase();
-        const targetId = String(body?.targetId || body?.targetUsername || body?.targetTitle || '').trim();
-        const reason = String(body?.reason || 'other').trim();
-        const details = String(body?.details || body?.description || '').trim();
+        const targetType = requireEnum(body?.targetType, 'targetType', ['listing','user','rental','message']);
+        const targetId = requireString(body?.targetId || body?.targetUsername || body?.targetTitle, 'targetId', 128, { required: true });
+        const reason = requireString(body?.reason || 'other', 'reason', 100, { required: true });
+        const details = requireString(body?.details ?? body?.description ?? '', 'details', 2000);
 
         if (!targetId) return errorResponse('Target identifier is required', 400, env, undefined, origin);
         if (!reason) return errorResponse('Report reason is required', 400, env, undefined, origin);
