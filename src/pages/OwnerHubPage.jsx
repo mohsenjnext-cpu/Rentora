@@ -13,7 +13,8 @@ import {
   Package,
   Layers,
   Check,
-  Edit3
+  Edit3,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onRentItem }) {
@@ -29,6 +30,8 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'active' | 'inactive'
   const [processingRentalId, setProcessingRentalId] = useState(null);
   const [successToast, setSuccessToast] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [actionErrorRentalId, setActionErrorRentalId] = useState(null);
   const [showAllRequests, setShowAllRequests] = useState(false);
 
   if (!isAuthenticated) {
@@ -88,9 +91,12 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
 
   const handleConfirmReturn = async (rentalId) => {
     setProcessingRentalId(rentalId);
+    setActionError('');
+    setActionErrorRentalId(rentalId);
     try {
       const res = await confirmReturnOneTap(rentalId);
       if (res.success) {
+        setActionErrorRentalId(null);
         setSuccessToast(l(
           'بازگشت سالم کالا تایید و ودیعه نقدی عودت داده شد.',
           'Safe return confirmed & cash deposit refunded.',
@@ -100,7 +106,12 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
         setTimeout(() => setSuccessToast(''), 3000);
       }
     } catch (e) {
-      console.warn(e);
+      setActionError(e?.message || l(
+        'تأیید بازگشت ناموفق بود. دوباره تلاش کنید.',
+        'Return confirmation failed. Try again.',
+        'تعذر تأكيد الإعادة. حاول مرة أخرى.',
+        '归还确认失败，请重试。'
+      ));
     } finally {
       setProcessingRentalId(null);
     }
@@ -135,6 +146,26 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
           <span>{t('ownerBtnAddGear')}</span>
         </button>
       </div>
+
+      {actionError && (
+        <div className="p-3 rounded-xl badge-amber text-xs font-bold flex items-center justify-between gap-3 animate-fadeIn" role="alert">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+            <span className="truncate">{actionError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const rental = pendingRequests.find(r => r.id === actionErrorRentalId);
+              if (rental) handleConfirmReturn(rental.id);
+            }}
+            disabled={processingRentalId !== null}
+            className="px-2.5 py-1.5 rounded-lg bg-white/70 dark:bg-slate-900/40 text-[#854F0B] dark:text-[#FAC775] shrink-0 cursor-pointer"
+          >
+            {l('تلاش مجدد', 'Try again', 'حاول مرة أخرى', '重试')}
+          </button>
+        </div>
+      )}
 
       {/* Success Toast */}
       {successToast && (
