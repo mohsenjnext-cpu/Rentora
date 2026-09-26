@@ -78,7 +78,7 @@ export default function SupportModal({ isOpen, onClose }) {
           <button
             type="button"
             onClick={handleClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+            className="min-h-11 min-w-11 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -138,7 +138,7 @@ export default function SupportModal({ isOpen, onClose }) {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="btn-primary disabled:opacity-60 disabled:cursor-not-allowed w-full py-2.5 text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                className="btn-primary min-h-11 disabled:opacity-60 disabled:cursor-not-allowed w-full py-2.5 text-xs font-bold cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <Send className={`w-3.5 h-3.5 ${dir === 'rtl' ? 'rotate-180' : ''}`} />
                 <span>{isSubmitting ? l('در حال ارسال...', 'Sending...', 'جارٍ الإرسال...', '正在提交...') : l('ارسال پیام به پشتیبانی', 'Send Message to Support', 'إرسال الرسالة إلى الدعم', '提交给技术客服')}</span>
