@@ -26,7 +26,7 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [selectedCondition, setSelectedCondition] = useState('all');
   const [selectedCity, setSelectedCity] = useState('');
-  const [maxPrice, setMaxPrice] = useState(100);
+  const priceCap = useMemo(() => {\n    const prices = (items || []).map(item => Number(item.pricePerDay)).filter(Number.isFinite);\n    return Math.max(1, Math.ceil(Math.max(...prices, 1)));\n  }, [items]);\n  const [maxPrice, setMaxPrice] = useState(null);
   const [sortBy, setSortBy] = useState('newest');
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
 
@@ -48,7 +48,7 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
       if (item.status && item.status !== 'active') return false;
       if (selectedCategory !== 'all' && item.category !== selectedCategory) return false;
       if (selectedCondition !== 'all' && item.condition !== selectedCondition) return false;
-      if (item.pricePerDay && item.pricePerDay > maxPrice) return false;
+      if (maxPrice !== null && item.pricePerDay && Number(item.pricePerDay) > maxPrice) return false;
       
       const loc = (item.location || '').toLowerCase();
       if (selectedCity && !loc.includes(selectedCity.toLowerCase().trim())) return false;
@@ -74,11 +74,11 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
     setSelectedCategory('all');
     setSelectedCondition('all');
     setSelectedCity('');
-    setMaxPrice(100);
+    setMaxPrice(null);
     setSortBy('newest');
   };
 
-  const isFiltered = query !== '' || selectedCategory !== 'all' || selectedCondition !== 'all' || selectedCity !== '' || maxPrice < 100;
+  const isFiltered = query !== '' || selectedCategory !== 'all' || selectedCondition !== 'all' || selectedCity !== '' || maxPrice !== null;
 
   return (
     <div className="space-y-4 pb-16 select-none">
@@ -232,14 +232,14 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
             <div className="space-y-1">
               <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
                 <span>{t('discoverFilterMaxPrice')}:</span>
-                <span className="text-[#0F6E56] font-mono font-black">{maxPrice} π</span>
+                <span className="text-[#0F6E56] font-mono font-black">{maxPrice === null ? l('بدون محدودیت', 'No limit', 'بدون حد', '不限') : `${maxPrice} π`}</span>
               </div>
               <input
                 type="range"
                 min="1"
-                max="100"
+                max={priceCap}
                 step="1"
-                value={maxPrice}
+                value={maxPrice ?? priceCap}
                 onChange={(e) => setMaxPrice(Number(e.target.value))}
                 className="w-full accent-[#534AB7] cursor-pointer"
               />
