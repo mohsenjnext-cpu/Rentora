@@ -1773,6 +1773,7 @@ export default {
           WHERE (c.owner_user_id = ?1 OR c.renter_user_id = ?1)
             AND c.status != 'archived'
           ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
+          LIMIT 100
         `).bind(user.id).all();
 
         const conversations = (rows.results || []).map(row => {
