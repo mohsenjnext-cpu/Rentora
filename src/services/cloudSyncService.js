@@ -856,7 +856,7 @@ export class CloudSyncService {
       return {
         items: localItems,
         rentals: localRentals,
-        users: localUsers,
+        users: this.getCachedUsers(),
         reviews: [],
         transactions: []
       };
