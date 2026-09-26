@@ -45,6 +45,15 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
   const myRentals = useMemo(() => (rentals || []).filter(r =>
     r.renterUsername?.toLowerCase() === currentUser?.username?.toLowerCase()
   ), [rentals, currentUser?.username]);
+
+  const rentalHistoryCount = useMemo(() => (myRentals || []).filter(r =>
+    ['completed', 'cancelled', 'rejected', 'disputed'].includes(String(r.status || '').toLowerCase())
+  ).length, [myRentals]);
+
+  const activeRentalCount = useMemo(() => (myRentals || []).filter(r =>
+    ['draft', 'pending_payment', 'payment_approved', 'confirmed', 'active', 'requested', 'accepted'].includes(String(r.status || '').toLowerCase())
+  ).length, [myRentals]);
+
   const rep = getUserReputationSummary(currentUser?.username, userReviewsData || rentals);
 
   if (!isAuthenticated) return (
@@ -115,7 +124,22 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
 
       <section><div className="flex items-center justify-between mb-3"><h2 className="text-lg font-bold text-slate-900 dark:text-white flex gap-2"><Package className="w-5 h-5 text-[#534AB7]" />{l('آگهی‌های من', 'My items', 'إعلاناتي', '我的物品')}</h2><button type="button" onClick={() => onNavigate('owner-hub')} className="text-xs font-bold text-[#534AB7]">{l('مدیریت', 'Manage', 'إدارة', '管理')}</button></div>{myItems.length ? <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">{myItems.slice(0,8).map(item => <button type="button" key={item.id} onClick={() => onSelectItem(item)} className="rentora-card rounded-2xl overflow-hidden text-start"><div className="aspect-[4/3] bg-slate-100 dark:bg-slate-800">{item.images?.[0] || item.imageUrl || item.image_url ? <img src={item.images?.[0] || item.imageUrl || item.image_url} alt="" className="w-full h-full object-cover" /> : <div className="h-full flex items-center justify-center"><Package className="w-8 h-8 text-slate-300" /></div>}</div><div className="p-3"><p className="text-xs font-bold truncate text-slate-900 dark:text-white">{item.title || item.name}</p></div></button>)}</div> : <div className="rentora-card rounded-2xl p-8 text-center text-xs text-slate-400">{l('هنوز آگهی فعالی ندارید.', 'No active listings yet.', 'لا توجد إعلانات نشطة.', '暂无活跃物品。')}</div>}</section>
 
-      <section className="rentora-card rounded-2xl p-4"><div className="flex items-center gap-2 mb-3"><CalendarDays className="w-4 h-4 text-[#534AB7]" /><h2 className="text-sm font-bold">{l('اجاره‌های من', 'My rentals', 'إيجاراتي', '我的租赁')}</h2><span className="ms-auto text-xs text-slate-400">{myRentals.length}</span></div>{myRentals.length ? <div className="space-y-2">{myRentals.slice(0,4).map(r => <div key={r.id || r.bookingNumber} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-xs font-bold truncate">{r.itemTitle || r.title || r.listingTitle || l('اجاره', 'Rental', 'إيجار', '租赁')}</p><p className="text-[10px] text-slate-400">{r.status || 'pending'}</p></div><span className="text-[10px] font-mono text-slate-500">{r.startDate || r.start_date || ''}</span></div>)}</div> : <p className="text-xs text-slate-400 text-center py-4">{l('هنوز اجاره‌ای ندارید.', 'No rentals yet.', 'لا توجد إيجارات بعد.', '暂无租赁记录。')}</p>}</section>
+      <section className="rentora-card rounded-2xl p-4">
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <CalendarDays className="w-4 h-4 text-[#534AB7]" />
+          <h2 className="text-sm font-bold">{l('اجاره‌های من', 'My rentals', 'إيجاراتي', '我的租赁')}</h2>
+          <span className="ms-auto text-xs text-slate-400">{myRentals.length}</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <button type="button" onClick={() => onNavigate('activity')} className="rounded-xl border border-[#534AB7]/20 bg-[#EEEDFE]/60 dark:bg-[#26215C]/50 p-2.5 text-start cursor-pointer hover:border-[#534AB7]/40 transition">
+            <span className="block text-[10px] text-slate-500 dark:text-slate-400">{l('در حال انجام', 'Active', 'نشطة', '进行中')}</span>
+            <strong className="block mt-0.5 text-base font-black text-[#534AB7] dark:text-[#AFA9EC]">{activeRentalCount}</strong>
+          </button>
+          <button type="button" onClick={() => onNavigate('activity')} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/60 p-2.5 text-start cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 transition">
+            <span className="block text-[10px] text-slate-500 dark:text-slate-400">{l('سوابق', 'History', 'السجل', '历史')}</span>
+            <strong className="block mt-0.5 text-base font-black text-slate-700 dark:text-slate-200">{rentalHistoryCount}</strong>
+          </button>
+        </div>{myRentals.length ? <div className="space-y-2">{myRentals.slice(0,4).map(r => <div key={r.id || r.bookingNumber} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-xs font-bold truncate">{r.itemTitle || r.title || r.listingTitle || l('اجاره', 'Rental', 'إيجار', '租赁')}</p><p className="text-[10px] text-slate-400">{r.status || 'pending'}</p></div><span className="text-[10px] font-mono text-slate-500">{r.startDate || r.start_date || ''}</span></div>)}</div> : <p className="text-xs text-slate-400 text-center py-4">{l('هنوز اجاره‌ای ندارید.', 'No rentals yet.', 'لا توجد إيجارات بعد.', '暂无租赁记录。')}</p>}</section>
       <button type="button" onClick={logout} className="w-full py-3 rounded-xl border border-rose-200 dark:border-rose-900 text-rose-600 text-xs font-bold flex justify-center gap-2"><LogOut className="w-4 h-4" />{t('navLogout')}</button>
     </div>
   );
