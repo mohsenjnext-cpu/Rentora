@@ -1007,7 +1007,30 @@ async function createPayoutPayment(env, operation, leaseOwner, paymentPayload) {
 }
 
 async function adminRoute(request, env, path) {
-  const user = await requireUser(request, env);
+  const user = await requireUser(request, env);  if (path === '/api/admin/platform-fee') {
+    const raw = await env.RENTORA_KV.get('config:platform_fee_rate');
+    const parsed = Number(raw);
+    const fallback = Number(env.PLATFORM_FEE_RATE || 0.05);
+    const rate = Number.isFinite(parsed) && parsed >= 0.01 && parsed <= 0.05 ? parsed : Math.min(0.05, Math.max(0.01, Number.isFinite(fallback) ? fallback : 0.05));
+    if (request.method === 'GET') {
+      return json({ success: true, ratePercent: Number((rate * 100).toFixed(6)), minPercent: 1, maxPercent: 5 }, 200, request, env);
+    }
+    if (request.method === 'POST') {
+      const body = await readJson(request);
+      const requestedPercent = Number(body?.ratePercent);
+      if (!Number.isFinite(requestedPercent) || requestedPercent < 1 || requestedPercent > 5) {
+        return json({ error: 'Platform fee rate must be between 1% and 5%.' }, 400, request, env);
+      }
+      const normalizedRate = requestedPercent / 100;
+      await env.RENTORA_KV.put('config:platform_fee_rate', String(normalizedRate));
+      const audit = await recordAdminAuditLog(env, user, 'PLATFORM_FEE_RATE_UPDATED', {
+        previousRatePercent: Number((rate * 100).toFixed(6)),
+        ratePercent: Number(requestedPercent.toFixed(6))
+      });
+      return json({ success: true, ratePercent: Number(requestedPercent.toFixed(6)), minPercent: 1, maxPercent: 5, auditLog: audit }, 200, request, env);
+    }
+  }
+
   if (!(user.role === 'admin' && adminAllowed(user.pi_uid, env))) return json({ error: 'Admin access required' }, 403, request, env);
   if (path === '/api/admin/users') {
     const rows = await env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
@@ -1224,6 +1247,7 @@ export default {
         const isAdmin = user.role === 'admin' && adminAllowed(user.pi_uid, env);
         return json({ authenticated: true, user: { ...userView(user, env), isAdmin }, isAdmin }, 200, request, env);
       }
+      if ((path === '/api/admin/platform-fee') && (request.method === 'GET' || request.method === 'POST')) return await adminRoute(request, env, path);
       if ((request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users')) || (request.method === 'POST' && (path === '/api/admin/payout' || path === '/api/admin/cleanup'))) return await adminRoute(request, env, path);
 
       // Static frontend assets must be served directly by the gateway worker. This keeps
