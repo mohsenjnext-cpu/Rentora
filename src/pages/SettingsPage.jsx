@@ -195,6 +195,8 @@ export default function SettingsPage({
                 key={lng.code}
                 type="button"
                 onClick={() => changeLanguage(lng.code)}
+                aria-pressed={isSelected}
+                aria-label={l(`انتخاب زبان ${lng.native}`, `Select language ${lng.native}`, `اختيار اللغة ${lng.native}`, `选择语言 ${lng.native}`)}
                 className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between transition cursor-pointer ${
                   isSelected
                     ? 'border-[#534AB7] bg-[#EEEDFE] dark:bg-[#26215C] text-[#26215C] dark:text-white shadow-xs font-bold'
@@ -220,6 +222,10 @@ export default function SettingsPage({
           <button
             type="button"
             onClick={toggleTheme}
+            aria-label={theme === 'dark'
+              ? l('تغییر به حالت روشن', 'Switch to light mode', 'التبديل إلى الوضع الفاتح', '切换到浅色模式')
+              : l('تغییر به حالت تاریک', 'Switch to dark mode', 'التبديل إلى الوضع الداكن', '切换到深色模式')}
+            aria-pressed={theme === 'dark'}
             className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
               theme === 'dark'
                 ? 'bg-[#1D1C36] border-slate-700 text-amber-400'
