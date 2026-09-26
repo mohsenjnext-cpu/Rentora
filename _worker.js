@@ -1052,6 +1052,21 @@ export default {
         await writeAuditLog(env, adminUser, 'payout_reconciliation_resolved', queueId, { txid, paymentId: queue.pi_payment_id, amount: payoutAmount }).catch(() => {});
         return jsonResponse({ success: true, resolved: true, txid, paymentId: queue.pi_payment_id, amount: payoutAmount }, 200, env, origin);
       }
+      if (method === 'PATCH' && /^\/api\/admin\/support\/[^/]+$/.test(path)) {
+        const { user: adminUser } = await requireAdmin(request, env);
+        const ticketId = decodeURIComponent(path.split('/').pop() || '');
+        const body = await readJson(request);
+        const status = String(body?.status || '').trim();
+        const allowedStatuses = new Set(['open', 'in_progress', 'resolved', 'closed']);
+        if (!allowedStatuses.has(status)) return errorResponse('Invalid support ticket status', 400, env, undefined, origin);
+        const result = await env.RENTORA_DB.prepare(
+          "UPDATE support_tickets SET status=?1, updated_at=?2 WHERE id=?3"
+        ).bind(status, now(), ticketId).run();
+        if (Number(result?.meta?.changes || 0) !== 1) return errorResponse('Support ticket not found', 404, env, undefined, origin);
+        await writeAuditLog(env, adminUser, 'support_ticket_status_changed', ticketId, { status }).catch(() => {});
+        return jsonResponse({ success: true, ticketId, status }, 200, env, origin);
+      }
+
       if (method === 'GET' && path === '/api/admin/console') {
         const { user } = await requireAdmin(request, env);
         const [
