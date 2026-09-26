@@ -160,3 +160,9 @@ test('payment intents and conversation/report route identifiers are type-checked
   assert.match(worker, /Invalid report ID/);
   assert.match(worker, /requireEnum\(body\?\.status \|\| 'resolved', 'status', \['resolved', 'dismissed', 'reviewing'\]\)/);
 });
+
+test('gateway incomplete payment rejects non-text or oversized payment identifiers', () => {
+  assert.match(gateway, /paymentIdRaw = body\?\.paymentId/);
+  assert.match(gateway, /paymentIntentIdRaw = body\?\.paymentIntentId/);
+  assert.match(gateway, /paymentId\.length > 128/);
+});
