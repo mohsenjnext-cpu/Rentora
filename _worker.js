@@ -2702,6 +2702,12 @@ export default {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
         const allowed = { displayName: body.displayName, avatar: body.avatar, bio: body.bio, location: body.location, phoneMasked: body.phoneMasked };
+        const profileLimits = { displayName: 80, avatar: 2048, bio: 1200, location: 160, phoneMasked: 64 };
+        for (const [key, value] of Object.entries(allowed)) {
+          if (value !== undefined && String(value).length > profileLimits[key]) {
+            return errorResponse(`Profile field too long: ${key}`, 400, env, undefined, origin);
+          }
+        }
         const meta = { ...parseMetadata(user.metadata), ...Object.fromEntries(Object.entries(allowed).filter(([,v]) => v !== undefined)) };
         const newAvatar = body.avatar !== undefined ? String(body.avatar).trim() : user.avatar_url;
         const newDisplayName = body.displayName !== undefined ? String(body.displayName).trim() : user.display_name;
