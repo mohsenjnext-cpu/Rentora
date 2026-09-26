@@ -95,6 +95,15 @@ export default function ItemDetailPage({
 
   const localized = (fa, en, ar, zh) => l(fa, en, ar, zh);
   const ownerInitial = (item.ownerUsername || 'R').replace('@', '').charAt(0).toUpperCase();
+  const listingStatus = String(item.status || 'active').toLowerCase();
+  const isExpired = Boolean(item.expiresAt && Number.isFinite(Date.parse(item.expiresAt)) && Date.parse(item.expiresAt) <= Date.now());
+  const isUnavailable = isExpired || ['paused', 'deleted', 'expired', 'unavailable', 'inactive'].includes(listingStatus);
+  const unavailableCopy = isExpired
+    ? localized('این آگهی منقضی شده و دیگر قابل رزرو نیست.', 'This listing has expired and is no longer available for booking.', 'انتهت صلاحية هذا الإعلان ولم يعد متاحاً للحجز.', '此商品已过期，无法继续预订。')
+    : listingStatus === 'paused'
+      ? localized('این آگهی موقتاً متوقف شده و قابل رزرو نیست.', 'This listing is temporarily paused and unavailable for booking.', 'هذا الإعلان متوقف مؤقتاً وغير متاح للحجز.', '此商品暂时暂停，无法预订。')
+      : localized('این آگهی در حال حاضر برای رزرو در دسترس نیست.', 'This listing is currently unavailable for booking.', 'هذا الإعلان غير متاح للحجز حالياً.', '此 الإعلان غير متاح للحجز حالياً.')
+;
 
   const handleShare = async () => {
     try {
@@ -152,6 +161,13 @@ export default function ItemDetailPage({
           </button>
         </div>
       </div>
+
+      {isUnavailable && (
+        <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center gap-2">
+          <Lock className="w-4 h-4 shrink-0" />
+          <span>{unavailableCopy}</span>
+        </div>
+      )}
 
       {copiedLink && (
         <div className="mb-4 p-2.5 rounded-xl badge-trust text-xs font-semibold flex items-center justify-center gap-1.5">
@@ -341,14 +357,14 @@ export default function ItemDetailPage({
             <button
               type="button"
               onClick={() => setBookingModalOpen(true)}
-              disabled={isOwner}
+              disabled={isOwner || isUnavailable}
               className="w-full btn-primary py-3 text-sm font-black flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Coins className="w-4 h-4 text-amber-400" />
-              <span>{isOwner ? localized('آگهی شماست', 'Your listing', 'إعلانك', '这是你的商品') : t('itemBookBtn')}</span>
+              <span>{isOwner ? localized('آگهی شماست', 'Your listing', 'إعلانك', '这是你的商品') : isUnavailable ? localized('فعلاً قابل رزرو نیست', 'Unavailable', 'غير متاح حالياً', '暂不可预订') : t('itemBookBtn')}</span>
             </button>
 
-            {!isOwner && onOpenChat && (
+            {!isOwner && !isUnavailable && onOpenChat && (
               <button type="button" onClick={() => onOpenChat(item)} className="w-full btn-secondary mt-2.5 py-2.5 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
                 <MessageSquare className="w-4 h-4 text-[#534AB7]" />
                 {t('itemChatBtn')}
