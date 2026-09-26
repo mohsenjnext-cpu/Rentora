@@ -324,7 +324,11 @@ function payoutIdempotencyKey(request, body) {
     request.headers.get('X-Idempotency-Key') ||
     body?.idempotencyKey;
 
-  return key ? String(key).trim().slice(0, 200) : null;
+  if (key == null) return null;
+  if (typeof key !== 'string') return null;
+  const out = key.trim();
+  if (!out || out.length > 200) return null;
+  return out;
 }
 
 async function claimPayoutOperation(env, { idempotencyKey, userId, amount, type, memo, targetWallet }) {
@@ -1264,6 +1268,18 @@ export default {
         const totalPayouts = Number(payoutRow?.total || 0);
         const availableBalance = Math.max(0, totalRev - totalPayouts);
 
+        if (body?.amount !== undefined && body?.amount !== null && typeof body.amount !== 'number' && typeof body.amount !== 'string') {
+          return errorResponse('Invalid payout amount', 400, env, undefined, origin);
+        }
+        if (typeof body?.amount === 'string' && body.amount.trim() && !/^\d+(?:\.\d{1,8})?$/.test(body.amount.trim())) {
+          return errorResponse('Invalid payout amount', 400, env, undefined, origin);
+        }
+        if (body?.memo !== undefined && body?.memo !== null && typeof body.memo !== 'string') {
+          return errorResponse('Invalid payout memo', 400, env, undefined, origin);
+        }
+        if (typeof body?.memo === 'string' && body.memo.trim().length > 500) {
+          return errorResponse('Payout memo is too long', 400, env, undefined, origin);
+        }
         let requestedAmount = Number(body?.amount || 0);
         if (!requestedAmount || isNaN(requestedAmount) || requestedAmount <= 0) {
           requestedAmount = availableBalance;
@@ -2899,6 +2915,9 @@ export default {
         const body = await readJson(request);
 
         let quote = null;
+        if (body.quoteId !== undefined && (typeof body.quoteId !== 'string' || !/^qt_[A-Za-z0-9_-]{10,100}$/.test(body.quoteId.trim()))) {
+          return errorResponse('Invalid quoteId', 400, env, undefined, origin);
+        }
         if (body.quoteId) {
           const rawQuote = env?.RENTORA_KV ? await env.RENTORA_KV.get(`quote:${body.quoteId}`) : null;
           if (!rawQuote) {
