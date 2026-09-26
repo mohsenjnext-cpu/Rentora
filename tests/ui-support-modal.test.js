@@ -14,3 +14,10 @@ if (!worker.includes('requireUser(request, env)')) throw new Error('Support endp
 if (!worker.includes('INSERT INTO support_tickets')) throw new Error('Support endpoint must persist tickets');
 if (!migration.includes('CREATE TABLE IF NOT EXISTS support_tickets')) throw new Error('Support tickets migration is missing');
 console.log('support ticket production regression checks passed');
+
+if (!worker.includes("PATCH") || !worker.includes("/api/admin/support/")) throw new Error('Admin support status endpoint is missing');
+if (!worker.includes('requireAdmin(request, env)')) throw new Error('Admin support status update must require admin authorization');
+if (!worker.includes("supportTickets")) throw new Error('Admin console must expose support tickets');
+const admin = fs.readFileSync('src/pages/AdminDashboardRedesign.jsx', 'utf8');
+if (!admin.includes('supportTickets') || !admin.includes('updateSupportStatus')) throw new Error('Admin UI must expose and update support tickets');
+console.log('support admin regression checks passed');
