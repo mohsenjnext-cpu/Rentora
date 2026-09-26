@@ -51,13 +51,16 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
           {t('btnSearch')}
         </button>
         <div className="relative flex-1 h-full">
-          <Search className="absolute end-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute end-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => setSearchFocused(true)}
             placeholder={t('homeSearchPlaceholder')}
             aria-label={t('homeSearchPlaceholder')}
+            aria-expanded={searchFocused}
+            aria-controls="home-search-suggestions"
+            aria-autocomplete="list"
             className="w-full h-full bg-transparent border-0 outline-none pe-9 ps-2 text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 text-end"
           />
           {searchQuery && (
@@ -67,14 +70,19 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
               onClick={() => setSearchQuery('')}
               className="absolute start-1 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           )}
         </div>
       </form>
 
       {searchFocused && (
-        <div className="absolute z-30 top-full inset-x-0 mt-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] shadow-xl overflow-hidden">
+        <div
+          id="home-search-suggestions"
+          role="listbox"
+          aria-label={l('پیشنهادهای جستجو', 'Search suggestions', 'اقتراحات البحث', '搜索建议')}
+          className="absolute z-30 top-full inset-x-0 mt-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] shadow-xl overflow-hidden"
+        >
           <div className="px-3 py-2 text-[10px] font-semibold text-slate-400 text-end">
             {searchQuery.trim()
               ? l('نتایج پیشنهادی', 'Suggestions', 'اقتراحات', '搜索建议')
@@ -84,17 +92,22 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
             <button
               key={title}
               type="button"
+              role="option"
+              aria-label={l(`جستجو برای ${title}`, `Search for ${title}`, `البحث عن ${title}`, `搜索 ${title}`)}
+              aria-selected="false"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => { setSearchQuery(title); submitSearch(title); }}
               className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-white/5 text-end"
             >
-              <ArrowUpLeft className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <ArrowUpLeft className="w-3.5 h-3.5 text-slate-400 shrink-0" aria-hidden="true" />
               <span className="flex-1 text-xs text-slate-700 dark:text-slate-200 truncate">{title}</span>
-              <Search className="w-3.5 h-3.5 text-[var(--primary-mid)] shrink-0" />
+              <Search className="w-3.5 h-3.5 text-[var(--primary-mid)] shrink-0" aria-hidden="true" />
             </button>
           )) : (
             <button
               type="button"
+              role="option"
+              aria-selected="false"
               onClick={() => submitSearch()}
               className="w-full px-3 py-3 text-xs text-[var(--primary-mid)] hover:bg-slate-50 dark:hover:bg-white/5 text-end"
             >
