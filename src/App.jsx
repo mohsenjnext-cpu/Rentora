@@ -105,8 +105,6 @@ function MainApp() {
         .catch(() => {
           if (!active) return;
           setSelectedItem(null);
-          setCurrentTab('discover');
-          window.history.replaceState({}, '', '/');
         });
     }
     return () => { active = false; };
