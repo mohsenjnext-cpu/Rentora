@@ -105,69 +105,66 @@ function sanitizeListingPublicMetadata(meta) {
 function detectBypassAttempt(rawText) {
   if (!rawText || typeof rawText !== 'string') return { isBlocked: false };
 
-  // Convert Persian & Arabic digits to ASCII 0-9
-  const persianDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
-  const arabicDigits = ['٠','١','۲','٣','٤','٥','٦','٧','٨','٩'];
-  let normalized = rawText.toLowerCase();
-  for (let i = 0; i < 10; i++) {
-    normalized = normalized.replaceAll(persianDigits[i], String(i));
-    normalized = normalized.replaceAll(arabicDigits[i], String(i));
-  }
+  // Normalize Unicode and common obfuscation without destroying normal message text.
+  let normalized = rawText.normalize('NFKC').toLowerCase();
+  const digitMap = {
+    '۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9',
+    '٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'
+  };
+  normalized = normalized.replace(/[۰-۹٠-٩]/g, (d) => digitMap[d] || d);
+  normalized = normalized.replace(/[\u200B-\u200D\uFEFF\u00AD\u200E\u200F\u2060\u00A0]/g, ' ');
+  normalized = normalized.replace(/[\u0640]/g, '');
+  normalized = normalized.replace(/\s+/g, ' ').trim();
 
-  // Remove zero-width spaces, directional marks, and invisible joiners
-  normalized = normalized.replace(/[\u200B-\u200D\uFEFF\u00AD\u200E\u200F\u00A0]/g, ' ');
-  const stripped = normalized.replace(/[\s\-_.,،;:\\/()[\]{}|+*#~`!?"'<>@$^&=]/g, '');
+  const compact = normalized.replace(/[\s\-_.,،;:\\/()[\]{}|+*#~`!?"'<>@$^&=]/g, '');
 
-  // 1. URLs, web protocols, domains
-  if (/(https?:\/\/|www\.)[^\s]+|[a-z0-9.-]+\.(com|ir|org|net|io|me|app|co|xyz|info|biz|site|online)\b/i.test(normalized)) {
+  // 1. Explicit URLs, domains, email addresses and common email obfuscation.
+  if (/(https?:\/\/|www\.)[^\s]+|(?:[a-z0-9-]+\.)+(?:com|ir|org|net|io|me|app|co|xyz|info|biz|site|online)\b/i.test(normalized)) {
     return { isBlocked: true, reason: 'urls_blocked' };
   }
-
-  // 2. Email addresses
-  if (/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(normalized) || /\b(gmail|yahoo|hotmail|outlook|chmail)\b/i.test(normalized)) {
+  if (/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(normalized) ||
+      /\b(?:gmail|yahoo|hotmail|outlook|protonmail|chmail)\b/i.test(normalized) ||
+      /\b[a-z0-9._%+-]+\s+(?:at|@)\s+[a-z0-9.-]+\s+(?:dot|\.)\s+[a-z]{2,}\b/i.test(normalized)) {
     return { isBlocked: true, reason: 'email_blocked' };
   }
 
-  // 3. Messengers and social handles
+  // 2. Messaging/social platforms and handle language.
   const messengerKeywords = [
-    'telegram', 'tg', 't.me', 'whatsapp', 'wa.me', 'instagram', 'insta', 'rubika', 'eitaa', 'bale', 'soroush', 'gap',
-    'تلگرام', 'تلگ', 'واتساپ', 'واتس‌اپ', 'واتس اپ', 'واتسپ', 'واتس‌آپ', 'اینستاگرام', 'اینستا', 'روبیکا', 'ایتا', 'بله', 'سروش', 'شاد', 'گپ'
+    'telegram','t.me','whatsapp','wa.me','instagram','insta','rubika','eitaa','bale','soroush','gap','twitter',
+    'تلگرام','تلگ','واتساپ','واتس اپ','واتسپ','اینستاگرام','اینستا','روبیکا','ایتا','بله','سروش','شاد','گپ'
   ];
   for (const kw of messengerKeywords) {
-    if (normalized.includes(kw) || stripped.includes(kw.replace(/\s+/g, ''))) {
+    if (normalized.includes(kw) || compact.includes(kw.replace(/\s+/g, ''))) {
       return { isBlocked: true, reason: 'messenger_blocked' };
     }
   }
-
-  // 4. @ handles or mentions
-  if (/@\w{3,}/.test(normalized)) {
+  if (/@[a-z0-9_\.]{3,}/i.test(normalized)) {
     return { isBlocked: true, reason: 'handle_blocked' };
   }
 
-  // 5. Phone numbers (stripping common separators)
-  const digitsOnly = normalized.replace(/[^0-9]/g, '');
-  if (digitsOnly.length >= 7) {
-    // Iranian Mobile (09..., 989..., 9...)
-    if (/09[0-9]{9}/.test(digitsOnly) || /989[0-9]{9}/.test(digitsOnly) || /9[0-9]{9}/.test(digitsOnly)) {
-      return { isBlocked: true, reason: 'phone_blocked' };
-    }
-    // General 7-15 digit sequences
-    if (/(\+?[0-9]{7,15})/.test(digitsOnly)) {
+  // 3. Phone numbers. Evaluate digit runs rather than concatenating every number
+  // in the message, so ordinary prices/model numbers do not become false positives.
+  const digitRuns = normalized.match(/\d(?:[\s()._-]*\d){5,}/g) || [];
+  for (const run of digitRuns) {
+    const digits = run.replace(/\D/g, '');
+    if (digits.length < 7) continue;
+    if (/^(?:09\d{9}|989\d{9}|\+?9\d{9})$/.test(digits) || /^\d{7,15}$/.test(digits)) {
       return { isBlocked: true, reason: 'phone_blocked' };
     }
   }
 
-  // 6. Spelled-out number words in Persian
-  const persianNumberWordsRegex = /(صفر|نه|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نهصد|دویست|سیصد|چهارصد|پانصد|شصت|هفتاد|هشتاد|نود)/g;
-  const wordMatches = normalized.match(persianNumberWordsRegex);
-  if (wordMatches && wordMatches.length >= 2) {
-    return { isBlocked: true, reason: 'spelled_numbers_blocked' };
-  }
-
-  // 7. Contact intent & direct payment bypass phrases
-  const bypassIntentRegex = /(شماره\s*(تماس|من|تلفن|همراه|بدم|بده|بفرست)|زنگ\s*(بزن|بزنید|بزنین)|تماس\s*(بگیر|بگیرید|بگیریم)|پیامک\s*بده|اس\s*ام\s*اس|کارت\s*به\s*کارت|بیرون\s*از\s*برنامه|خارج\s*از\s*برنامه|بدون\s*کارمزد|مستقیم\s*واریز|call\s*me|phone\s*number|contact\s*me|text\s*me)/i;
-  if (bypassIntentRegex.test(normalized) || bypassIntentRegex.test(stripped)) {
+  // 4. Direct contact/payment intent. Keep this context-based so ordinary words
+  // such as "شماره مدل" are not automatically treated as a bypass attempt.
+  const bypassIntentRegex = /(شماره\s*(?:تماس|من|تلفن|همراه|بدم|بده|بفرست)|شماره\s*(?:ام|ات)\b|زنگ\s*(?:بزن|بزنید|بزنین)|تماس\s*(?:بگیر|بگیرید|بگیریم)|پیامک\s*(?:بده|بفرست)|اس\s*ام\s*اس|کارت\s*به\s*کارت|بیرون\s*از\s*برنامه|خارج\s*از\s*برنامه|بدون\s*کارمزد|مستقیم\s*واریز|call\s*me|phone\s*number|contact\s*me|text\s*me)/i;
+  if (bypassIntentRegex.test(normalized) || bypassIntentRegex.test(compact)) {
     return { isBlocked: true, reason: 'bypass_intent_blocked' };
+  }
+
+  // 5. Strong phone-word obfuscation. Require several number words together
+  // rather than blocking ordinary Persian sentences containing "یک" or "دو".
+  const numberWordMatches = normalized.match(/(?:صفر|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|یازده|دوازده|سی|چهل|پنجاه|شصت|هفتاد|هشتاد|نود)/g) || [];
+  if (numberWordMatches.length >= 4) {
+    return { isBlocked: true, reason: 'spelled_numbers_blocked' };
   }
 
   return { isBlocked: false };

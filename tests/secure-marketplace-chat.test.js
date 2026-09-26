@@ -453,3 +453,59 @@ test('Secure Chat 12: Conversation and message responses contain private no-stor
   assert.equal(msgListRes.status, 200);
   assert.ok(msgListRes.headers.get('Cache-Control')?.includes('no-store'));
 });
+
+test('Secure Chat 13: Anti-Bypass blocks Unicode and obfuscated contact variants', async () => {
+  const owner = { id: 'usr_owner', pi_uid: 'uid_owner', username: 'owner_user', status: 'active', role: 'user' };
+  const renter = { id: 'usr_renter', pi_uid: 'uid_renter', username: 'renter_user', status: 'active', role: 'user' };
+  const listing = { id: 'item_camera', owner_user_id: 'usr_owner', title: 'Camera', price_per_day: 5, status: 'active' };
+  const conv = { id: 'conv_unicode_bypass', listing_id: 'item_camera', owner_user_id: 'usr_owner', renter_user_id: 'usr_renter', type: 'pre_booking', status: 'active' };
+  const { env, kvStore } = createMockEnv({ users: [owner, renter], listings: [listing], conversations: [conv] });
+  const token = 'renter_tok';
+  kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: renter.pi_uid, username: renter.username, role: renter.role }));
+
+  const bypassAttempts = [
+    'شماره: ۰۹۱۲۳۴۵۶۷۸۹',
+    'شماره: ٠٩١٢٣٤٥٦٧٨٩',
+    '0 9 1 2 3 4 5 6 7 8 9',
+    'test.user at gmail dot com',
+    'https://example.com',
+    'آیدی من @camera_owner'
+  ];
+
+  for (const text of bypassAttempts) {
+    const res = await gateway.fetch(new Request('https://rentora.example/api/conversations/conv_unicode_bypass/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ text })
+    }), env);
+    assert.equal(res.status, 400, `Expected 400 for text: "${text}"`);
+    const json = await res.json();
+    assert.equal(json.code, 'CONTACT_INFO_BLOCKED');
+  }
+});
+
+test('Secure Chat 14: Anti-Bypass does not reject ordinary prices, years, model numbers, or numeric questions', async () => {
+  const owner = { id: 'usr_owner', pi_uid: 'uid_owner', username: 'owner_user', status: 'active', role: 'user' };
+  const renter = { id: 'usr_renter', pi_uid: 'uid_renter', username: 'renter_user', status: 'active', role: 'user' };
+  const listing = { id: 'item_camera_2', owner_user_id: 'usr_owner', title: 'Camera 2026', price_per_day: 25, status: 'active' };
+  const conv = { id: 'conv_numeric_legit', listing_id: 'item_camera_2', owner_user_id: 'usr_owner', renter_user_id: 'usr_renter', type: 'pre_booking', status: 'active' };
+  const { env, kvStore } = createMockEnv({ users: [owner, renter], listings: [listing], conversations: [conv] });
+  const token = 'renter_tok';
+  kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: renter.pi_uid, username: renter.username, role: renter.role }));
+
+  const legitimateMessages = [
+    'قیمت روزانه 25 پای است؟',
+    'مدل 2026 موجود است؟',
+    'این دوربین رزولوشن 3840 در 2160 دارد؟',
+    'برای اجاره 3 روزه تخفیف دارید؟'
+  ];
+
+  for (const text of legitimateMessages) {
+    const res = await gateway.fetch(new Request('https://rentora.example/api/conversations/conv_numeric_legit/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ text })
+    }), env);
+    assert.equal(res.status, 201, `Expected 201 for legitimate text: "${text}"`);
+  }
+});
