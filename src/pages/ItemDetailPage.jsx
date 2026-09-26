@@ -16,11 +16,12 @@ export default function ItemDetailPage({
   onOpenChat,
   onOpenPublicProfile,
   onNavigateToOwnerHub,
-  onEditItem
+  onEditItem,
+  onSelectItem
 }) {
   const { lang, dir, t, l } = useLanguage();
   const { currentUser } = usePiAuth();
-  const { favorites, toggleFavorite, fetchListingReviews } = useRentora();
+  const { favorites, items, toggleFavorite, fetchListingReviews } = useRentora();
 
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -33,6 +34,8 @@ export default function ItemDetailPage({
   });
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [reviewsError, setReviewsError] = useState('');
+  const imagesList = Array.isArray(item?.images) ? item.images.filter(Boolean) : [];
+  const hasGallery = imagesList.length > 0;
 
   useEffect(() => {
     if (!item?.id) return;
@@ -88,8 +91,7 @@ export default function ItemDetailPage({
   const itemReviews = reviewsData.reviews || [];
   const averageRating = reviewsData.stats?.averageRating;
   const totalReviews = reviewsData.stats?.totalReviews || 0;
-  const imagesList = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
-  const hasGallery = imagesList.length > 0;
+  const ownerItems = (items || []).filter((candidate) => candidate.id !== item.id && candidate.status === 'active' && ((item.ownerUid && candidate.ownerUid === item.ownerUid) || (item.ownerUsername && candidate.ownerUsername?.toLowerCase() === item.ownerUsername.toLowerCase()))).slice(0, 4);
 
   const localized = (fa, en, ar, zh) => l(fa, en, ar, zh);
   const ownerInitial = (item.ownerUsername || 'R').replace('@', '').charAt(0).toUpperCase();
@@ -275,6 +277,23 @@ export default function ItemDetailPage({
               </p>
             </div>
           </section>
+
+          {ownerItems.length > 0 && (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-black text-sm sm:text-base text-slate-900 dark:text-white">{localized('آگهی‌های دیگر این مالک', 'More from this owner', 'إعلانات أخرى لهذا المالك', '该物主的其他商品')}</h2>
+                <button type="button" onClick={() => onOpenPublicProfile?.(item.ownerUsername)} className="text-xs font-bold text-[#534AB7] hover:underline cursor-pointer">{localized('مشاهده پروفایل', 'View profile', 'عرض الملف', '查看主页')}</button>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {ownerItems.map((other) => (
+                  <button key={other.id} type="button" onClick={() => onSelectItem?.(other)} className="rentora-card overflow-hidden text-start cursor-pointer hover:-translate-y-0.5 transition">
+                    {other.images?.[0] ? <img src={other.images[0]} alt={other.title} className="w-full aspect-[4/3] object-cover" /> : <div className="w-full aspect-[4/3] bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-xs text-slate-400">R</div>}
+                    <div className="p-2.5"><div className="text-xs font-bold text-slate-900 dark:text-white line-clamp-2">{other.title}</div><div className="mt-1 text-[11px] font-black text-[#0F6E56]">{other.pricePerDay} π / {localized('روز', 'day', 'day', '天')}</div></div>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="space-y-3">
             <h2 className="font-black text-sm sm:text-base text-slate-900 dark:text-white">{t('itemReviewsTitle')} ({totalReviews})</h2>
