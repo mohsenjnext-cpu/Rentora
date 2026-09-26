@@ -78,8 +78,6 @@ export default function ItemDetailPage({
 
   if (!item) return null;
 
-  const imagesList = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
-  const hasGallery = imagesList.length > 0;
   const isFav = (favorites || []).includes(item.id);
   const myName = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
   const ownerName = (item.ownerUsername || '').toLowerCase().replace('@', '').trim();
