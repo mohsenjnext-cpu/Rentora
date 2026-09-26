@@ -47,11 +47,6 @@ export default function ReportModal({ target, type = 'listing', isOpen, onClose 
         details: details.trim()
       });
       setSubmitted(true);
-      setTimeout(() => {
-        setSubmitted(false);
-        setDetails('');
-        onClose();
-      }, 2000);
     } catch (err) {
       setErrorMsg(err?.message || l('خطا در ارسال گزارش تخلف', 'Failed to submit report', 'فشل في إرسال البلاغ', '提交举报失败'));
     } finally {
