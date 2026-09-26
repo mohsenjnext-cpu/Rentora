@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Activity, AlertTriangle, ArrowUpRight, CheckCircle2, CreditCard, Database,
+  Activity, AlertTriangle, ArrowUpRight, CheckCircle2, CreditCard, Database, MessageCircle,
   LayoutDashboard, Loader2, Package, RefreshCw, ShieldCheck, Users, Wallet,
   XCircle
 } from 'lucide-react';
@@ -23,7 +23,7 @@ const copy = {
     refresh: 'Refresh', users: 'Users', listings: 'Listings', rentals: 'Rentals',
     revenue: 'Revenue', treasury: 'Available treasury', alerts: 'Open alerts',
     operations: 'Operations', healthy: 'Healthy', attention: 'Needs review',
-    reports: 'Open reports', payouts: 'Payouts in flight', recent: 'Recent activity',
+    reports: 'Open reports', support: 'Support tickets', payouts: 'Payouts in flight', recent: 'Recent activity',
     noData: 'No data available.', loading: 'Loading admin center...', unauthorized: 'Unauthorized',
     retry: 'Retry', api: 'API', d1: 'D1', kv: 'KV', pi: 'Pi API'
   },
@@ -32,7 +32,7 @@ const copy = {
     refresh: 'تحديث', users: 'المستخدمون', listings: 'الإعلانات', rentals: 'الإيجارات',
     revenue: 'الإيرادات', treasury: 'الخزينة المتاحة', alerts: 'التنبيهات المفتوحة',
     operations: 'حالة العمليات', healthy: 'سليم', attention: 'يحتاج مراجعة',
-    reports: 'التقارير المفتوحة', payouts: 'الدفعات الجارية', recent: 'النشاط الأخير',
+    reports: 'التقارير المفتوحة', support: 'تذاكر الدعم', payouts: 'الدفعات الجارية', recent: 'النشاط الأخير',
     noData: 'لا توجد بيانات.', loading: 'جارٍ تحميل مركز الإدارة...', unauthorized: 'غير مصرح',
     retry: 'إعادة المحاولة', api: 'API', d1: 'D1', kv: 'KV', pi: 'Pi API'
   },
@@ -41,7 +41,7 @@ const copy = {
     refresh: '刷新', users: '用户', listings: '物品', rentals: '租赁',
     revenue: '收入', treasury: '可用资金', alerts: '待处理提醒',
     operations: '运营状态', healthy: '正常', attention: '需要检查',
-    reports: '待处理报告', payouts: '进行中的付款', recent: '最近活动',
+    reports: '待处理报告', support: '客服工单', payouts: '进行中的付款', recent: '最近活动',
     noData: '暂无数据。', loading: '正在加载管理中心...', unauthorized: '无权访问',
     retry: '重试', api: 'API', d1: 'D1', kv: 'KV', pi: 'Pi API'
   }
@@ -83,6 +83,7 @@ export default function AdminDashboardRedesign({ onNavigate }) {
   const treasury = data?.treasury || {};
   const reports = data?.reports || [];
   const payouts = data?.payouts || [];
+  const supportTickets = data?.supportTickets || [];
   const audit = data?.auditLogs || [];
   const system = data?.system || {};
 
@@ -191,6 +192,24 @@ export default function AdminDashboardRedesign({ onNavigate }) {
           </div>
         </article>
       </div>
+
+
+      <article className="rentora-card p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div><h2 className="text-sm font-black">{t.support}</h2><p className="text-[10px] text-slate-500 mt-1">درخواست‌های پشتیبانی ثبت‌شده و متصل به حساب کاربر.</p></div>
+          <MessageCircle className="w-4 h-4 text-rentora-primary-mid" />
+        </div>
+        <div className="mt-4 space-y-2">
+          {supportTickets.slice(0, 5).map(ticket => <div key={ticket.id} className="rounded-2xl bg-slate-50 dark:bg-white/5 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0"><div className="text-xs font-bold truncate">{ticket.subject || 'Support request'}</div><div className="text-[9px] text-slate-500 mt-1 truncate">@{ticket.username || ticket.pi_uid || 'user'}</div></div>
+              <span className="px-2 py-1 rounded-full text-[9px] font-bold badge-amber">{ticket.status || 'open'}</span>
+            </div>
+            <p className="text-[10px] text-slate-500 mt-2 line-clamp-2">{ticket.message}</p>
+          </div>)}
+          {!supportTickets.length && <p className="text-xs text-slate-400 py-5 text-center">{t.noData}</p>}
+        </div>
+      </article>
 
       <div className="grid md:grid-cols-2 gap-3">
         <article className="rentora-card p-4 sm:p-5">
