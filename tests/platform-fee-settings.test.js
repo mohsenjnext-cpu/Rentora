@@ -24,5 +24,5 @@ test('admin fee endpoint validates 1%-5% and writes the authoritative rate to KV
 test('admin UI exposes the bounded platform fee setting', () => {
   assert.match(adminPage, /min="1" max="5"/);
   assert.match(adminPage, /\/api\/admin\/platform-fee/);
-  assert.match(adminPage, /server.*محاسبه|محاسبه.*سرور/);
+  assert.match(adminPage, /قیمت معتبر سرور محاسبه می‌شود/);
 });
