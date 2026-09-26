@@ -8,6 +8,7 @@ import {
   Moon, 
   Sun, 
   ReceiptText, 
+  Bell, 
   Menu, 
   ShieldCheck, 
   User, 
@@ -53,6 +54,7 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
       case 'public-profile': return t('profileTitle');
       case 'admin': return t('navAdmin');
       case 'settings': return t('navSettings');
+      case 'notifications': return l('اعلان‌ها', 'Notifications', 'الإشعارات', '通知');
       default: return t('appName');
     }
   };
@@ -178,6 +180,8 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
               <RotateCw className={`w-4 h-4 text-[#534AB7] dark:text-[#AFA9EC] stroke-[2] ${isRefreshing ? 'animate-spin text-[#26215C]' : ''}`} />
             </button>
 
+            <button type="button" onClick={() => onNavigate('notifications')} className="relative p-2 rounded-lg bg-slate-100 dark:bg-[#1C1B30] text-slate-700 dark:text-slate-200 hover:bg-[#EEEDFE] dark:hover:bg-[#1E1B3D] transition cursor-pointer" title={l('اعلان‌ها', 'Notifications', 'الإشعارات', '通知')}><Bell className="w-4 h-4 text-[#534AB7] dark:text-[#AFA9EC] stroke-[1.8]" /></button>
+
             {/* In-App Chat / Messages Icon */}
             <button
               type="button"
@@ -297,6 +301,8 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
           >
             <RotateCw className={`w-4 h-4 text-[#534AB7] stroke-[2] ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
+
+          <button type="button" onClick={() => onNavigate('notifications')} className="relative p-1.5 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer" aria-label="Notifications"><Bell className="w-4 h-4 stroke-[1.8] text-[#534AB7]" /></button>
 
           <button
             type="button"
