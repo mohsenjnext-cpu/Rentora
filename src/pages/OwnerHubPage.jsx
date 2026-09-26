@@ -2,20 +2,16 @@ import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
-import ItemCard from '../components/ItemCard';
 import { 
   Briefcase, 
   Plus, 
   Clock, 
   CheckCircle2, 
-  ShieldCheck, 
-  TrendingUp, 
-  Sparkles,
+  ShieldCheck,
   ToggleLeft,
   ToggleRight,
   Package,
   Layers,
-  ArrowRight,
   Check,
   Edit3
 } from 'lucide-react';
@@ -33,6 +29,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'active' | 'inactive'
   const [processingRentalId, setProcessingRentalId] = useState(null);
   const [successToast, setSuccessToast] = useState('');
+  const [showAllRequests, setShowAllRequests] = useState(false);
 
   if (!isAuthenticated) {
     return (
@@ -85,7 +82,9 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
   );
 
   // Total Earnings
-  const totalEarnings = completedRentals.reduce((sum, r) => sum + (r.rentalTotal || r.baseAmount || 0), 0);
+  const totalEarnings = completedRentals.reduce((sum, r) => sum + Number(r.rentalTotal ?? r.baseAmount ?? 0), 0);
+  const visibleRequests = showAllRequests ? pendingRequests : pendingRequests.slice(0, 3);
+  const ownerKycVerified = currentUser?.kycStatus === 'verified' || currentUser?.kyc_status === 'verified';
 
   const handleConfirmReturn = async (rentalId) => {
     setProcessingRentalId(rentalId);
@@ -108,7 +107,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-5 pb-16 select-none animate-fadeIn">
+    <div className="w-full max-w-6xl mx-auto space-y-5 pb-16 select-none animate-fadeIn">
       
       {/* 1. Header with Post New Item CTA */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl rentora-card">
@@ -120,9 +119,10 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
             <h1 className="text-base font-bold text-slate-900 dark:text-white">
               {t('ownerHubTitle')}
             </h1>
-            <p className="text-[11px] text-slate-400">
-              {t('ownerHubSubtitle')}
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+              <p className="text-[11px] text-slate-400">{t('ownerHubSubtitle')}</p>
+              {ownerKycVerified && <span className="badge-trust px-1.5 py-0.5 rounded-full text-[9px] font-bold inline-flex items-center gap-1"><ShieldCheck className="w-3 h-3" />KYC</span>}
+            </div>
           </div>
         </div>
 
@@ -167,7 +167,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
         </div>
       </div>
 
-      {/* 3. Pending Handover Requests (Amber Card) */}
+      {/* 3. Rental requests & handovers */}
       {pendingRequests.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -178,7 +178,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
           </div>
 
           <div className="space-y-2.5">
-            {pendingRequests.map((rental) => (
+            {visibleRequests.map((rental) => (
               <div
                 key={rental.id}
                 className="p-4 rounded-xl badge-amber flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
@@ -194,7 +194,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
                     {rental.startDate} ➔ {rental.endDate} ({rental.daysCount} {l('روز', 'days', 'أيام', '天')})
                   </div>
                   <div className="text-[11px] text-[#0F6E56] font-bold font-mono">
-                    {l('مبلغ اجاره دریافتی مستقیم (P2P):', 'Direct P2P rental payout:', 'إجمالي الإيجار المباشر:', '线下实收租金：')} {rental.rentalTotal || rental.baseAmount} π
+                    {l('مبلغ اجاره (تسویه مستقیم P2P):', 'Rental amount (direct P2P):', 'قيمة الإيجار (تسوية مباشرة):', '租金金额（P2P直接结算）：')} {rental.rentalTotal ?? rental.baseAmount ?? 0} π
                   </div>
                 </div>
 
@@ -211,6 +211,14 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
               </div>
             ))}
           </div>
+          {pendingRequests.length > 3 && (
+            <button type="button" onClick={() => setShowAllRequests(v => !v)}
+              className="w-full py-2 text-xs font-bold text-[#534AB7] dark:text-[#AFA9EC] hover:underline cursor-pointer">
+              {showAllRequests
+                ? l('نمایش کمتر', 'Show less', 'عرض أقل', '收起')
+                : l('نمایش همه درخواست‌ها', 'View all requests', 'عرض كل الطلبات', '查看全部请求')}
+            </button>
+          )}
         </div>
       )}
 
