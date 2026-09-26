@@ -261,12 +261,14 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
             <span>{t('ownerMyListingsTitle')} ({myItems.length})</span>
           </h2>
 
-          <div className="flex items-center gap-1 text-xs">
+          <div className="flex items-center gap-1 text-xs" role="tablist" aria-label={l('فیلتر آگهی‌ها', 'Listing filters', 'مرشحات الإعلانات', '物品筛选')}>
             {['all', 'active', 'inactive'].map((tab) => (
               <button
                 key={tab}
                 type="button"
                 onClick={() => setActiveTab(tab)}
+                aria-selected={activeTab === tab}
+                role="tab"
                 className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
                   activeTab === tab
                     ? 'bg-[#26215C] text-white dark:bg-[#534AB7]'
@@ -292,9 +294,11 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
               const isItemActive = !item.status || item.status === 'active';
               return (
                 <div key={item.id} className="p-3 rounded-xl rentora-card flex items-center justify-between gap-3">
-                  <div 
+                  <button
+                    type="button"
                     onClick={() => onSelectItem(item)}
-                    className="flex items-center gap-3 min-w-0 cursor-pointer flex-1"
+                    aria-label={l(`مشاهده آگهی ${item.title || ''}`, `View listing ${item.title || ''}`, `عرض الإعلان ${item.title || ''}`, `查看物品 ${item.title || ''}`)}
+                    className="flex items-center gap-3 min-w-0 cursor-pointer flex-1 text-start bg-transparent border-0 p-0"
                   >
                     <img
                       src={item.images?.[0] || 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80'}
@@ -312,7 +316,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
                         )}
                       </div>
                     </div>
-                  </div>
+                  </button>
 
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
@@ -328,6 +332,8 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
                     <button
                       type="button"
                       onClick={() => toggleItemStatus(item.id)}
+                      aria-pressed={isItemActive}
+                      aria-label={isItemActive ? l(`توقف نمایش آگهی ${item.title || ''}`, `Pause listing ${item.title || ''}`, `إيقاف الإعلان ${item.title || ''}`, `暂停物品 ${item.title || ''}`) : l(`فعال‌سازی آگهی ${item.title || ''}`, `Activate listing ${item.title || ''}`, `تفعيل الإعلان ${item.title || ''}`, `激活物品 ${item.title || ''}`)}
                       className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
                         isItemActive 
                           ? 'bg-[#E1F5EE] text-[#0F6E56]' 
