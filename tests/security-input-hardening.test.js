@@ -166,3 +166,9 @@ test('gateway incomplete payment rejects non-text or oversized payment identifie
   assert.match(gateway, /paymentIntentIdRaw = body\?\.paymentIntentId/);
   assert.match(gateway, /paymentId\.length > 128/);
 });
+
+test('gateway payment completion requires bounded text identifiers', () => {
+  assert.match(gateway, /body\?\.paymentId !== 'string'/);
+  assert.match(gateway, /body\?\.txid !== 'string'/);
+  assert.match(gateway, /paymentIntentId\.length > 128/);
+});
