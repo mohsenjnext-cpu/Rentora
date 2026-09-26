@@ -55,6 +55,8 @@ export default function ListItemPage({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successNotice, setSuccessNotice] = useState(false);
+  const [contactLoadError, setContactLoadError] = useState('');
+  const [contactRetryNonce, setContactRetryNonce] = useState(0);
 
   // Private Contact & Coordination State
   const [contactName, setContactName] = useState('');
@@ -67,6 +69,7 @@ export default function ListItemPage({
   // Synchronize state when entering Edit mode or changing itemToEdit
   useEffect(() => {
     let active = true;
+    setContactLoadError('');
     if (itemToEdit) {
       setTitle(itemToEdit.title || '');
       setCategory(itemToEdit.category || 'tools');
@@ -94,7 +97,9 @@ export default function ListItemPage({
             setContactHours(c.contactHours || '');
             setCoordinationNotes(c.coordinationNotes || '');
           }
-        }).catch(() => {});
+        }).catch(err => {
+          if (active) setContactLoadError(err?.message || l('اطلاعات تماس آگهی بارگذاری نشد. دوباره تلاش کنید.', 'Listing contact details could not be loaded. Try again.', 'تعذر تحميل بيانات اتصال الإعلان. حاول مجدداً.', '无法加载物品联系方式，请重试。'));
+        });
       }
     } else {
       setTitle('');
@@ -115,7 +120,7 @@ export default function ListItemPage({
     setErrorMessage('');
     setSuccessNotice(false);
     return () => { active = false; };
-  }, [itemToEdit, currentUser]);
+  }, [itemToEdit, currentUser, contactRetryNonce]);
 
   const categories = [
     { id: 'tools', label: t('catTools'), icon: Wrench },
@@ -169,7 +174,7 @@ export default function ListItemPage({
       );
       setImages(prev => [...prev, ...compressedImages].slice(0, 6));
     } catch (err) {
-      console.warn('[Image Upload Note]', err);
+      setErrorMessage(err?.message || l('بارگذاری تصویر ناموفق بود. دوباره تلاش کنید.', 'Image upload failed. Try again.', 'فشل تحميل الصورة. حاول مجدداً.', '图片上传失败，请重试。'));
     }
   };
 
@@ -346,6 +351,15 @@ export default function ListItemPage({
         </div>
       )}
 
+      {contactLoadError && isEditMode && (
+        <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center justify-between gap-3" role="alert">
+          <span>{contactLoadError}</span>
+          <button type="button" onClick={() => setContactRetryNonce(v => v + 1)} className="shrink-0 underline font-bold cursor-pointer">
+            {l('تلاش مجدد', 'Try again', 'حاول مجدداً', '重试')}
+          </button>
+        </div>
+      )}
+
       {/* Form */}
       <form onSubmit={handleSubmit} className="p-4 sm:p-6 rounded-2xl rentora-card space-y-5 shadow-sm">
 
@@ -497,238 +511,3 @@ export default function ListItemPage({
                 className="group relative aspect-square rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shadow-2xs"
               >
                 <img src={img} alt="" className="w-full h-full object-cover" />
-
-                {/* Primary Badge */}
-                {idx === 0 ? (
-                  <span className="absolute top-1 left-1 rtl:left-auto rtl:right-1 px-1.5 py-0.5 rounded bg-[#26215C]/90 text-amber-300 text-[8px] font-black flex items-center gap-0.5 shadow">
-                    <Star className="w-2.5 h-2.5 fill-amber-300 text-amber-300" />
-                    <span>{l('کاور', 'Cover', 'غلاف', '封面')}</span>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleSetPrimaryImage(idx)}
-                    className="absolute top-1 left-1 rtl:left-auto rtl:right-1 opacity-0 group-hover:opacity-100 px-1.5 py-0.5 rounded bg-slate-900/80 text-white text-[8px] font-bold transition cursor-pointer"
-                    title={l('تنظیم به عنوان عکس اصلی', 'Set as Cover', 'تعيين كغلاف', '设为主图')}
-                  >
-                    {l('کاور شود', 'Set Cover', 'تعيين', '设封面')}
-                  </button>
-                )}
-
-                {/* Delete Photo Button (حذف عکس) */}
-                <button
-                  type="button"
-                  onClick={() => handleRemoveImage(idx)}
-                  className="absolute top-1 right-1 rtl:right-auto rtl:left-1 p-1 rounded-full bg-rose-600/90 text-white shadow-md hover:bg-rose-700 transition cursor-pointer"
-                  title={l('حذف عکس', 'Delete photo', 'حذف الصورة', '删除图片')}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
-
-            {/* Upload Button */}
-            {images.length < 6 && (
-              <label className="aspect-square rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-[#534AB7] flex flex-col items-center justify-center gap-1 cursor-pointer transition bg-slate-50/50 dark:bg-[#16152B]/40 group">
-                <Upload className="w-4 h-4 text-slate-400 group-hover:text-[#534AB7] transition" />
-                <span className="text-[10px] text-slate-400 font-semibold group-hover:text-slate-600 dark:group-hover:text-slate-200">
-                  {l('+ افزودن عکس', '+ Add Photo', '+ إضافة صورة', '+ 添加图片')}
-                </span>
-                <input
-                  type="file"
-                  multiple
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-              </label>
-            )}
-          </div>
-
-          {/* Quick preset suggestion photos for this category */}
-          {presetImages[category] && presetImages[category].length > 0 && images.length < 6 && (
-            <div className="pt-1 flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] text-slate-400">{l('عکس‌های نمونه:', 'Sample photos:', 'صور مقترحة:', '推荐示例图：')}</span>
-              {presetImages[category].map((presetUrl, pIdx) => (
-                <button
-                  key={pIdx}
-                  type="button"
-                  onClick={() => handleAddPresetImage(presetUrl)}
-                  disabled={images.includes(presetUrl)}
-                  className={`text-[9px] px-2 py-0.5 rounded-md border font-medium cursor-pointer transition ${
-                    images.includes(presetUrl)
-                      ? 'opacity-40 border-slate-200 dark:border-slate-800 text-slate-400'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-[#534AB7]'
-                  }`}
-                >
-                  + {l(`نمونه ${pIdx + 1}`, `Sample ${pIdx + 1}`, `عينة ${pIdx + 1}`, `示例 ${pIdx + 1}`)}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Private Contact & Coordination Details Section */}
-        <div className="p-4 rounded-xl rentora-card space-y-3.5 border border-[#534AB7]/30 bg-gradient-to-b from-white to-[#EEEDFE]/15 dark:from-[#121124] dark:to-[#181630]">
-          <div className="flex items-start gap-2.5">
-            <div className="p-2 rounded-xl bg-[#EEEDFE] dark:bg-[#26215C] text-[#534AB7] dark:text-[#AFA9EC] shrink-0 mt-0.5">
-              <Lock className="w-4 h-4 stroke-[2]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
-                  {l('اطلاعات تماس و هماهنگی (محرمانه پس از رزرو)', 'Contact & Coordination (Private)', 'بيانات التواصل والتنسيق (خاصة بعد الحجز)', '联系与交接信息（预订后解锁）')}
-                </h3>
-                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-[#0F6E56]/15 text-[#0F6E56] dark:text-[#48D2A8]">
-                  Private
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                {l(
-                  '🔒 این اطلاعات در آگهی عمومی نمایش داده نمی‌شود و تنها پس از پرداخت قطعی کارمزد توسط مستأجر برای وی فعال می‌گردد.',
-                  '🔒 Private details are hidden publicly and only unlocked for the renter after confirmed booking fee payment.',
-                  '🔒 هذه البيانات سرية ولن تظهر للعامة، وتتاح فقط للمستأجر بعد تأكيد دفع عمولة الحجز.',
-                  '🔒 此信息对外隐藏，仅在租客成功支付平台服务费后对其解锁显示。'
-                )}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            {/* Contact Name */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                {l('نام رابط / شخص پاسخگو', 'Contact Name / Person', 'اسم جهة الاتصال', '联系人姓名')}
-              </label>
-              <input
-                type="text"
-                value={contactName}
-                onChange={(e) => setContactName(e.target.value)}
-                placeholder={currentUser?.displayName || currentUser?.username || 'مثال: علی رضایی'}
-                className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#534AB7]"
-              />
-            </div>
-
-            {/* Contact Phone */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                {l('شماره تلفن مستقیم', 'Contact Phone Number', 'رقم الهاتف المباشر', '联系电话')}
-              </label>
-              <div className="relative">
-                <input
-                  type="tel"
-                  dir="ltr"
-                  value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
-                  placeholder="09123456789"
-                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#534AB7]"
-                />
-                <Phone className="w-3.5 h-3.5 text-slate-400 absolute top-3 right-3 rtl:right-auto rtl:left-3" />
-              </div>
-            </div>
-
-            {/* WhatsApp */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                {l('واتساپ (اختیاری)', 'WhatsApp (Optional)', 'واتساب (اختياري)', 'WhatsApp（选填）')}
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  dir="ltr"
-                  value={whatsapp}
-                  onChange={(e) => setWhatsapp(e.target.value)}
-                  placeholder="09123456789 / wa.me/..."
-                  className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-mono focus:outline-none focus:border-[#534AB7]"
-                />
-                <MessageCircle className="w-3.5 h-3.5 text-slate-400 absolute top-3 right-3 rtl:right-auto rtl:left-3" />
-              </div>
-            </div>
-
-            {/* Preferred Contact Method */}
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                {l('روش ترجیحی ارتباط', 'Preferred Contact Method', 'طريقة التواصل المفضلة', '首选沟通方式')}
-              </label>
-              <select
-                value={preferredContactMethod}
-                onChange={(e) => setPreferredContactMethod(e.target.value)}
-                className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#534AB7]"
-              >
-                <option value="phone">{l('تماس تلفنی', 'Phone Call', 'اتصال هاتفي', '电话通话')}</option>
-                <option value="whatsapp">{l('پیام در واتساپ', 'WhatsApp Message', 'واتساب', 'WhatsApp')}</option>
-                <option value="chat">{l('چت درون‌برنامه رنتورا', 'Rentora In-App Chat', 'دردشة رنتورا', '应用内聊天')}</option>
-                <option value="both">{l('تماس تلفنی و واتساپ', 'Phone & WhatsApp', 'هاتف وواتساب', '电话与WhatsApp均可')}</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Contact Hours */}
-          <div>
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 mb-1">
-              <Clock className="w-3.5 h-3.5 text-[#534AB7]" />
-              <span>{l('ساعات پاسخگویی و تماس', 'Contact Hours', 'أوقات الاتصال المتاحة', '接听时间段')}</span>
-            </label>
-            <input
-              type="text"
-              value={contactHours}
-              onChange={(e) => setContactHours(e.target.value)}
-              placeholder="مثال: همه‌روزه از ۹ صبح الی ۹ شب"
-              className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#534AB7]"
-            />
-          </div>
-
-          {/* Coordination Notes */}
-          <div>
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 mb-1">
-              <FileText className="w-3.5 h-3.5 text-[#534AB7]" />
-              <span>{l('توضیحات و دستورالعمل هماهنگی تحویل', 'Handover & Coordination Notes', 'ملاحظات التنسيق والاستلام', '交付与交接附加说明')}</span>
-            </label>
-            <textarea
-              rows="3"
-              value={coordinationNotes}
-              onChange={(e) => setCoordinationNotes(e.target.value)}
-              placeholder={l('مثال: لطفاً ۲ ساعت قبل از مراجعه هماهنگ بفرمایید. همراه داشتن کارت شناسایی الزامی است.', 'e.g., Please call 2 hours before pickup. ID required.', 'مثال: يرجى الاتصال قبل ساعتين من الحضور. يلزم إحضار الهوية.', '例如：请提前2小时联系确认，自提时请携带有效证件。')}
-              className="w-full p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#534AB7]"
-            ></textarea>
-          </div>
-        </div>
-
-        {/* Submit & Cancel Action Buttons */}
-        <div className="pt-2 flex items-center gap-2">
-          {isEditMode && (
-            <button
-              type="button"
-              onClick={onCancelEdit || (() => onNavigate && onNavigate('owner-hub'))}
-              className="btn-secondary flex-1 py-2.5 text-xs font-bold cursor-pointer text-center"
-            >
-              {l('انصراف', 'Cancel', 'إلغاء', '取消')}
-            </button>
-          )}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={`btn-primary flex-1 py-2.5 text-xs font-bold cursor-pointer flex items-center justify-center gap-2 shadow-sm ${
-              isEditMode ? 'bg-[#26215C] dark:bg-[#534AB7]' : ''
-            }`}
-          >
-            {isEditMode ? (
-              <>
-                <CheckCircle2 className="w-4 h-4 stroke-[2]" />
-                <span>{isSubmitting ? l('در حال ذخیره...', 'Saving...', 'جارٍ الحفظ...', '正在保存...') : l('ذخیره تغییرات آگهی', 'Save Changes', 'حفظ التعديلات', '保存修改')}</span>
-              </>
-            ) : (
-              <>
-                <PlusCircle className="w-4 h-4 stroke-[2]" />
-                <span>{isSubmitting ? l('در حال انتشار...', 'Publishing...', 'جارٍ النشر...', '正在发布...') : t('btnSubmitListing')}</span>
-              </>
-            )}
-          </button>
-        </div>
-
-      </form>
-
-    </div>
-  );
-}
