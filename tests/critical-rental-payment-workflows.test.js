@@ -78,5 +78,5 @@ test('rental overlap remains an authoritative D1 gate before persistence', () =>
   assert.match(block, /status IN \('pending_payment', 'paid', 'confirmed', 'active'\)/);
   assert.match(block, /julianday\(end_date\) > julianday\(\?2\)/);
   assert.match(block, /julianday\(start_date\) < julianday\(\?3\)/);
-  assert.match(block, /return errorResponse\('این کالا برای تاریخ‌های انتخابی قبلاً رزرو شده است\.', 409/);
+  assert.match(block, /return errorResponse\('این کالا برای تاریخ‌های انتخابی در دسترس نیست یا قبلاً رزرو شده است\.', 409/);
 });
