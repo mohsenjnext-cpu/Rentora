@@ -37,12 +37,16 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
   const {
     rentals = [],
+    transactions = [],
+    conversations = [],
+    items = [],
     fetchRentalContact,
     confirmHandoverOneTap,
     confirmReturnOneTap
   } = useRentora();
 
   const [activeTab, setActiveTab] = useState('active'); // 'active' | 'history'
+  const [activityFilter, setActivityFilter] = useState('all');
   const [selectedRentalForReview, setSelectedRentalForReview] = useState(null);
   const [selectedRentalForReport, setSelectedRentalForReport] = useState(null);
   const [selectedAgreementRental, setSelectedAgreementRental] = useState(null);
@@ -87,6 +91,97 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
     } catch (e) {}
   };
   const [processingId, setProcessingId] = useState(null);
+
+  const activityFeed = useMemo(() => {
+    const events = [];
+    const push = (event) => {
+      if (!event?.id) return;
+      events.push(event);
+    };
+    (rentals || []).forEach((r) => {
+      const stamp = r.updatedAt || r.createdAt;
+      push({
+        id: 'rental:' + (r.id || r.bookingNumber),
+        type: 'rentals',
+        icon: 'rental',
+        title: l('وضعیت اجاره به‌روزرسانی شد', 'Rental status updated', 'تم تحديث حالة الإيجار', '租赁状态已更新'),
+        detail: `${r.itemTitle || l('کالا', 'Item', 'غرض', '物品')} • #${r.bookingNumber || r.id?.slice?.(0, 10) || ''} • ${r.status || ''}`,
+        time: stamp
+      });
+    });
+    (transactions || []).forEach((tx) => {
+      const stamp = tx.updatedAt || tx.createdAt || tx.timestamp;
+      push({
+        id: 'tx:' + (tx.id || tx.txid || stamp),
+        type: 'payments',
+        icon: 'payment',
+        title: l('رویداد پرداخت', 'Payment event', 'حدث دفع', '支付事件'),
+        detail: tx.status || tx.type || tx.memo || l('تراکنش ثبت‌شده', 'Recorded transaction', 'معاملة مسجلة', '已记录交易'),
+        time: stamp
+      });
+    });
+    (conversations || []).forEach((c) => {
+      const stamp = c.lastMessageAt || c.updatedAt || c.createdAt;
+      if (!c.lastMessageText && !c.lastMessageAt) return;
+      push({
+        id: 'message:' + (c.id || stamp),
+        type: 'messages',
+        icon: 'message',
+        title: l('گفتگو به‌روزرسانی شد', 'Conversation updated', 'تم تحديث المحادثة', '对话已更新'),
+        detail: c.lastMessageText || l('پیام جدید در گفتگو', 'New message in conversation', 'رسالة جديدة', '对话中有新消息'),
+        time: stamp
+      });
+    });
+    (items || []).forEach((item) => {
+      const stamp = item.updatedAt || item.createdAt;
+      push({
+        id: 'listing:' + (item.id || stamp),
+        type: 'listings',
+        icon: 'listing',
+        title: l('آگهی به‌روزرسانی شد', 'Listing updated', 'تم تحديث الإعلان', '物品信息已更新'),
+        detail: `${item.title || l('آگهی', 'Listing', 'إعلان', '物品')} • ${item.status || ''}`,
+        time: stamp
+      });
+    });
+    if (currentUser?.kycStatus === 'verified') {
+      push({
+        id: 'kyc:' + (currentUser.uid || currentUser.username),
+        type: 'system',
+        icon: 'kyc',
+        title: l('احراز هویت KYC فعال است', 'KYC verification is active', 'التحقق من KYC نشط', 'KYC 已验证'),
+        detail: l('وضعیت اعتماد حساب شما از سرور دریافت شده است.', 'Your account trust status is available from the server.', 'تم استلام حالة الثقة من الخادم.', '账户信任状态来自服务器。'),
+        time: currentUser.updatedAt
+      });
+    }
+    return events.sort((a,b) => {
+      const at = a.time ? new Date(a.time).getTime() : 0;
+      const bt = b.time ? new Date(b.time).getTime() : 0;
+      return bt - at;
+    }).slice(0, 50);
+  }, [rentals, transactions, conversations, items, currentUser, l]);
+
+  const filteredActivity = useMemo(
+    () => activityFilter === 'all' ? activityFeed : activityFeed.filter(e => e.type === activityFilter),
+    [activityFeed, activityFilter]
+  );
+
+  const formatActivityTime = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString(lang === 'fa' ? 'fa-IR' : lang === 'ar' ? 'ar' : lang === 'zh' ? 'zh-CN' : 'en', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  };
+
+  const activityFilters = [
+    ['all', l('همه', 'All', 'الكل', '全部')],
+    ['rentals', l('اجاره‌ها', 'Rentals', 'الإيجارات', '租赁')],
+    ['listings', l('آگهی‌ها', 'Listings', 'الإعلانات', '物品')],
+    ['payments', l('پرداخت‌ها', 'Payments', 'المدفوعات', '支付')],
+    ['messages', l('پیام‌ها', 'Messages', 'الرسائل', '消息')],
+    ['system', l('سیستم', 'System', 'النظام', '系统')]
+  ];
 
   const myUsername = (currentUser?.username || '').toLowerCase().replace('@', '').trim();
 
@@ -182,7 +277,55 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Unified Activity Feed */}
+      <section className="rentora-card p-3 sm:p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">{l('رویدادهای اخیر', 'Recent activity', 'النشاط الأخير', '最近动态')}</h2>
+            <p className="text-[10px] text-slate-400">{l('رویدادهای واقعی حساب، اجاره، پرداخت، آگهی و گفتگو', 'Real account, rental, payment, listing and conversation events', 'أحداث الحساب والإيجار والدفع والإعلانات والمحادثات', '真实账户、租赁、支付、物品和对话事件')}</p>
+          </div>
+          <span className="text-[10px] font-mono text-slate-400">{filteredActivity.length}</span>
+        </div>
+        <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist">
+          {activityFilters.map(([key, label]) => (
+            <button key={key} type="button" onClick={() => setActivityFilter(key)}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border transition cursor-pointer ${
+                activityFilter === key
+                  ? 'bg-[#534AB7] text-white border-[#534AB7]'
+                  : 'bg-white dark:bg-[#1A1930] text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="space-y-2">
+          {filteredActivity.length === 0 ? (
+            <div className="py-7 text-center text-xs text-slate-400">
+              <Clock className="w-6 h-6 mx-auto mb-2 text-slate-300" />
+              {l('هنوز رویدادی برای نمایش وجود ندارد.', 'No activity to show yet.', 'لا توجد أحداث لعرضها بعد.', '暂无动态。')}
+            </div>
+          ) : filteredActivity.map((event) => (
+            <div key={event.id} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50/70 dark:bg-[#16152B]/60 border border-slate-200/70 dark:border-slate-800">
+              <div className="w-9 h-9 shrink-0 rounded-xl bg-[#EEEDFE] dark:bg-[#26215C] text-[#534AB7] dark:text-[#AFA9EC] flex items-center justify-center">
+                {event.icon === 'payment' ? <Coins className="w-4 h-4" /> :
+                 event.icon === 'message' ? <MessageCircle className="w-4 h-4" /> :
+                 event.icon === 'listing' ? <Package className="w-4 h-4" /> :
+                 event.icon === 'kyc' ? <ShieldCheck className="w-4 h-4" /> :
+                 <Receipt className="w-4 h-4" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-white">{event.title}</h3>
+                  <time className="text-[9px] text-slate-400 shrink-0">{formatActivityTime(event.time)}</time>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">{event.detail}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Rental workspace tabs */}
       <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-[#1A1930] rounded-xl text-xs font-bold">
         <button
           type="button"
@@ -217,8 +360,7 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
           {activeRentals.length === 0 ? (
             <div className="p-8 text-center rounded-xl rentora-card space-y-2">
               <Package className="w-8 h-8 mx-auto text-slate-300 stroke-[1.5]" />
-              <p className="text-xs text-slate-400">{t('noActiveRentals')}</p>
-            </div>
+              <p className="text-xs text-slate-400">{t('noActiveRentals')}</p>            </div>
           ) : (
             activeRentals.map(rental => {
               const statusMeta = RentalStateMachine.getStatusMeta(rental.status, l);
@@ -437,8 +579,7 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
                 className="flex-1 py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>{t('btnClearHistory')}</span>
-              </button>
+                <span>{t('btnClearHistory')}</span>              </button>
               <button
                 type="button"
                 onClick={() => setIsClearHistoryModalOpen(false)}
@@ -657,8 +798,7 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
                         <a
                           href={`tel:${rentalContactData.contactPhone}`}
                           className="btn-primary px-3 py-1.5 text-xs font-bold flex items-center gap-1 cursor-pointer"
-                        >
-                          <Phone className="w-3.5 h-3.5" />
+                        >                          <Phone className="w-3.5 h-3.5" />
                           <span>{l('تماس', 'Call', 'اتصال', '拨打')}</span>
                         </a>
                       </div>
