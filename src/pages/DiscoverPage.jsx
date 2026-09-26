@@ -101,6 +101,7 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              aria-label={t('discoverSearchPlaceholder')}
               placeholder={t('discoverSearchPlaceholder')}
               className="w-full pl-9 pr-9 rtl:pr-9 rtl:pl-9 py-2 text-xs rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151426] text-slate-900 dark:text-white focus:outline-none focus:border-[#534AB7]"
             />
@@ -108,6 +109,7 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
               <button
                 type="button"
                 onClick={() => setQuery('')}
+                aria-label={l('پاک کردن جستجو', 'Clear search', 'مسح البحث', '清除搜索')}
                 className="absolute top-2 right-2.5 rtl:right-auto rtl:left-2.5 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
@@ -124,6 +126,7 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
                 ? 'bg-[#26215C] text-white border-[#26215C] dark:bg-[#534AB7]'
                 : 'rentora-card text-slate-700 dark:text-slate-200 hover:border-[#534AB7]'
             }`}
+            aria-label={t('discoverFilterBtn')}
             title={t('discoverFilterBtn')}
           >
             <SlidersHorizontal className="w-4 h-4 stroke-[1.8]" />
@@ -148,8 +151,9 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
         </span>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px]">{t('discoverSortBy')}:</span>
+          <label htmlFor="discover-sort" className="text-[11px]">{t('discoverSortBy')}:</label>
           <select
+            id="discover-sort"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
             className="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#151426] text-slate-900 dark:text-white font-semibold text-xs cursor-pointer focus:outline-none"
@@ -239,6 +243,7 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
                 <span className="text-[#0F6E56] font-mono font-black">{maxPrice === null ? l('بدون محدودیت', 'No limit', 'بدون حد', '不限') : `${maxPrice} π`}</span>
               </div>
               <input
+                aria-label={t('discoverFilterMaxPrice')}
                 type="range"
                 min="1"
                 max={priceCap}
@@ -268,6 +273,7 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">{t('discoverFilterLocation')}:</label>
               <input
+                aria-label={t('discoverFilterLocation')}
                 type="text"
                 value={selectedCity}
                 onChange={(e) => setSelectedCity(e.target.value)}
