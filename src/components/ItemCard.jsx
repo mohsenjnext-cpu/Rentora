@@ -8,8 +8,8 @@ import {
   Star, 
   ShieldCheck, 
   Heart, 
-  Coins, 
-  CheckCircle2,
+  Coins,
+  Package,
   Settings
 } from 'lucide-react';
 
