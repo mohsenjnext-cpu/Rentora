@@ -216,7 +216,7 @@ test('TASK 1: KYC 3-state resolution and verified status preservation across log
     display_name: 'Pioneer Verified',
     role: 'user',
     status: 'active',
-    metadata: JSON.stringify({ kycStatus: 'verified', isOfficialSdk: true }),
+    metadata: JSON.stringify({ adminKycStatus: 'verified', isOfficialSdk: true }),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   });
@@ -269,7 +269,7 @@ test('TASK 1: KYC 3-state resolution and verified status preservation across log
       display_name: 'Admin User',
       role: 'admin',
       status: 'active',
-      metadata: JSON.stringify({ kycStatus: 'verified' }),
+      metadata: JSON.stringify({ adminKycStatus: 'verified' }),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     });
@@ -690,7 +690,7 @@ test('TASK 5: Navigation & Auth Token verification returns stable state', async 
     display_name: 'Pioneer User',
     role: 'user',
     status: 'active',
-    metadata: JSON.stringify({ kycStatus: 'verified' }),
+    metadata: JSON.stringify({ adminKycStatus: 'verified' }),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   });
