@@ -95,7 +95,7 @@ export default function WalletModal({ isOpen, onClose }) {
                 <span>{l('کیف پول و درآمدها (Pi A2U Payout)', 'Pi Wallet & Earnings (A2U)', 'محفظة وأرباح باي (A2U)', 'Pi 钱包与收益（A2U）')}</span>
               </h3>
               <p className="text-[10px] text-slate-400">
-                {l('موجودی تاییدشده و سوابق تراکنش‌ها', 'Verified balance and transaction records', 'الرصيد القابل للسحب، التحويل لمحفظة باي وسجل المعاملات', '可提现收益、Pi 链上自动到账与账本明细')}
+                {l('موجودی تاییدشده و سوابق تراکنش‌ها', 'Verified balance and transaction records', 'الرصيد المؤكد وسجل المعاملات', '已确认余额与账本明细')}
               </p>
             </div>
           </div>
@@ -103,7 +103,7 @@ export default function WalletModal({ isOpen, onClose }) {
           <button
             type="button"
             onClick={handleClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+            className="min-h-11 min-w-11 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer flex items-center justify-center"
           >
             <X className="w-5 h-5" />
           </button>
@@ -112,7 +112,7 @@ export default function WalletModal({ isOpen, onClose }) {
         {/* Content Body */}
         <div className="p-4 sm:p-5 overflow-y-auto space-y-4 text-xs">
           
-          {/* Section 0: Authoritative Withdrawable Balance & A2U Withdrawal Form */}
+          {/* Section 0: Authoritative Confirmed Balance & A2U Status */}
           <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-gradient-to-b from-[#EEEDFE]/40 to-white dark:from-[#26215C]/20 dark:to-[#151426] space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white text-xs">
