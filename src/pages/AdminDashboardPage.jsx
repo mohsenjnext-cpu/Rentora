@@ -267,7 +267,44 @@ function Overview({cards,o,reports,payouts,go}) {
   return <div className="space-y-4"><div className="grid grid-cols-2 md:grid-cols-3 gap-3">{cards.map(([l,v,I])=><div key={l} className="rentora-card p-4"><I className="w-4 h-4 text-[#534AB7] mb-3"/><div className="text-lg font-black">{v}</div><div className="text-[10px] text-slate-500 mt-1">{l}</div></div>)}</div>
     <div className="grid md:grid-cols-2 gap-3"><div className="rentora-card p-4"><div className="flex justify-between"><b className="text-sm">Operational Alerts</b><AlertTriangle className="w-4 h-4 text-amber-600"/></div><p className="text-xs text-slate-500 mt-3">{o.openAlerts||0} مورد نیازمند بررسی.</p><button onClick={()=>go('reports-open')} className="btn-secondary px-3 py-2 text-[11px] mt-3">مشاهده گزارش‌ها</button></div>
       <div className="rentora-card p-4"><b className="text-sm">Payout Pipeline</b><div className="flex gap-2 mt-3 flex-wrap">{['reserved','creating','pi_created','approving','approved','completing','completed','reconciliation_required'].map(s=><span key={s} className="px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[9px]">{s}: {payouts.filter(p=>p.status===s).length}</span>)}</div></div></div>
+    <NeedsAttention reports={reports} payouts={payouts} go={go}/>
   </div>;
+}
+
+function NeedsAttention({ reports, payouts, go }) {
+  const openReports = reports.filter(r => r.status === 'open').slice(0, 4);
+  const payoutIssues = payouts.filter(p => ['failed', 'reconciliation_required'].includes(p.status)).slice(0, 4);
+  const items = [
+    ...openReports.map(r => ({
+      key: 'report-' + r.id,
+      title: 'گزارش نیازمند بررسی',
+      detail: r.reason || r.target_type || r.id,
+      action: () => go('reports-open'),
+      icon: AlertTriangle
+    })),
+    ...payoutIssues.map(p => ({
+      key: 'payout-' + p.id,
+      title: p.status === 'failed' ? 'پرداخت ناموفق' : 'نیازمند تطبیق پرداخت',
+      detail: money(p.amount),
+      action: () => go('payout-reconcile'),
+      icon: CreditCard
+    }))
+  ].slice(0, 6);
+
+  return <section className="rentora-card p-4">
+    <div className="flex items-center justify-between gap-3">
+      <div><h3 className="font-bold text-sm">Needs Attention</h3><p className="text-[10px] text-slate-500 mt-1">موارد عملیاتی که قبل از ادامه کار باید بررسی شوند.</p></div>
+      <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800">{items.length}</span>
+    </div>
+    {items.length ? <div className="mt-3 space-y-2">{items.map(item => {
+      const Icon = item.icon;
+      return <button key={item.key} onClick={item.action} className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-right hover:bg-slate-50 dark:hover:bg-slate-900/40">
+        <Icon className="w-4 h-4 shrink-0 text-amber-600"/>
+        <span className="min-w-0 flex-1"><span className="block text-xs font-bold">{item.title}</span><span className="block text-[10px] text-slate-500 truncate mt-0.5">{item.detail}</span></span>
+        <ArrowUpRight className="w-3.5 h-3.5 text-slate-400"/>
+      </button>;
+    })}</div> : <div className="mt-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 p-4 text-xs text-slate-500 flex items-center gap-2"><CheckCircle2 className="w-4 h-4"/> مورد فوری ثبت نشده است.</div>}
+  </section>;
 }
 
 function Treasury({t,system,go}) {
