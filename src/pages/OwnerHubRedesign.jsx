@@ -155,7 +155,7 @@ export default function OwnerHubRedesign({ onNavigate, onSelectItem, onEditItem 
                       </button>
                     </div>
                   </div>
-                  <button type="button" onClick={() => onSelectItem(item)} className="w-full mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] font-bold text-[#534AB7] flex items-center justify-end gap-1 cursor-pointer">
+                  <button type="button" onClick={() => onSelectItem(item)} className="w-full min-h-11 mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] font-bold text-[#534AB7] flex items-center justify-end gap-1 cursor-pointer">
                     {l('مشاهده آگهی', 'View listing', 'عرض الإعلان', '查看物品')}<ChevronRight className="w-3.5 h-3.5 rtl:rotate-180" />
                   </button>
                 </RentoraCard>
