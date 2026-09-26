@@ -20,15 +20,35 @@ export default function PublicProfilePage({ username, onBack, onSelectItem, onRe
   const [userReviewsData, setUserReviewsData] = useState(null);
   const [remoteUser, setRemoteUser] = useState(null);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [profileLoadError, setProfileLoadError] = useState('');
+  const [reviewsLoadError, setReviewsLoadError] = useState('');
+  const [retryNonce, setRetryNonce] = useState(0);
   const targetUsername = String(username || '').replace('@', '').trim();
 
   useEffect(() => {
     if (!targetUsername) return;
     let mounted = true;
-    cloudSyncService.fetchPublicUserProfile(targetUsername).then(u => mounted && u && setRemoteUser(u)).catch(() => {});
-    fetchUserReviews(targetUsername).then(data => mounted && data && setUserReviewsData(data)).catch(() => {});
+    setProfileLoadError('');
+    setReviewsLoadError('');
+    cloudSyncService.fetchPublicUserProfile(targetUsername)
+      .then(u => {
+        if (!mounted) return;
+        if (u) setRemoteUser(u);
+        else setProfileLoadError(l('پروفایل پیدا نشد.', 'Public profile could not be found.', 'تعذر العثور على الملف العام.', '找不到公开主页。'));
+      })
+      .catch((error) => {
+        if (mounted) setProfileLoadError(error?.message || l('دریافت پروفایل ناموفق بود.', 'Could not load the public profile.', 'تعذر تحميل الملف العام.', '无法加载公开主页。'));
+      });
+    fetchUserReviews(targetUsername)
+      .then(data => {
+        if (!mounted) return;
+        if (data) setUserReviewsData(data);
+      })
+      .catch((error) => {
+        if (mounted) setReviewsLoadError(error?.message || l('دریافت نظرات ناموفق بود.', 'Could not load reviews.', 'تعذر تحميل المراجعات.', '无法加载评价。'));
+      });
     return () => { mounted = false; };
-  }, [targetUsername, fetchUserReviews]);
+  }, [targetUsername, fetchUserReviews, retryNonce]);
 
   const targetUser = remoteUser || users.find(u => u.username?.toLowerCase() === targetUsername.toLowerCase());
   const userItems = useMemo(() => (items || []).filter(i =>
@@ -47,6 +67,15 @@ export default function PublicProfilePage({ username, onBack, onSelectItem, onRe
           <button type="button" onClick={() => { try { navigator.share?.({ title: targetUser?.displayName || targetUsername, text: '@' + targetUsername }); } catch {} }} className="p-2 rounded-xl border border-slate-200 dark:border-slate-700" title={l('اشتراک‌گذاری', 'Share', 'مشاركة', '分享')}><Share2 className="w-4 h-4" /></button>
         </div>
       </div>
+
+      {(profileLoadError || reviewsLoadError) && (
+        <div role="alert" className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300 text-xs font-semibold flex items-center justify-between gap-3">
+          <span>{profileLoadError || reviewsLoadError}</span>
+          <button type="button" onClick={() => setRetryNonce(v => v + 1)} className="shrink-0 btn-secondary px-3 py-1.5 text-[11px] font-bold">
+            {l('تلاش مجدد', 'Try again', 'حاول مجدداً', '重试')}
+          </button>
+        </div>
+      )}
 
       <section className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-5">
         <div className="rentora-card rounded-3xl p-5 sm:p-7">
@@ -77,7 +106,14 @@ export default function PublicProfilePage({ username, onBack, onSelectItem, onRe
           <div className="rentora-card rounded-2xl p-10 text-center space-y-2"><UserX className="w-8 h-8 mx-auto text-slate-300" /><p className="text-xs text-slate-400">{l('این کاربر در حال حاضر آگهی فعال ندارد.', 'No active listings currently.', 'لا توجد إعلانات نشطة حالياً.', '该用户目前没有活跃物品。')}</p></div>}
       </section>
 
-      {rep.reviewCount > 0 && <section className="rentora-card rounded-2xl p-4"><div className="flex items-center gap-2 mb-3"><Star className="w-4 h-4 text-amber-500 fill-amber-400" /><h2 className="text-sm font-bold">{l('اعتبار و نظرات', 'Reputation & reviews', 'السمعة والمراجعات', '信誉与评价')}</h2></div><div className="flex items-center gap-2 text-xs"><span className="font-bold text-amber-500">{rep.formattedScore}</span><span className="text-slate-400">({rep.reviewCount} {l('نظر', 'reviews', 'مراجعة', '条评价')})</span></div></section>}
+      {reviewsLoadError ? (
+        <section className="rentora-card rounded-2xl p-4" role="status">
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <span className="text-slate-500 dark:text-slate-400">{reviewsLoadError}</span>
+            <button type="button" onClick={() => setRetryNonce(v => v + 1)} className="btn-secondary px-3 py-1.5 text-[11px] font-bold">{l('تلاش مجدد', 'Try again', 'حاول مجدداً', '重试')}</button>
+          </div>
+        </section>
+      ) : rep.reviewCount > 0 && <section className="rentora-card rounded-2xl p-4"><div className="flex items-center gap-2 mb-3"><Star className="w-4 h-4 text-amber-500 fill-amber-400" /><h2 className="text-sm font-bold">{l('اعتبار و نظرات', 'Reputation & reviews', 'السمعة والمراجعات', '信誉与评价')}</h2></div><div className="flex items-center gap-2 text-xs"><span className="font-bold text-amber-500">{rep.formattedScore}</span><span className="text-slate-400">({rep.reviewCount} {l('نظر', 'reviews', 'مراجعة', '条评价')})</span></div></section>}
 
       {isReportOpen && <ReportModal isOpen={isReportOpen} onClose={() => setIsReportOpen(false)} targetType="user" targetId={targetUser?.uid || targetUser?.id || targetUsername} />}
     </div>
