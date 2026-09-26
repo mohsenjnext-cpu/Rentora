@@ -1,0 +1,65 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+const rentoraContext = fs.readFileSync(new URL('../src/context/RentoraContext.jsx', import.meta.url), 'utf8');
+const piAuthContext = fs.readFileSync(new URL('../src/context/PiAuthContext.jsx', import.meta.url), 'utf8');
+const cloudSync = fs.readFileSync(new URL('../src/services/cloudSyncService.js', import.meta.url), 'utf8');
+
+function section(start, end) {
+  const from = worker.indexOf(start);
+  assert.notEqual(from, -1, `missing section: ${start}`);
+  const to = end ? worker.indexOf(end, from) : worker.length;
+  return worker.slice(from, to === -1 ? worker.length : to);
+}
+
+test('profile updates enforce server-side field types and bounds', () => {
+  const route = section("path === '/api/sync/user'", "path === '/api/upload'");
+  assert.match(route, /requireString\(body\.displayName, 'displayName', 120\)/);
+  assert.match(route, /requireString\(body\.avatar, 'avatar', 4096\)/);
+  assert.match(route, /requireString\(body\.bio, 'bio', 1000\)/);
+  assert.match(route, /requireString\(body\.location, 'location', 200\)/);
+  assert.match(route, /requireString\(body\.phoneMasked, 'phoneMasked', 64\)/);
+  assert.doesNotMatch(route, /String\(body\.avatar\)/);
+});
+
+test('conversation messages use a constrained server-side message type', () => {
+  const route = section("path.startsWith('/api/conversations/') && path.endsWith('/messages')", "path.startsWith('/api/conversations/') && path.endsWith('/read')");
+  assert.match(route, /requireString\(body\?\.text, 'text', 2000, \{ required: true \}\)/);
+  assert.match(route, /requireEnum\(body\?\.messageType \|\| 'text', 'messageType', \['text'\]\)/);
+  assert.match(route, /\.bind\(messageId, convId, user\.pi_uid, user\.username, rawText, messageType, now\(\)\)/);
+});
+
+test('review text is type-checked and bounded', () => {
+  const route = section("path.startsWith('/api/rentals/') && path.endsWith('/reviews')", "path === '/api/support/tickets'");
+  assert.match(route, /requireString\(body\?\.reviewText \?\? body\?\.comment \?\? '', 'reviewText', 1000\)/);
+});
+
+test('admin target identifiers have bounded path lengths', () => {
+  assert.match(worker, /const targetUserId = path\.slice\('\/api\/admin\/users\/'\.length, -'\/status'\.length\)\.trim\(\);\s*if \(!targetUserId \|\| targetUserId\.length > 128\)/);
+  assert.match(worker, /const targetUserId = path\.slice\('\/api\/admin\/users\/'\.length, -'\/kyc'\.length\)\.trim\(\);\s*if \(!targetUserId \|\| targetUserId\.length > 128\)/);
+  assert.match(worker, /const listingId = path\.slice\('\/api\/admin\/listings\/'\.length, -'\/status'\.length\)\.trim\(\);\s*if \(!listingId \|\| listingId\.length > 128\)/);
+});
+
+test('client UI never fabricates third-party listing placeholders', () => {
+  assert.doesNotMatch(rentoraContext, /images\.unsplash\.com/);
+  assert.doesNotMatch(rentoraContext, /api\.dicebear\.com/);
+  assert.match(rentoraContext, /const finalImage = Array\.isArray\(itemData\.images\)/);
+});
+
+test('client platform config and favorites are not persisted in browser storage', () => {
+  assert.doesNotMatch(rentoraContext, /localStorage\.(getItem|setItem).*config_v9/);
+  assert.doesNotMatch(rentoraContext, /localStorage\.(getItem|setItem).*favorites_v8/);
+});
+
+test('session bridge keeps API detection variables in scope and admin UI requires server verification', () => {
+  assert.match(piAuthContext, /const isApiRequest = \(apiBase && url\.startsWith\(apiBase\)\) \|\| url\.startsWith\('\/api\/'\)/);
+  assert.match(piAuthContext, /const isPiLogin = url\.includes\('\/api\/auth\/pi-login'\)/);
+  assert.match(piAuthContext, /const isActuallyAdmin = Boolean\(currentUser\?\.uid && isServerVerifiedAdmin\)/);
+});
+
+test('offline sync path uses the memory user cache instead of an undefined variable', () => {
+  assert.doesNotMatch(cloudSync, /users:\s*localUsers/);
+  assert.match(cloudSync, /users: this\.getCachedUsers\(\)/);
+});
