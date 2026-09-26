@@ -91,6 +91,8 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
     } catch (e) {}
   };
   const [processingId, setProcessingId] = useState(null);
+  const [handoverError, setHandoverError] = useState('');
+  const [handoverErrorRentalId, setHandoverErrorRentalId] = useState(null);
 
   const activityFeed = useMemo(() => {
     const events = [];
@@ -253,10 +255,20 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
 
   const handleConfirmHandover = async (rentalId) => {
     setProcessingId(rentalId);
+    setHandoverError('');
+    setHandoverErrorRentalId(rentalId);
     try {
-      await confirmHandoverOneTap(rentalId);
+      const result = await confirmHandoverOneTap(rentalId);
+      if (result?.success !== false) {
+        setHandoverErrorRentalId(null);
+      }
     } catch (e) {
-      console.warn(e);
+      setHandoverError(e?.message || l(
+        'تأیید تحویل ناموفق بود. دوباره تلاش کنید.',
+        'Handover confirmation failed. Try again.',
+        'تعذر تأكيد التسليم. حاول مرة أخرى.',
+        '交接确认失败，请重试。'
+      ));
     } finally {
       setProcessingId(null);
     }
@@ -276,6 +288,23 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
           </p>
         </div>
       </div>
+
+      {handoverError && (
+        <div className="p-3 rounded-xl badge-amber text-xs font-bold flex items-center justify-between gap-3 animate-fadeIn" role="alert">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+            <span className="truncate">{handoverError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => handoverErrorRentalId && handleConfirmHandover(handoverErrorRentalId)}
+            disabled={processingId !== null}
+            className="px-2.5 py-1.5 rounded-lg bg-white/70 dark:bg-slate-900/40 text-[#854F0B] dark:text-[#FAC775] shrink-0 cursor-pointer"
+          >
+            {l('تلاش مجدد', 'Try again', 'حاول مرة أخرى', '重试')}
+          </button>
+        </div>
+      )}
 
       {/* Unified Activity Feed */}
       <section className="rentora-card p-3 sm:p-4 space-y-3">
