@@ -79,3 +79,11 @@ test('listing numeric inputs reject booleans and blank prices', () => {
   assert.match(worker, /typeof priceRaw === 'string' && !priceRaw\.trim\(\)/);
   assert.match(worker, /typeof depositRaw === 'boolean'/);
 });
+
+
+test('listing text fields reject non-string values', () => {
+  assert.match(worker, /typeof item\?\.title !== 'string'/);
+  assert.match(worker, /typeof item\.description !== 'string'/);
+  assert.match(worker, /typeof item\.category !== 'string'/);
+  assert.match(worker, /typeof item\.location !== 'string'/);
+});
