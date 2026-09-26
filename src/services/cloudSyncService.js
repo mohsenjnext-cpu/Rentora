@@ -54,20 +54,24 @@ export class CloudSyncService {
 
   handleIncomingBroadcast(payload) {
     const { type, data } = payload;
-    if (type === 'NEW_ITEM' && data) {
-      const items = this.getCachedItems();
-      const updated = [data, ...items.filter(i => i.id !== data.id)];
-      this.saveCachedItems(updated);
-      this.notifySubscribers('ITEM_ADDED', { items: updated, item: data });
-    } else if (type === 'USER_PROFILE' && data) {
-      const users = this.getCachedUsers();
-      const updated = [data, ...users.filter(u => u.username?.toLowerCase() !== data.username?.toLowerCase())];
-      this.saveCachedUsers(updated);
-      this.notifySubscribers('USER_SYNC', { users: updated, user: data });
-    } else if (type === 'RENTAL_UPDATE' && data) {
-      // Rental/payment state is never persisted in browser storage.
-      // Broadcast only the fresh server payload; the next sync rehydrates authority from D1.
-      this.notifySubscribers('RENTAL_SYNC', { rentals: [data], rental: data });
+
+    // BroadcastChannel is a notification bus, not a trust boundary. Never hydrate
+    // application state from a peer tab's client-supplied object. Re-fetch authoritative
+    // state from the API/D1 instead, then let the normal sync pipeline update React.
+    if (type === 'NEW_ITEM' && data?.id) {
+      this.fetchSharedData(true).catch(() => {});
+      return;
+    }
+
+    if (type === 'USER_PROFILE' && data?.username) {
+      this.fetchSharedData(true).catch(() => {});
+      return;
+    }
+
+    if (type === 'RENTAL_UPDATE' && data?.id) {
+      // Rental/payment state is never persisted in browser storage and is never
+      // accepted from BroadcastChannel as authority.
+      this.fetchSharedData(true).catch(() => {});
     }
   }
 
