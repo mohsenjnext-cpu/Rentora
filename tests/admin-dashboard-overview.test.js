@@ -19,3 +19,11 @@ test('admin audit view exposes operational audit summaries', () => {
   assert.match(fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', import.meta.url), 'utf8'), /Action Types/);
   assert.match(fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', import.meta.url), 'utf8'), /داده‌های ثبت‌شده را فقط نمایش می‌دهد/);
 });
+
+
+test('admin dashboard keeps production-safe lightweight imports', () => {
+  const page = fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(page, /useMemo/);
+  assert.doesNotMatch(page, /currentUser \}/);
+  assert.match(page, /function AuditView\(\{audit\}\)/);
+});
