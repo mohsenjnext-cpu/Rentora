@@ -1500,10 +1500,10 @@ export default {
         if (!paymentLimit.allowed) return errorResponse('Too many payment requests. Please retry shortly.', 429, env, { retryAfter: paymentLimit.retryAfter }, origin);
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
-        if (!body.rentalId) return errorResponse('rentalId is required', 400, env, undefined, origin);
+        const rentalId = requireString(body?.rentalId, 'rentalId', 128, { required: true });
         const rental = await env.RENTORA_DB.prepare(
           `SELECT r.*, l.title, l.id listing_id, l.price_per_day, l.deposit_amount FROM rentals r JOIN listings l ON l.id=r.listing_id WHERE r.id=?1 AND r.renter_user_id=?2 LIMIT 1`
-        ).bind(body.rentalId, user.id).first();
+        ).bind(rentalId, user.id).first();
         if (!rental) return errorResponse('Rental not found', 404, env, undefined, origin);
         if (!['draft','pending_payment','payment_approved'].includes(rental.status)) return errorResponse('Rental is not payable', 409, env, undefined, origin);
 
@@ -2160,7 +2160,7 @@ export default {
 
       if (method === 'POST' && path.startsWith('/api/conversations/') && path.endsWith('/read')) {
         const convId = path.slice('/api/conversations/'.length, -'/read'.length).trim();
-        if (!convId) return errorResponse('Missing conversation ID', 400, env, undefined, origin);
+        if (!convId || convId.length > 128) return errorResponse('Invalid conversation ID', 400, env, undefined, origin);
         const { user } = await requireUser(request, env);
         const conv = await env.RENTORA_DB.prepare('SELECT id, owner_user_id, renter_user_id FROM conversations WHERE id=?1 LIMIT 1').bind(convId).first();
         if (!conv) return errorResponse('Conversation not found', 404, env, undefined, origin);
@@ -2174,8 +2174,8 @@ export default {
       if (method === 'POST' && path === '/api/conversations') {
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
-        const listingId = String(body?.listingId || '').trim();
-        const rentalId = body?.rentalId ? String(body.rentalId).trim() : null;
+        const listingId = requireString(body?.listingId, 'listingId', 128, { required: !body?.rentalId });
+        const rentalId = body?.rentalId == null ? null : requireString(body.rentalId, 'rentalId', 128, { required: true });
 
         let targetListingId = listingId;
         let targetOwnerId = null;
@@ -2237,7 +2237,7 @@ export default {
 
       if (method === 'GET' && path.startsWith('/api/conversations/') && path.endsWith('/messages')) {
         const convId = path.slice('/api/conversations/'.length, -'/messages'.length).trim();
-        if (!convId) return errorResponse('Missing conversation ID', 400, env, undefined, origin);
+        if (!convId || convId.length > 128) return errorResponse('Invalid conversation ID', 400, env, undefined, origin);
         const { user } = await requireUser(request, env);
 
         const conv = await env.RENTORA_DB.prepare(`
@@ -2807,12 +2807,11 @@ export default {
 
       if (method === 'POST' && path.startsWith('/api/reports/') && path.endsWith('/resolve')) {
         const reportId = path.slice('/api/reports/'.length, -'/resolve'.length).trim();
-        if (!reportId) return errorResponse('Missing report ID', 400, env, undefined, origin);
+        if (!reportId || reportId.length > 128) return errorResponse('Invalid report ID', 400, env, undefined, origin);
         const { user } = await requireAdmin(request, env);
         const body = await readJson(request);
-        const status = String(body?.status || 'resolved').trim().toLowerCase();
-        const allowed = ['resolved', 'dismissed', 'reviewing'];
-        const finalStatus = allowed.includes(status) ? status : 'resolved';
+        const status = requireEnum(body?.status || 'resolved', 'status', ['resolved', 'dismissed', 'reviewing']);
+        const finalStatus = status;
 
         const report = await env.RENTORA_DB.prepare('SELECT id FROM reports WHERE id=?1 LIMIT 1').bind(reportId).first();
         if (!report) return errorResponse('Report not found', 404, env, undefined, origin);
