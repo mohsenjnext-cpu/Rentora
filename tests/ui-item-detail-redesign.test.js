@@ -26,6 +26,10 @@ test('redesigned item detail keeps direct P2P rental and deposit settlement expl
   assert.match(file, /Rentora processes only the platform fee through Pi/);
 });
 
+test('redesigned item detail does not rely on fake timers for share feedback', () => {
+  assert.doesNotMatch(file, /setTimeout|setInterval/);
+});
+
 test('redesigned item detail provides keyboard-friendly 44px touch targets', () => {
   assert.match(file, /min-h-11/);
   assert.match(file, /focus-visible:ring-2/);
