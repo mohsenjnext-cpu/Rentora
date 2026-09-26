@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   LayoutDashboard, WalletCards, ArrowUpRight, Users, Package, AlertTriangle,
   CreditCard, ShieldCheck, Settings, RefreshCw, Lock, Search,
-  Activity, Database, Wallet, ChevronDown, Loader2
+  Activity, Database, Wallet, ChevronDown, Loader2, CheckCircle2
 } from 'lucide-react';
 import { usePiAuth } from '../context/PiAuthContext';
 import { getApiBaseUrl } from '../services/apiConfig';
@@ -179,7 +179,7 @@ export default function AdminDashboardPage({ onNavigate }) {
 
   if (loading && !data) return <div className="py-24 text-center"><Loader2 className="w-7 h-7 mx-auto animate-spin text-[#534AB7]"/><p className="mt-3 text-xs text-slate-500">در حال بارگذاری مرکز مدیریت...</p></div>;
 
-  if (error && !data) return <div className="rentora-card p-6 text-center"><AlertTriangle className="w-8 h-8 mx-auto text-rose-500 mb-2"/><p className="text-sm">{error}</p><button onClick={load} className="btn-primary px-4 py-2 mt-4 text-xs">تلاش دوباره</button></div>;
+  if (error && !data) return <div className="rentora-card p-6 text-center"><AlertTriangle className="w-8 h-8 mx-auto text-rose-500 mb-2"/><p className="text-sm">{error}</p><button type="button" aria-label="تلاش دوباره برای بارگذاری پنل مدیریت" onClick={load} className="btn-primary px-4 py-2 mt-4 text-xs">تلاش دوباره</button></div>;
 
   const o = data?.overview || {};
   const t = data?.treasury || {};
@@ -255,20 +255,20 @@ export default function AdminDashboardPage({ onNavigate }) {
     <header className="rentora-card p-4 flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
       <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-[#26215C] text-white flex items-center justify-center"><LayoutDashboard className="w-5 h-5"/></div>
         <div><h1 className="font-bold text-lg">مرکز مدیریت Rentora</h1><p className="text-[11px] text-slate-500">مدیریت عملیاتی، خزانه، پرداخت و نظارت</p></div></div>
-      <div className="flex gap-2"><div className="relative"><Search className="absolute right-3 top-2.5 w-4 h-4 text-slate-400"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="جستجو..." className="h-9 w-48 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent pr-9 pl-3 text-xs"/></div>
-        <button onClick={load} className="h-9 px-3 rounded-lg border text-xs font-bold flex items-center gap-1.5"><RefreshCw className={`w-4 h-4 ${loading?'animate-spin':''}`}/> رفرش</button></div>
+      <div className="flex gap-2"><div className="relative"><Search className="absolute right-3 top-2.5 w-4 h-4 text-slate-400"/><input aria-label="جستجوی پنل مدیریت" value={query} onChange={e=>setQuery(e.target.value)} placeholder="جستجو..." className="h-9 w-48 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent pr-9 pl-3 text-xs"/></div>
+        <button type="button" aria-label="تازه‌سازی پنل مدیریت" onClick={load} className="h-9 px-3 rounded-lg border text-xs font-bold flex items-center gap-1.5"><RefreshCw className={`w-4 h-4 ${loading?'animate-spin':''}`}/> رفرش</button></div>
     </header>
     {error && <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 text-xs flex gap-2"><AlertTriangle className="w-4 h-4"/>{error}</div>}
     <div className="grid lg:grid-cols-[245px_1fr] gap-4">
-      <aside className="rentora-card p-2 h-fit lg:sticky lg:top-3">
+      <aside aria-label="ناوبری پنل مدیریت" className="rentora-card p-2 h-fit lg:sticky lg:top-3">
         {NAV.map(n => { const Icon=n.icon, open=expanded[n.id] || section===n.id || n.children?.some(c=>c[0]===section); return <div key={n.id}>
-          <button onClick={()=> n.children ? setExpanded(e=>({...e,[n.id]:!open})) : go(n.id)} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold ${section===n.id?'bg-[#EEEDFE] text-[#26215C] dark:bg-[#211E45] dark:text-white':''}`}>
+          <button type="button" aria-expanded={n.children ? open : undefined} aria-current={section===n.id ? "page" : undefined} onClick={()=> n.children ? setExpanded(e=>({...e,[n.id]:!open})) : go(n.id)} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold ${section===n.id?'bg-[#EEEDFE] text-[#26215C] dark:bg-[#211E45] dark:text-white':''}`}>
             <Icon className="w-4 h-4"/><span className="flex-1 text-right">{n.label}</span>{n.children&&<ChevronDown className={`w-3.5 h-3.5 transition ${open?'rotate-180':''}`}/>}
           </button>
-          {open&&n.children&&<div className="mr-4 border-r pr-2 border-slate-200 dark:border-slate-700">{n.children.map(c=><button key={c[0]} onClick={()=>go(c[0])} className={`block w-full text-right px-3 py-2 rounded-md text-[11px] ${section===c[0]?'font-bold text-[#534AB7] bg-slate-50 dark:bg-[#1b1930]':'text-slate-500'}`}>{c[1]}</button>)}</div>}
+          {open&&n.children&&<div className="mr-4 border-r pr-2 border-slate-200 dark:border-slate-700">{n.children.map(c=><button type="button" key={c[0]} aria-current={section===c[0] ? "page" : undefined} onClick={()=>go(c[0])} className={`block w-full text-right px-3 py-2 rounded-md text-[11px] ${section===c[0]?'font-bold text-[#534AB7] bg-slate-50 dark:bg-[#1b1930]':'text-slate-500'}`}>{c[1]}</button>)}</div>}
         </div>})}
       </aside>
-      <main className="min-w-0"><div className="mb-3"><h2 className="text-base font-bold">{title}</h2><p className="text-[11px] text-slate-500">داده‌ها مستقیماً از API مدیریتی و D1 خوانده می‌شوند.</p></div>{page()}</main>
+      <main className="min-w-0"><div className="mb-3"><h2 id="admin-section-title" className="text-base font-bold">{title}</h2><p className="text-[11px] text-slate-500">داده‌ها مستقیماً از API مدیریتی و D1 خوانده می‌شوند.</p></div>{page()}</main>
     </div>
   </div>;
 }
