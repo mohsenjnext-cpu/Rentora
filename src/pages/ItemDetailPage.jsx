@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
+import { cloudSyncService } from '../services/cloudSyncService';
 import BookingModal from '../components/BookingModal';
 import ReportModal from '../components/ReportModal';
 import {
@@ -10,7 +11,7 @@ import {
 } from 'lucide-react';
 
 export default function ItemDetailPage({
-  item,
+  item: initialItem,
   itemId,
   onBack,
   onBookingSuccess,
@@ -35,23 +36,23 @@ export default function ItemDetailPage({
   });
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [reviewsError, setReviewsError] = useState('');
-  const [detailItem, setDetailItem] = useState(item || null);
-  const [detailLoading, setDetailLoading] = useState(!item && !!itemId);
+  const [detailItem, setDetailItem] = useState(initialItem || null);
+  const [detailLoading, setDetailLoading] = useState(!initialItem && !!itemId);
   const [detailError, setDetailError] = useState('');
-  const imagesList = Array.isArray(item?.images) ? item.images.filter(Boolean) : [];
+  const imagesList = Array.isArray(detailItem?.images) ? item.images.filter(Boolean) : [];
   const hasGallery = imagesList.length > 0;
   const localized = (fa, en, ar, zh) => l(fa, en, ar, zh);
 
   useEffect(() => {
-    setDetailItem(item || null);
-    if (item) {
+    setDetailItem(initialItem || null);
+    if (initialItem) {
       setDetailLoading(false);
       setDetailError('');
     }
-  }, [item]);
+  }, [initialItem]);
 
   useEffect(() => {
-    if (item || !itemId) {
+    if (initialItem || !itemId) {
       setDetailLoading(false);
       return undefined;
     }
@@ -72,14 +73,14 @@ export default function ItemDetailPage({
           : l('بارگذاری آگهی ناموفق بود. لطفاً دوباره تلاش کنید.', 'Unable to load this listing. Please try again.', 'تعذر تحميل الإعلان. يرجى المحاولة مرة أخرى.', '商品加载失败，请重试。'));
       });
     return () => { mounted = false; };
-  }, [item, itemId, l]);
+  }, [initialItem, itemId, l]);
 
   useEffect(() => {
-    if (!item?.id) return;
+    if (!detailItem?.id) return;
     let mounted = true;
     setLoadingReviews(true);
     setReviewsError('');
-    fetchListingReviews(item.id)
+    fetchListingReviews(detailItem.id)
       .then((data) => {
         if (mounted && data) setReviewsData(data);
       })
@@ -90,12 +91,12 @@ export default function ItemDetailPage({
         if (mounted) setLoadingReviews(false);
       });
     return () => { mounted = false; };
-  }, [item?.id, fetchListingReviews]);
+  }, [detailItem?.id, fetchListingReviews]);
 
   useEffect(() => {
     setActiveImageIndex(0);
     setGalleryOpen(false);
-  }, [item?.id]);
+  }, [detailItem?.id]);
 
   useEffect(() => {
     if (!galleryOpen) return undefined;
