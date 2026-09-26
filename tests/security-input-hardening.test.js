@@ -153,3 +153,10 @@ test('payout and quote identifiers reject coercive or malformed sensitive inputs
   assert.match(worker, /Invalid quoteId/);
   assert.match(worker, /qt_\[A-Za-z0-9_-\]/);
 });
+
+test('payment intents and conversation/report route identifiers are type-checked and bounded', () => {
+  assert.match(worker, /const rentalId = requireString\(body\?\.rentalId, 'rentalId', 128, \{ required: true \}\)/);
+  assert.match(worker, /Invalid conversation ID/);
+  assert.match(worker, /Invalid report ID/);
+  assert.match(worker, /requireEnum\(body\?\.status \|\| 'resolved', 'status', \['resolved', 'dismissed', 'reviewing'\]\)/);
+});
