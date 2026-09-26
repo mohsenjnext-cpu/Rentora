@@ -4,24 +4,30 @@ import fs from 'node:fs';
 
 const source = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
 
-const requiredGuards = [
-  /method === 'GET' && path === '\/api\/admin\/console'[\s\S]*?requireAdmin\(request, env\)/,
-  /method === 'GET' && path === '\/api\/admin\/overview'[\s\S]*?requireAdmin\(request, env\)/,
-  /method === 'POST' && path === '\/api\/admin\/cleanup'[\s\S]*?requireAdmin\(request, env\)/,
-  /method === 'POST' && path === '\/api\/admin\/payout'[\s\S]*?requireAdmin\(request, env\)/,
-  /method === 'GET' && path === '\/api\/admin\/users'[\s\S]*?requireAdmin\(request, env\)/,
-  /method === 'POST' && path\.startsWith\('\/api\/admin\/users\/'\)[\s\S]*?requireAdmin\(request, env\)/,
-  /method === 'POST' && path\.startsWith\('\/api\/admin\/reports\/'\)[\s\S]*?requireAdmin\(request, env\)/,
-  /method === 'POST' && path\.startsWith\('\/api\/admin\/listings\/'\)[\s\S]*?requireAdmin\(request, env\)/,
-  /method === 'POST' && path\.startsWith\('\/api\/admin\/reconciliation\/'\)[\s\S]*?requireAdmin\(request, env\)/,
-  /method === 'POST' && path\.startsWith\('\/api\/reports\/'\)[\s\S]*?requireAdmin\(request, env\)/,
-  /method === 'POST' && path === '\/api\/sync\/purge'[\s\S]*?requireAdmin\(request, env\)/
+const routeGuards = [
+  { name: 'admin console', route: /method === 'GET' && path === '\/api\/admin\/console'[\s\S]*?requireAdmin\(request, env\)/ },
+  { name: 'admin overview', route: /method === 'GET' && path === '\/api\/admin\/overview'[\s\S]*?requireAdmin\(request, env\)/ },
+  { name: 'admin cleanup', route: /method === 'POST' && path === '\/api\/admin\/cleanup'[\s\S]*?requireAdmin\(request, env\)/ },
+  { name: 'admin payout', route: /method === 'POST' && path === '\/api\/admin\/payout'[\s\S]*?requireAdmin\(request, env\)/ },
+  { name: 'admin users list', route: /method === 'GET' && path === '\/api\/admin\/users'[\s\S]*?requireAdmin\(request, env\)/ },
+  { name: 'admin user status', route: /method === 'POST' && path\.startsWith\('\/api\/admin\/users\/'\) && path\.endsWith\('\/status'\)[\s\S]*?requireAdmin\(request, env\)/ },
+  { name: 'admin user kyc', route: /method === 'POST' && path\.startsWith\('\/api\/admin\/users\/'\) && path\.endsWith\('\/kyc'\)[\s\S]*?requireAdmin\(request, env\)/ },
+  { name: 'admin report status', route: /method === 'POST' && path\.startsWith\('\/api\/admin\/reports\/'\) && path\.endsWith\('\/status'\)[\s\S]*?requireAdmin\(request, env\)/ },
+  { name: 'admin listing status', route: /method === 'POST' && path\.startsWith\('\/api\/admin\/listings\/'\) && path\.endsWith\('\/status'\)[\s\S]*?requireAdmin\(request, env\)/ },
+  { name: 'report resolve', route: /method === 'POST' && path\.startsWith\('\/api\/reports\/'\) && path\.endsWith\('\/resolve'\)[\s\S]*?requireAdmin\(request, env\)/ },
+  { name: 'database purge', route: /method === 'POST' && path === '\/api\/sync\/purge'[\s\S]*?requireAdmin\(request, env\)/ }
 ];
 
-test('all privileged admin routes require server-side admin authorization', () => {
-  for (const routePattern of requiredGuards) {
-    assert.match(source, routePattern);
+test('all privileged admin routes are protected by server-side admin authorization', () => {
+  for (const { name, route } of routeGuards) {
+    assert.match(source, route, \`route should be present and guarded: \${name}\`);
   }
+
+  const reconciliationIndex = source.indexOf("path === '/api/admin/reconciliation/");
+  assert.ok(reconciliationIndex >= 0, 'reconciliation retry route should exist');
+  const nextRoute = source.indexOf("\n      if (method ===", reconciliationIndex + 1);
+  const block = source.slice(reconciliationIndex, nextRoute === -1 ? source.length : nextRoute);
+  assert.match(block, /requireAdmin\(request, env\)/);
 });
 
 test('requireAdmin requires active authentication plus allowlisted admin role', () => {
