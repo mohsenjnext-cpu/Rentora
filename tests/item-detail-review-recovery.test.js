@@ -9,7 +9,7 @@ test('item detail review loading exposes a visible retry action', () => {
   assert.match(source, /setReviewsError\(l\(/);
   assert.match(source, /role="alert"/);
   assert.match(source, /onClick=\{\(\) => setReviewRetryNonce\(v => v \+ 1\)\}/);
-  assert.match(source, /l\('تلاش مجدد', 'Try again'/);
+  assert.match(source, /localized\('تلاش مجدد', 'Try again'/);
 });
 
 test('item detail review retry reuses the authoritative review fetch path', () => {
