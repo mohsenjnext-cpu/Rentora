@@ -1226,7 +1226,7 @@ export default {
           piA2UWalletConfigured: Boolean(env?.PI_WALLET_PRIVATE_SEED),
           piA2UHorizonConfigured: Boolean(env?.PI_HORIZON_URL || 'https://api.testnet.minepi.com'),
         };
-        const healthy = Boolean(checks.piApiKeyConfigured && checks.databaseBound && checks.sessionStoreBound);
+        const healthy = Boolean(checks.piApiKeyConfigured && checks.piApiKeyValid && checks.databaseBound && checks.sessionStoreBound);
         return json({ ok: healthy, checks }, healthy ? 200 : 503, request, env);
       }
       if (request.method === 'POST' && path === '/api/auth/pi-login') {
