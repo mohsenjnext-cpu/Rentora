@@ -175,11 +175,11 @@ export default function AdminDashboardPage({ onNavigate }) {
     } catch (e) { setPayoutMessage(e.message || 'پرداخت ناموفق بود.'); }
   };
 
-  if (!isAdmin) return <div className="py-20 text-center"><Lock className="w-10 h-10 mx-auto text-rose-500 mb-3"/><h2 className="font-bold">دسترسی غیرمجاز (403)</h2></div>;
+  if (!isAdmin) return <div className="py-20 text-center" role="alert" aria-live="assertive"><Lock className="w-10 h-10 mx-auto text-rose-500 mb-3"/><h2 className="font-bold">دسترسی غیرمجاز (403)</h2></div>;
 
-  if (loading && !data) return <div className="py-24 text-center"><Loader2 className="w-7 h-7 mx-auto animate-spin text-[#534AB7]"/><p className="mt-3 text-xs text-slate-500">در حال بارگذاری مرکز مدیریت...</p></div>;
+  if (loading && !data) return <div className="py-24 text-center" role="status" aria-live="polite"><Loader2 className="w-7 h-7 mx-auto animate-spin text-[#534AB7]"/><p className="mt-3 text-xs text-slate-500">در حال بارگذاری مرکز مدیریت...</p></div>;
 
-  if (error && !data) return <div className="rentora-card p-6 text-center"><AlertTriangle className="w-8 h-8 mx-auto text-rose-500 mb-2"/><p className="text-sm">{error}</p><button type="button" aria-label="تلاش دوباره برای بارگذاری پنل مدیریت" onClick={load} className="btn-primary px-4 py-2 mt-4 text-xs">تلاش دوباره</button></div>;
+  if (error && !data) return <div className="rentora-card p-6 text-center" role="alert" aria-live="assertive"><AlertTriangle className="w-8 h-8 mx-auto text-rose-500 mb-2"/><p className="text-sm">{error}</p><button type="button" aria-label="تلاش دوباره برای بارگذاری پنل مدیریت" onClick={load} className="btn-primary px-4 py-2 mt-4 text-xs">تلاش دوباره</button></div>;
 
   const o = data?.overview || {};
   const t = data?.treasury || {};
