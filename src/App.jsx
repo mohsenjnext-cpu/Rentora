@@ -62,6 +62,7 @@ function MainApp() {
     publicProfileUsername,
     discoverInitialCategory,
     discoverInitialQuery,
+    chatInitialConversationId,
   });
 
   const pushNavigationState = (nextState) => {
