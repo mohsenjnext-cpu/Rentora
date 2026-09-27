@@ -195,7 +195,7 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
           setDataState({ loading: true, error: null });
           refreshApp?.().then(result => setDataState(result?.success ? { loading: false, error: null } : { loading: false, error: result?.error || l('دریافت آگهی‌ها ناموفق بود.', 'Unable to load listings.', 'تعذر تحميل الإعلانات.', '无法加载物品.') })).catch(error => setDataState({ loading: false, error: error?.message || l('دریافت آگهی‌ها ناموفق بود.', 'Unable to load listings.', 'تعذر تحميل الإعلانات.', '无法加载物品.') }));
         }} />
-      ) : {filteredItems.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <EmptyState
           type="search"
           title={t('discoverEmptyTitle')}
