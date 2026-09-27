@@ -560,7 +560,9 @@ test('FINAL REAL USER FLOW TEST: Complete end-to-end lifecycle', async () => {
     }), env);
     assert.equal(login1Res.status, 200);
     const user1Data = await login1Res.json();
-    const token1 = user1Data.sessionToken;
+    const sessionCookie1 = login1Res.headers.get('set-cookie') || '';
+    const token1 = decodeURIComponent(sessionCookie1.match(/__Host-rentora_session=([^;]+)/)?.[1] || '');
+    assert.ok(user1Data.authenticated);
     assert.ok(token1);
 
     // 2. View / Create Listing
@@ -610,7 +612,8 @@ test('FINAL REAL USER FLOW TEST: Complete end-to-end lifecycle', async () => {
     }), env);
     assert.equal(adminLoginRes.status, 200);
     const adminData = await adminLoginRes.json();
-    const adminToken = adminData.sessionToken;
+    const adminCookie = adminLoginRes.headers.get('set-cookie') || '';
+    const adminToken = decodeURIComponent(adminCookie.match(/__Host-rentora_session=([^;]+)/)?.[1] || '');
     assert.equal(adminData.user.role, 'admin');
 
     // 5. Admin Database Purge
