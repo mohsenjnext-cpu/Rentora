@@ -10,16 +10,14 @@ import {
   ReceiptText, 
   Bell, 
   Menu, 
-  ShieldCheck, 
   User, 
-  LayoutDashboard,
   MessageSquare,
   RotateCw,
   Check
 } from 'lucide-react';
 
 export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenChat }) {
-  const { t, dir, l } = useLanguage();
+  const { t, l } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const { 
     currentUser, 
@@ -68,93 +66,9 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
       <header className="hidden md:block sticky top-0 z-30 bg-white/92 dark:bg-[#121124]/92 backdrop-blur-xl border-b border-slate-200/70 dark:border-slate-800/70 transition-colors">
         <div className="w-full px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
           
-          {/* Logo + Horizontal Nav Links */}
-          <div className="flex items-center gap-6">
-            <button
-              type="button"
-              onClick={() => onNavigate('home')}
-              aria-label={t('navHome')}
-              aria-current={currentPage === 'home' ? 'page' : undefined}
-              className="flex items-center gap-2 focus:outline-none cursor-pointer"
-            >
-              <div className="w-8 h-8 rounded-lg bg-[#26215C] dark:bg-[#534AB7] flex items-center justify-center text-white p-1.5 shrink-0 shadow-xs">
-                <svg viewBox="0 0 100 100" fill="none" className="w-full h-full">
-                  <circle cx="50" cy="38" r="22" stroke="#FFFFFF" strokeWidth="6" strokeLinecap="round"/>
-                  <path d="M38 38h24" stroke="#FFFFFF" strokeWidth="6" strokeLinecap="round"/>
-                  <path d="M43 38v34M57 38v34" stroke="#FFFFFF" strokeWidth="6" strokeLinecap="round"/>
-                  <circle cx="50" cy="20" r="5" fill="#FACC15"/>
-                </svg>
-              </div>
-              <span className="font-semibold text-lg text-[#26215C] dark:text-white tracking-tight">
-                {t('appName')}
-              </span>
-            </button>
-
-            {/* Horizontal Nav Links */}
-            <nav className="flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300">
-              <button
-                type="button"
-                onClick={() => onNavigate('home')}
-                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                  currentPage === 'home'
-                    ? 'bg-[#EEEDFE] text-[#26215C] dark:bg-[#1E1B3D] dark:text-[#EEEDFE] font-bold'
-                    : 'hover:text-[#26215C] dark:hover:text-white'
-                }`}
-              >
-                {t('navHome')}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onNavigate('discover')}
-                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                  currentPage === 'discover'
-                    ? 'bg-[#EEEDFE] text-[#26215C] dark:bg-[#1E1B3D] dark:text-[#EEEDFE] font-bold'
-                    : 'hover:text-[#26215C] dark:hover:text-white'
-                }`}
-              >
-                {t('navDiscover')}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onNavigate('owner-hub')}
-                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                  currentPage === 'owner-hub'
-                    ? 'bg-[#EEEDFE] text-[#26215C] dark:bg-[#1E1B3D] dark:text-[#EEEDFE] font-bold'
-                    : 'hover:text-[#26215C] dark:hover:text-white'
-                }`}
-              >
-                {t('navOwnerHub')}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onNavigate('activity')}
-                className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                  currentPage === 'activity'
-                    ? 'bg-[#EEEDFE] text-[#26215C] dark:bg-[#1E1B3D] dark:text-[#EEEDFE] font-bold'
-                    : 'hover:text-[#26215C] dark:hover:text-white'
-                }`}
-              >
-                {t('navActivity')}
-              </button>
-
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => onNavigate('admin')}
-                  className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer ${
-                    currentPage === 'admin'
-                      ? 'bg-[#26215C] text-white font-bold'
-                      : 'text-[#534AB7] dark:text-[#AFA9EC] hover:bg-[#EEEDFE] dark:hover:bg-[#1E1B3D]'
-                  }`}
-                >
-                  <LayoutDashboard className="w-3.5 h-3.5 stroke-[1.8]" />
-                  <span>{t('navAdmin')}</span>
-                </button>
-              )}
-            </nav>
+          {/* Current section title. Primary desktop navigation lives in the Sidebar. */}
+          <div className="min-w-0 flex items-center">
+            <h1 className="text-sm font-bold text-slate-900 dark:text-white truncate">{getPageTitle(currentPage)}</h1>
           </div>
 
           {/* Right Actions (Desktop) */}
