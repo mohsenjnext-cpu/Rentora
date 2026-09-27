@@ -31,8 +31,18 @@ export default function Sidebar({
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : '';
-    return () => { document.body.style.overflow = ''; };
-  }, [mobileOpen]);
+    if (!mobileOpen) return () => { document.body.style.overflow = ''; };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setMobileOpen?.(false);
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [mobileOpen, setMobileOpen]);
 
   const handleNavClick = (tabId, params = {}) => {
     onNavigate?.(tabId, params);
@@ -224,7 +234,9 @@ export default function Sidebar({
         <div className="md:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
           <div className={`absolute inset-y-0 ${dir === 'rtl' ? 'right-0' : 'left-0'} shadow-2xl animate-fadeIn`}>
-            <Panel mobile />
+            <div role="dialog" aria-modal="true" aria-label={l('منوی کناری', 'Side menu', 'القائمة الجانبية', '侧边菜单')} className="h-full">
+              <Panel mobile />
+            </div>
           </div>
         </div>
       )}
