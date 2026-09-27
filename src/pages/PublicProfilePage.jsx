@@ -23,6 +23,8 @@ export default function PublicProfilePage({ username, onBack, onSelectItem, onRe
   const [profileLoadError, setProfileLoadError] = useState('');
   const [reviewsLoadError, setReviewsLoadError] = useState('');
   const [retryNonce, setRetryNonce] = useState(0);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [isReviewsLoading, setIsReviewsLoading] = useState(false);
   const targetUsername = String(username || '').replace('@', '').trim();
 
   useEffect(() => {
@@ -30,6 +32,8 @@ export default function PublicProfilePage({ username, onBack, onSelectItem, onRe
     let mounted = true;
     setProfileLoadError('');
     setReviewsLoadError('');
+    setIsProfileLoading(true);
+    setIsReviewsLoading(true);
     cloudSyncService.fetchPublicUserProfile(targetUsername)
       .then(u => {
         if (!mounted) return;
@@ -38,6 +42,9 @@ export default function PublicProfilePage({ username, onBack, onSelectItem, onRe
       })
       .catch((error) => {
         if (mounted) setProfileLoadError(error?.message || l('دریافت پروفایل ناموفق بود.', 'Could not load the public profile.', 'تعذر تحميل الملف العام.', '无法加载公开主页。'));
+      })
+      .finally(() => {
+        if (mounted) setIsProfileLoading(false);
       });
     fetchUserReviews(targetUsername)
       .then(data => {
@@ -46,6 +53,9 @@ export default function PublicProfilePage({ username, onBack, onSelectItem, onRe
       })
       .catch((error) => {
         if (mounted) setReviewsLoadError(error?.message || l('دریافت نظرات ناموفق بود.', 'Could not load reviews.', 'تعذر تحميل المراجعات.', '无法加载评价。'));
+      })
+      .finally(() => {
+        if (mounted) setIsReviewsLoading(false);
       });
     return () => { mounted = false; };
   }, [targetUsername, fetchUserReviews, retryNonce]);
@@ -67,6 +77,12 @@ export default function PublicProfilePage({ username, onBack, onSelectItem, onRe
           <button type="button" onClick={() => { try { navigator.share?.({ title: targetUser?.displayName || targetUsername, text: '@' + targetUsername }); } catch {} }} className="p-2 rounded-xl border border-slate-200 dark:border-slate-700" title={l('اشتراک‌گذاری', 'Share', 'مشاركة', '分享')}><Share2 className="w-4 h-4" /></button>
         </div>
       </div>
+
+      {(isProfileLoading || isReviewsLoading) && (
+        <div role="status" aria-live="polite" aria-busy="true" className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold">
+          {l('در حال بارگذاری پروفایل و نظرات...', 'Loading profile and reviews...', 'جارٍ تحميل الملف والمراجعات...', '正在加载主页和评价...')}
+        </div>
+      )}
 
       {(profileLoadError || reviewsLoadError) && (
         <div role="alert" className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300 text-xs font-semibold flex items-center justify-between gap-3">
