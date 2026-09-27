@@ -62,11 +62,11 @@ export class CloudSyncService {
       const updated = [data, ...users.filter(u => u.username?.toLowerCase() !== data.username?.toLowerCase())];
       this.saveCachedUsers(updated);
       this.notifySubscribers('USER_SYNC', { users: updated, user: data });
-    } else if (type === 'RENTAL_UPDATE' && data) {
-      const rentals = this.getCachedRentals();
-      const updated = [data, ...rentals.filter(r => r.id !== data.id)];
-      this.saveCachedRentals(updated);
-      this.notifySubscribers('RENTAL_SYNC', { rentals: updated, rental: data });
+    } else if (type === 'RENTAL_UPDATE') {
+      // BroadcastChannel is a client-side transport and is not an authority boundary.
+      // Never accept a rental payload from another tab as business truth. Re-fetch
+      // authoritative rental state from the server instead.
+      this.fetchSharedData(true).catch(() => {});
     }
   }
 
