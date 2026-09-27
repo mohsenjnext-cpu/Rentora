@@ -1622,14 +1622,25 @@ export default {
         const existing = await env.RENTORA_DB.prepare('SELECT * FROM listings WHERE id=?1 LIMIT 1').bind(item.id).first();
         if (existing) {
           if (existing.owner_user_id !== user.id && !isAdmin(user.pi_uid, env)) return errorResponse('Listing ownership denied', 403, env, undefined, origin);
-          const isDeleting = item.status === 'deleted' && existing.status !== 'deleted';
+          const requestedStatus = item.status;
+          const nextStatus = requestedStatus === undefined || requestedStatus === null || requestedStatus === ''
+            ? existing.status
+            : String(requestedStatus).trim().toLowerCase();
+          const isAdminUser = isAdmin(user.pi_uid, env);
+          if (!['active', 'paused', 'deleted'].includes(nextStatus)) {
+            return errorResponse('Invalid listing status', 400, env, undefined, origin);
+          }
+          if (existing.status === 'deleted' && nextStatus !== 'deleted' && !isAdminUser) {
+            return errorResponse('Deleted listings cannot be restored through client sync', 403, env, undefined, origin);
+          }
+          const isDeleting = nextStatus === 'deleted' && existing.status !== 'deleted';
           const existingMeta = parseMetadata(existing.metadata);
           const price = Number(item.pricePerDay ?? existing.price_per_day);
           const deposit = Number(item.deposit ?? existing.deposit_amount);
           if (!Number.isFinite(price) || price < 0 || !Number.isFinite(deposit) || deposit < 0) {
             return errorResponse('Invalid listing price', 400, env, undefined, origin);
           }
-          await env.RENTORA_DB.prepare(`UPDATE listings SET title=?1,description=?2,category=?3,location=?4,price_per_day=?5,deposit_amount=?6,status=?7,metadata=?8,updated_at=?9 WHERE id=?10`).bind(String(item.title).trim(), item.description || '', item.category || null, item.location || null, price, deposit, item.status || 'active', JSON.stringify(sanitizedItem), now(), item.id).run();
+          await env.RENTORA_DB.prepare(`UPDATE listings SET title=?1,description=?2,category=?3,location=?4,price_per_day=?5,deposit_amount=?6,status=?7,metadata=?8,updated_at=?9 WHERE id=?10`).bind(String(item.title).trim(), item.description || '', item.category || null, item.location || null, price, deposit, nextStatus, JSON.stringify(sanitizedItem), now(), item.id).run();
           if (cInfo && typeof cInfo === 'object') {
             const cName = String(cInfo.contactName || cInfo.name || '').trim() || null;
             const cPhone = String(cInfo.contactPhone || cInfo.phone || cInfo.phoneContact || '').trim() || null;
