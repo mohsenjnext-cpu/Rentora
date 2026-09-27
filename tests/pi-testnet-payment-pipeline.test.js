@@ -128,9 +128,18 @@ test('Auth: Normal authenticated user can access GET /api/auth/me without 403 Fo
     headers: { 'Authorization': 'Bearer renter_token_abc' }
   });
 
-  const res = await gateway.fetch(req, env, {});
-  assert.equal(res.status, 200);
-  const data = await res.json();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = typeof input === 'string' ? input : input?.url;
+    if (url === 'https://api.minepi.com/v2/payments/probe_health_check') {
+      return new Response(JSON.stringify({}), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+    return originalFetch(input, init);
+  };
+  try {
+    const res = await gateway.fetch(req, env, {});
+    assert.equal(res.status, 200);
+    const data = await res.json();
   assert.equal(data.authenticated, true);
   assert.equal(data.user.username, 'renter_pioneer');
   assert.equal(data.isAdmin, false);
@@ -167,6 +176,10 @@ test('Health: GET /api/health returns 200 and passes all readiness checks', asyn
   assert.equal(data.checks.piApiKeyConfigured, true);
   assert.equal(data.checks.databaseBound, true);
   assert.equal(data.checks.sessionStoreBound, true);
+  assert.equal(data.checks.piApiKeyValid, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('Pi SDK Configuration: index.html configures sandbox: false for Pi Testnet', async () => {
