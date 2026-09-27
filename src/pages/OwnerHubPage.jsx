@@ -300,11 +300,20 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
                     aria-label={l(`مشاهده آگهی ${item.title || ''}`, `View listing ${item.title || ''}`, `عرض الإعلان ${item.title || ''}`, `查看物品 ${item.title || ''}`)}
                     className="flex items-center gap-3 min-w-0 cursor-pointer flex-1 text-start bg-transparent border-0 p-0"
                   >
-                    <img
-                      src={item.images?.[0] || 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80'}
-                      alt=""
-                      className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
-                    />
+                    {item.images?.[0] ? (
+                      <img
+                        src={item.images[0]}
+                        alt=""
+                        className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                      />
+                    ) : (
+                      <span
+                        className="w-12 h-12 rounded-lg border border-slate-200 dark:border-slate-700 shrink-0 bg-[#EEEDFE] dark:bg-[#211E45] text-[#534AB7] flex items-center justify-center"
+                        aria-hidden="true"
+                      >
+                        <Package className="w-5 h-5 stroke-[1.6]" />
+                      </span>
+                    )}
                     <div className="min-w-0">
                       <h4 className="font-bold text-xs text-slate-900 dark:text-white truncate">{item.title}</h4>
                       <div className="flex items-center gap-1.5 mt-0.5">
