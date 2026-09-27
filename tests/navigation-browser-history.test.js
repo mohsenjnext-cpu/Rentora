@@ -18,3 +18,6 @@ console.log('Browser navigation history recovery checks passed.');
 assert.match(source, /const handleBrowserBack = \(fallbackTab = 'discover'\)/, 'in-app back actions must use the shared browser-history recovery path');
 assert.match(source, /onBack=\{\(\) => handleBrowserBack\(previousTab \|\| 'discover'\)\}/, 'item and public profile back actions must unwind browser history');
 assert.match(source, /onCancelEdit=\{\(\) => \{ setEditingItem\(null\); handleBrowserBack\(previousTab \|\| 'owner-hub'\); \}\}/, 'cancel edit must unwind browser history instead of leaving a stale history entry');
+
+assert.match(source, /onNavigateToActivity=\{\(\) => handleNavigate\('activity'\)\}/, 'item detail activity navigation must create a browser history entry');
+assert.match(source, /onNavigateToOwnerHub=\{\(\) => handleNavigate\('owner-hub'\)\}/, 'item detail owner hub navigation must create a browser history entry');
