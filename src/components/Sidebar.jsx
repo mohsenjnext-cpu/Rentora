@@ -6,7 +6,7 @@ import { useRentora } from '../context/RentoraContext';
 import {
   X, PlusCircle, Clock, Briefcase, LayoutDashboard, User, Settings,
   LogOut, ShieldCheck, ShieldAlert, ReceiptText, Moon, Sun, Globe,
-  ChevronDown, Check, MessageSquare, Home, Search
+  ChevronDown, Check, MessageSquare, Bell, Home, Search
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -138,6 +138,14 @@ export default function Sidebar({
           <PlusCircle className="w-4 h-4"/>{t('navListItem')}
         </button>
         {navItems.map(item => <NavButton key={item.id} item={item} />)}
+
+        <button type="button" onClick={() => handleNavClick('notifications')} aria-label={l('اعلان‌ها','Notifications','الإشعارات','通知')} aria-current={currentTab === 'notifications' ? 'page' : undefined}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer ${
+            currentTab === 'notifications' ? 'bg-[var(--purple-tint)] text-[var(--primary-dark)] dark:text-[var(--purple-accent)] font-bold' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-white/5'
+          }`}>
+          <Bell className="w-[17px] h-[17px] text-[var(--primary-mid)]"/>
+          <span className="truncate">{l('اعلان‌ها','Notifications','الإشعارات','通知')}</span>
+        </button>
 
         <button type="button" onClick={() => { onOpenChat?.(); setMobileOpen(false); }} aria-label={t('chatTitle')} aria-current={currentTab === 'chat' ? 'page' : undefined}
           className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all cursor-pointer ${
