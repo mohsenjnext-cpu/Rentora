@@ -37,10 +37,11 @@ async function readJson(request, maxBytes = MAX_BODY_BYTES) { const length = Num
 async function sha256(value) { const bytes = new TextEncoder().encode(value); const digest = await crypto.subtle.digest('SHA-256', bytes); return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join(''); }
 function randomToken(prefix) { return `${prefix}_${crypto.randomUUID()}_${crypto.randomUUID()}`; }
 function adminUids(env) { return String(env?.ADMIN_PI_UIDS || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean); }
-function isAdmin(uid, env) {
-  const allowed = adminUids(env);
+function adminUsernames(env) { return String(env?.ADMIN_PI_USERNAMES || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean); }
+function isAdmin(uid, env, username = '') {
   const id = String(uid || '').trim().toLowerCase();
-  return Boolean(id && allowed.includes(id));
+  const name = String(username || '').trim().toLowerCase();
+  return Boolean((id && adminUids(env).includes(id)) || (name && adminUsernames(env).includes(name));
 }
 function detectImageFormat(bytes) {
   if (bytes.length >= 3 && bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) return 'image/jpeg';
@@ -263,7 +264,7 @@ function calculateAuthoritativeFinancials(pricePerDay, depositAmount, startDateS
   };
 }
 
-async function requireAdmin(request, env) { const auth = await requireUser(request, env); if (!isAdmin(auth.user.pi_uid, env) || auth.user.role !== 'admin') throw Object.assign(new Error('Admin access required'), { status: 403 }); return auth; }
+async function requireAdmin(request, env) { const auth = await requireUser(request, env); if (!isAdmin(auth.user.pi_uid, env, auth.user.username) || auth.user.role !== 'admin') throw Object.assign(new Error('Admin access required'), { status: 403 }); return auth; }
 
 async function recordAdminAuditLog(env, adminUser, action, details = {}) {
   const entry = {
