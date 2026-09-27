@@ -56,7 +56,12 @@ function createMockEnv(initialData = {}) {
                 };
               }
               if (query.includes('FROM conversations') && query.includes('WHERE listing_id = ?1 AND renter_user_id = ?2 AND type = ?3')) {
-                return dbData.conversations.find(c => c.listing_id === params[0] && c.renter_user_id === params[1] && c.type === params[2]) || null;
+                return dbData.conversations.find(c =>
+                  c.listing_id === params[0] &&
+                  c.renter_user_id === params[1] &&
+                  c.type === params[2] &&
+                  (!query.includes('status != \'archived\'') || c.status !== 'archived')
+                ) || null;
               }
               if (query.includes('FROM conversations') && query.includes('WHERE c.id = ?1') || query.includes('WHERE id=?1')) {
                 const c = dbData.conversations.find(item => item.id === params[0]);
