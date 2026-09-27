@@ -13,8 +13,8 @@ export default function NotificationsPage({ onNavigate, onOpenChat }) {
 
   const notifications = useMemo(() => {
     const events = [];
-    const add = (id, type, title, detail, time, action) => {
-      if (id && time) events.push({ id, type, title, detail, time, action });
+    const add = (id, type, title, detail, time, action, targetId = null) => {
+      if (id && time) events.push({ id, type, title, detail, time, action, targetId });
     };
     (rentals || []).forEach(r => add('rental:' + (r.id || r.bookingNumber), 'rentals',
       l('وضعیت اجاره به‌روزرسانی شد', 'Rental status updated', 'تم تحديث حالة الإيجار', '租赁状态已更新'),
@@ -48,7 +48,7 @@ export default function NotificationsPage({ onNavigate, onOpenChat }) {
 
   const openNotification = n => {
     setReadIds(prev => new Set(prev).add(n.id));
-    if (n.action === 'chat' && onOpenChat) return onOpenChat(null);
+    if (n.action === 'chat' && onOpenChat) return onOpenChat(n.targetId);
     onNavigate(n.action === 'profile' ? 'profile' : 'activity');
   };
 

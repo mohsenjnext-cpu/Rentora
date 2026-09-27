@@ -6,7 +6,7 @@ import { useRentora } from '../context/RentoraContext';
 import { inspectMessageSafety } from '../services/contactFilterService';
 import ReportModal from '../components/ReportModal';
 
-export default function ChatPage({ onNavigate }) {
+export default function ChatPage({ onNavigate, initialConversationId = null }) {
   const { lang, dir, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen } = usePiAuth();
   const {
@@ -79,6 +79,11 @@ export default function ChatPage({ onNavigate }) {
   };
 
   useEffect(() => { loadList(); }, [isAuthenticated]);
+  useEffect(() => {
+    if (!initialConversationId || selectedId || !conversations.length) return;
+    if (conversations.some(c => c.id === initialConversationId)) setSelectedId(initialConversationId);
+  }, [initialConversationId, conversations, selectedId]);
+
   useEffect(() => { if (selectedId) loadMessages(selectedId); else setMessages([]); }, [selectedId]);
 
   useEffect(() => {
