@@ -4,9 +4,7 @@
  */
 import { getApiBaseUrl } from './apiConfig.js';
 
-const STORAGE_ITEMS_KEY = 'rentora_live_v1_items';
 const STORAGE_RENTALS_KEY = 'rentora_live_v1_rentals';
-const STORAGE_USERS_KEY = 'rentora_live_v1_users_dir';
 const STORAGE_USER_KEY = 'rentora_live_v1_session';
 
 export class CloudSyncService {
@@ -53,10 +51,8 @@ export class CloudSyncService {
   handleIncomingBroadcast(payload) {
     const { type, data } = payload;
     if (type === 'NEW_ITEM' && data) {
-      const items = this.getCachedItems();
-      const updated = [data, ...items.filter(i => i.id !== data.id)];
-      this.saveCachedItems(updated);
-      this.notifySubscribers('ITEM_ADDED', { items: updated, item: data });
+      // BroadcastChannel is a transport only. Marketplace truth stays server-authoritative.
+      this.notifySubscribers('ITEM_ADDED', { items: [data], item: data });
     } else if (type === 'USER_PROFILE' && data) {
       const users = this.getCachedUsers();
       const updated = [data, ...users.filter(u => u.username?.toLowerCase() !== data.username?.toLowerCase())];
@@ -142,10 +138,6 @@ export class CloudSyncService {
       if (data.user) userObj = data.user;
     }
 
-    const cachedUsers = this.getCachedUsers();
-    const updatedUsers = [userObj, ...cachedUsers.filter(u => u.username?.toLowerCase() !== userObj.username?.toLowerCase())];
-    this.saveCachedUsers(updatedUsers);
-
     try {
       this.broadcastChannel?.postMessage({ type: 'USER_PROFILE', data: userObj });
     } catch (e) {}
@@ -169,10 +161,6 @@ export class CloudSyncService {
       }
       if (data.item) item = data.item;
     }
-
-    const cached = this.getCachedItems();
-    const updated = [item, ...cached.filter(i => i.id !== item.id)];
-    this.saveCachedItems(updated);
 
     try {
       this.broadcastChannel?.postMessage({ type: 'NEW_ITEM', data: item });
@@ -914,23 +902,13 @@ export class CloudSyncService {
     }, 8000);
   }
 
+  // Marketplace listings are business data and must never be persisted in browser storage.
   getCachedItems() {
-    try {
-      const saved = localStorage.getItem(STORAGE_ITEMS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    return [];
   }
 
-  saveCachedItems(items) {
-    try {
-      localStorage.setItem(STORAGE_ITEMS_KEY, JSON.stringify(items || []));
-    } catch (e) {}
+  saveCachedItems() {
+    // Intentionally a no-op for backward-compatible callers.
   }
 
   getCachedRentals() {
@@ -954,33 +932,20 @@ export class CloudSyncService {
         localStorage.removeItem('rentora_db_transactions_v8');
         localStorage.removeItem('rentora_db_reports_v8');
         localStorage.removeItem('rentora_live_v1_session');
+        localStorage.removeItem('rentora_live_v1_items');
+        localStorage.removeItem('rentora_live_v1_users_dir');
       }
     } catch (_) {}
     this.lastSyncedHash = '';
   }
 
+  // User profiles can contain private/business data and remain server-authoritative.
   getCachedUsers() {
-    try {
-      const saved = localStorage.getItem(STORAGE_USERS_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
+    return [];
   }
 
-  saveCachedUsers(users) {
-    try {
-      const safeUsers = (Array.isArray(users) ? users : []).map((user) => {
-        if (!user || typeof user !== 'object') return user;
-        const { sessionToken, accessToken, ...safeUser } = user;
-        return safeUser;
-      });
-      localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(safeUsers));
-    } catch (e) {}
+  saveCachedUsers() {
+    // Intentionally a no-op for backward-compatible callers.
   }
 
   subscribe(callback) {
