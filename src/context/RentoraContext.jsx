@@ -75,7 +75,7 @@ export function RentoraProvider({ children }) {
     } catch (e) {
       return [];
     }
-  }, [userIdentifier, usernameIdentifier, getReadTimestamps]);
+  }, [userIdentifier, usernameIdentifier]);
 
   useEffect(() => {
     refreshConversations().finally(() => {
