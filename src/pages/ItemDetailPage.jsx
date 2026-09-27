@@ -40,7 +40,7 @@ export default function ItemDetailPage({
   const [detailItem, setDetailItem] = useState(initialItem || null);
   const [detailLoading, setDetailLoading] = useState(!initialItem && !!itemId);
   const [detailError, setDetailError] = useState('');
-  const imagesList = Array.isArray(detailItem?.images) ? item.images.filter(Boolean) : [];
+  const imagesList = Array.isArray(detailItem?.images) ? detailItem.images.filter(Boolean) : [];
   const hasGallery = imagesList.length > 0;
   const localized = (fa, en, ar, zh) => l(fa, en, ar, zh);
 
