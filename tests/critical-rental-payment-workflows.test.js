@@ -37,6 +37,23 @@ test('critical rental workflow keeps quote -> rental authority on the server', (
 });
 
 test('payment intent derives the Pi amount from the persisted rental fee', () => {
+
+test('payment intent reuses an approved/completed intent without resetting the rental or Pi binding', () => {
+  const start = worker.indexOf("path === '/api/payments/intent'");
+  const end = worker.indexOf("path === '/api/payments/approve'", start);
+  assert.ok(start >= 0 && end > start, 'payment intent route must exist');
+  const block = worker.slice(start, end);
+  assert.match(block, /\['approved', 'completed'\]\.includes\(String\(existing\.status \|\| ''\)\.toLowerCase\(\)\)/);
+  assert.match(block, /idempotent: true/);
+  assert.match(block, /existing\.expires_at/);
+  const reuseGuard = block.indexOf("if (existing && ['approved', 'completed'].includes");
+  const resetUpdate = block.indexOf("UPDATE payment_intents SET id=?1, amount=?2, memo=?3, status='created'");
+  assert.ok(reuseGuard >= 0 && resetUpdate > reuseGuard, 'approved/completed reuse guard must run before the reset path');
+  const rentalReset = block.indexOf("UPDATE rentals SET payment_status='pending', status='pending_payment'");
+  assert.ok(rentalReset > reuseGuard, 'rental reset must occur only after the approved/completed reuse guard');
+});
+
+
   const start = worker.indexOf("path === '/api/payments/intent'");
   const end = worker.indexOf("path === '/api/payments/approve'", start);
   assert.ok(start >= 0 && end > start, 'payment intent route must exist');
