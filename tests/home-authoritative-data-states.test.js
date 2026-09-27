@@ -9,4 +9,7 @@ test('home handles authoritative listing loading and error states', () => {
   assert.match(source, /dataState\.loading \|\| isRefreshing/);
   assert.match(source, /dataState\.error \?/);
   assert.match(source, /تلاش دوباره/);
+  assert.match(source, /activeCategoryCount/);
+  assert.doesNotMatch(source, /homeStatPioneers/);
+  assert.doesNotMatch(source, /const \{ users = \[\], currentUser \}/);
 });
