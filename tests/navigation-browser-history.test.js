@@ -28,3 +28,9 @@ assert.match(source, /onBookingSuccess=\{\(\) => \{ setIsDirectBookingOpen\(fals
 
 assert.match(source, /onItemCreated=\{\(newItem\) => \{ setEditingItem\(null\); handleSelectItem\(newItem\); \}\}/, 'listing creation must preserve browser history when opening the new detail');
 assert.match(source, /onItemUpdated=\{\(updatedItem\) => \{ setEditingItem\(null\); handleSelectItem\(updatedItem\); \}\}/, 'listing update must preserve browser history when opening the updated detail');
+
+assert.doesNotMatch(
+  fs.readFileSync('src/pages/ListItemPage.jsx', 'utf8'),
+  /setTimeout\(\(\) => \{\s*if \(onNavigate\) onNavigate\('owner-hub'\);\s*\}, 1200\);/,
+  'listing save must not schedule a delayed owner-hub navigation after opening the saved detail'
+);
