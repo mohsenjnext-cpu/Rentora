@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 const source = fs.readFileSync('src/pages/PublicProfilePage.jsx', 'utf8');
 
 assert.match(source, /profileLoadError/);
+assert.match(fs.readFileSync('src/App.jsx', 'utf8'), /const normalizeUsername =/);
+assert.match(fs.readFileSync('src/App.jsx', 'utf8'), /normalizeUsername\(currentUser\.username\) === normalizeUsername\(username\)/);
 assert.match(source, /reviewsLoadError/);
 assert.match(source, /retryNonce/);
 assert.match(source, /fetchPublicUserProfile\(targetUsername\)/);

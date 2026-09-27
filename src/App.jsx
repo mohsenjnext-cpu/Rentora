@@ -33,6 +33,8 @@ import SettingsPage from './pages/SettingsPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ChatPage from './pages/ChatPage';
 
+const normalizeUsername = (value) => String(value || '').toLowerCase().replace(/^@+/, '').trim();
+
 function MainApp() {
   const { dir } = useLanguage();
   const { isAdmin, currentUser } = usePiAuth();
@@ -183,7 +185,7 @@ function MainApp() {
   };
 
   const handleOpenPublicProfile = (username) => {
-    if (currentUser && currentUser.username?.toLowerCase() === String(username).toLowerCase().replace('@', '')) {
+    if (currentUser && normalizeUsername(currentUser.username) === normalizeUsername(username)) {
       setCurrentTab('profile');
       return;
     }
