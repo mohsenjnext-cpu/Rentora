@@ -128,15 +128,6 @@ test('Auth: Normal authenticated user can access GET /api/auth/me without 403 Fo
     headers: { 'Authorization': 'Bearer renter_token_abc' }
   });
 
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (input, init) => {
-    const url = typeof input === 'string' ? input : input?.url;
-    if (url === 'https://api.minepi.com/v2/payments/probe_health_check') {
-      return new Response(JSON.stringify({}), { status: 404, headers: { 'Content-Type': 'application/json' } });
-    }
-    return originalFetch(input, init);
-  };
-  try {
     const res = await gateway.fetch(req, env, {});
     assert.equal(res.status, 200);
     const data = await res.json();
@@ -169,7 +160,17 @@ test('Health: GET /api/health returns 200 and passes all readiness checks', asyn
   const env = createMockEnv(d1);
   const req = new Request('https://rentora.workers.dev/api/health', { method: 'GET' });
 
-  const res = await gateway.fetch(req, env, {});
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = typeof input === 'string' ? input : input?.url;
+    if (url === 'https://api.minepi.com/v2/payments/probe_health_check') {
+      return new Response(JSON.stringify({}), { status: 404, headers: { 'Content-Type': 'application/json' } });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const res = await gateway.fetch(req, env, {});
   assert.equal(res.status, 200);
   const data = await res.json();
   assert.equal(data.ok, true);
