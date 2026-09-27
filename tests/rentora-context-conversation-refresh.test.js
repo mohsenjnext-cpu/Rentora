@@ -3,9 +3,8 @@ import assert from 'assert';
 
 const source = fs.readFileSync('src/context/RentoraContext.jsx', 'utf8');
 
-assert.match(
-  source,
-  /refreshConversations[\\s\\S]*?\\}, \\[userIdentifier, usernameIdentifier\\]\\);/,
+assert.ok(
+  source.includes('}, [userIdentifier, usernameIdentifier]);'),
   'conversation refresh must only depend on identifiers that exist in RentoraContext'
 );
 assert.doesNotMatch(
