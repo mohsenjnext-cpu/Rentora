@@ -1535,6 +1535,9 @@ export default {
         if (!completionResponse.ok && !['completed','complete'].includes(status)) {
           return errorResponse('Pi payment completion failed', 502, env, { details: completion }, origin);
         }
+        if (!completionResponse.ok) {
+          return errorResponse('Pi payment completion failed', 502, env, { details: completion }, origin);
+        }
 
         await env.RENTORA_DB.batch([
           env.RENTORA_DB.prepare(`UPDATE payment_intents SET pi_payment_id=?1,pi_txid=?2,status='completed',updated_at=?3 WHERE id=?4 AND status IN ('approved','completed')`).bind(body.paymentId, body.txid, now(), intent.id),
