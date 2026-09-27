@@ -26,7 +26,12 @@ export default function NotificationsPage({ onNavigate, onOpenChat }) {
       l('گفتگو به‌روزرسانی شد', 'Conversation updated', 'تم تحديث المحادثة', '对话已更新'),
       c.lastMessageText || l('پیام جدید در گفتگو', 'New message in conversation', 'رسالة جديدة في المحادثة', '对话中有新消息'),
       c.lastMessageAt || c.updatedAt || c.createdAt, 'chat'));
-    (items || []).forEach(item => add('listing:' + (item.id || item.updatedAt || item.createdAt), 'listings',
+    (items || []).filter(item => {
+      const ownerUid = item.ownerUid || item.owner_uid || item.ownerId || '';
+      const ownerUsername = String(item.ownerUsername || item.owner_username || '').replace('@', '').trim().toLowerCase();
+      const username = String(currentUser?.username || '').replace('@', '').trim().toLowerCase();
+      return Boolean((currentUser?.uid && ownerUid && ownerUid === currentUser.uid) || (ownerUsername && username && ownerUsername === username));
+    }).forEach(item => add('listing:' + (item.id || item.updatedAt || item.createdAt), 'listings',
       l('آگهی به‌روزرسانی شد', 'Listing updated', 'تم تحديث الإعلان', '物品信息已更新'),
       (item.title || l('آگهی', 'Listing', 'إعلان', '物品')) + ' • ' + (item.status || ''), item.updatedAt || item.createdAt, 'activity'));
     if (currentUser && currentUser.kycStatus === 'verified') add('kyc:' + (currentUser.uid || currentUser.username), 'system',
