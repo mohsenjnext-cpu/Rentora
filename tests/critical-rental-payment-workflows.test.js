@@ -36,7 +36,9 @@ test('critical rental workflow keeps quote -> rental authority on the server', (
   assert.match(rentalBlock, /'pending_payment'/);
 });
 
-test('payment intent derives the Pi amount from the persisted rental fee', () => {test('payment intent reuses an approved/completed intent without resetting the rental or Pi binding', () => {
+test('payment intent derives the Pi amount from the persisted rental fee', () => {
+
+test('payment intent reuses an approved/completed intent without resetting the rental or Pi binding', () => {
   const start = worker.indexOf("path === '/api/payments/intent'");
   const end = worker.indexOf("path === '/api/payments/approve'", start);
   assert.ok(start >= 0 && end > start, 'payment intent route must exist');
