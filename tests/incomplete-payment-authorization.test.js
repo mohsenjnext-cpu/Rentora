@@ -14,6 +14,6 @@ test('incomplete Pi payment recovery requires an authenticated session', () => {
 
 test('incomplete Pi recovery must resolve the payment intent to its owning user', () => {
   assert.match(route, /WHERE pi\.pi_payment_id=\?1 LIMIT 1/);
-  assert.match(route, /intent\.user_id/);
-  assert.match(route, /user\.id/);
+  assert.match(route, /if \(intent\.user_id !== user\.id\)/);
+  assert.match(route, /Access denied to incomplete Pi payment recovery/);
 });
