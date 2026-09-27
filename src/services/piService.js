@@ -262,7 +262,7 @@ class PiNetworkService {
       return await executeNativePayment();
     } catch (err) {
       const errMsg = String(err?.message || '').toLowerCase();
-      if (errMsg.includes('scope') || errMsg.includes('payment') || errMsg.includes('authenticate')) {
+      if (errMsg.includes('scope') || errMsg.includes('authenticate')) {
         this.isSdkAuthenticated = false;
         await this.authenticate();
         return await executeNativePayment();
