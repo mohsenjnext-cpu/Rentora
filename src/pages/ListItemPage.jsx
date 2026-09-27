@@ -242,9 +242,7 @@ export default function ListItemPage({
 
       if (isEditMode) {
         // Edit Mode
-        const finalImages = images.length > 0
-          ? images
-          : [presetImages[category]?.[0] || presetImages.tools[0]];
+        const finalImages = images.length > 0 ? images : [];
 
         const updatedItem = await updateItem(itemToEdit.id, {
           title: title.trim(),
