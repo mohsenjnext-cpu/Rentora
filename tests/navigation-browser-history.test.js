@@ -22,3 +22,6 @@ assert.match(source, /onCancelEdit=\{\(\) => \{ setEditingItem\(null\); handleBr
 assert.match(source, /onNavigateToActivity=\{\(\) => handleNavigate\('activity'\)\}/, 'item detail activity navigation must create a browser history entry');
 assert.match(source, /onNavigateToOwnerHub=\{\(\) => handleNavigate\('owner-hub'\)\}/, 'item detail owner hub navigation must create a browser history entry');
 assert.match(source, /if \(currentUser && normalizeUsername\(currentUser\.username\) === normalizeUsername\(username\)\) \{\s*handleNavigate\('profile'\);/, 'self-profile routing must preserve browser history');
+
+assert.match(source, /onNavigate=\{\(page\) => \{ setEditingItem\(null\); handleNavigate\(page\); \}\}/, 'listing page navigation must preserve browser history');
+assert.match(source, /onBookingSuccess=\{\(\) => \{ setIsDirectBookingOpen\(false\); setDirectBookingItem\(null\); handleNavigate\('activity'\); \}\}/, 'successful booking navigation must preserve browser history');
