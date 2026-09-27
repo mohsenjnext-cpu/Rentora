@@ -84,7 +84,7 @@ export default function Sidebar({
   };
 
   const Panel = ({ mobile = false }) => (
-    <aside className={`rentora-sidebar-panel h-full w-[272px] bg-white/96 dark:bg-[#121124]/98 border-slate-200/80 dark:border-slate-800/80 flex flex-col shadow-sm ${
+    <aside aria-label={l('منوی اصلی','Main navigation','التنقل الرئيسي','主导航')} className={`rentora-sidebar-panel h-full w-[272px] bg-white/96 dark:bg-[#121124]/98 border-slate-200/80 dark:border-slate-800/80 flex flex-col shadow-sm ${
       mobile ? (dir === 'rtl' ? 'border-r' : 'border-l') : (dir === 'rtl' ? 'border-l' : 'border-r')
     }`}>
       <div className="h-16 px-4 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between shrink-0">
@@ -148,7 +148,7 @@ export default function Sidebar({
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+      <nav aria-label={l('ناوبری اصلی','Primary navigation','التنقل الأساسي','主要导航')} className="flex-1 overflow-y-auto p-3 space-y-1">
         <button type="button" onClick={() => handleNavClick('list-item')}
           className="btn-primary w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold mb-2 cursor-pointer shadow-sm">
           <PlusCircle className="w-4 h-4"/>{t('navListItem')}
