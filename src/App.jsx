@@ -194,7 +194,7 @@ function MainApp() {
 
   const handleOpenPublicProfile = (username) => {
     if (currentUser && normalizeUsername(currentUser.username) === normalizeUsername(username)) {
-      setCurrentTab('profile');
+      handleNavigate('profile');
       return;
     }
     setPublicProfileUsername(username);
