@@ -23,4 +23,4 @@ assert.match(notifications, /const result = await refreshApp\?\.\(\)/, 'notifica
 
 assert.match(chat, /role="status" aria-live="polite"/, 'chat must expose a loading status for conversations or messages');
 assert.match(chat, /role="alert" aria-live="polite"/, 'chat warnings must be exposed as live alerts');
-assert.match(chat, /onClick=\{loadMessages\(selectedId\)\}/, 'chat message retry must reload the selected conversation');
+assert.match(chat, /onClick=\{\(\) => loadMessages\(selectedId\)\}/, 'chat message retry must reload the selected conversation');
