@@ -11,6 +11,6 @@ assert.match(source, /role="alert"/, 'public profile errors must be exposed as a
 assert.match(source, /setRetryNonce\(v => v \+ 1\)/, 'public profile recovery must retry authoritative requests');
 assert.match(source, /fetchPublicUserProfile\(targetUsername\)/, 'public profile must use the real public profile service');
 assert.match(source, /fetchUserReviews\(targetUsername\)/, 'public profile must use the real reviews service');
-assert.match(source, /status !== 'active'/, 'public profile must render only active listings');
+assert.match(source, /!i\.status \|\| i\.status === 'active'/, 'public profile must render only active listings');
 
 console.log('Public profile state and authority checks passed.');
