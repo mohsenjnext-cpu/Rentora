@@ -13,3 +13,9 @@ console.log('Notifications and chat accessibility checks passed.');
 assert.match(notifications, /items \|\| \[\]\)\.filter\(item => \{/, 'listing notifications must filter to current user owned listings');
 assert.match(notifications, /ownerUid && ownerUid === currentUser\.uid/, 'listing notifications must match the authenticated owner UID');
 assert.match(notifications, /ownerUsername && username && ownerUsername === username/, 'listing notifications must fall back to the authenticated owner username');
+
+
+assert.match(notifications, /role="status" aria-live="polite"/, 'notifications must expose a loading status');
+assert.match(notifications, /role="alert"/, 'notifications must expose a recoverable load error');
+assert.match(notifications, /onClick=\{refreshNotifications\}/, 'notifications retry must refresh authoritative account data');
+assert.match(notifications, /const result = await refreshApp\?\.\(\)/, 'notifications refresh must use the real app sync path');
