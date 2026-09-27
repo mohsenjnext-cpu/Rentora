@@ -1,13 +1,24 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useRentora } from '../context/RentoraContext';
+import { usePiAuth } from '../context/PiAuthContext';
 import { Home, Search, Clock, User } from 'lucide-react';
 
 export default function BottomNav({ currentTab, onNavigate }) {
   const { t } = useLanguage();
   const { rentals } = useRentora();
+  const { currentUser } = usePiAuth();
   const ACTIVE_RENTAL_STATUSES = new Set(['draft', 'pending_payment', 'payment_approved', 'confirmed', 'active', 'requested', 'accepted']);
-  const activeRentalsCount = (rentals || []).filter(r => ACTIVE_RENTAL_STATUSES.has(String(r?.status || '').toLowerCase())).length;
+  const myUsername = String(currentUser?.username || '').toLowerCase().replace(/^@+/, '').trim();
+  const myUid = currentUser?.uid || currentUser?.id;
+  const activeRentalsCount = (rentals || []).filter(r => {
+    const renterUsername = String(r?.renterUsername || r?.renter_username || '').toLowerCase().replace(/^@+/, '').trim();
+    const renterUid = r?.renterUid || r?.renter_pi_uid;
+    const belongsToCurrentUser =
+      (myUid && renterUid && renterUid === myUid) ||
+      (myUsername && renterUsername && renterUsername === myUsername);
+    return belongsToCurrentUser && ACTIVE_RENTAL_STATUSES.has(String(r?.status || '').toLowerCase());
+  }).length;
 
   const navItems = [
     { id: 'home', label: t('navHome'), icon: Home },
