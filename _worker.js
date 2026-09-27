@@ -1554,6 +1554,7 @@ export default {
         return jsonResponse({ completed: true, paymentId: body.paymentId, txid: body.txid, data: completion }, 200, env, origin);
       }
       if (method === 'POST' && path === '/api/payments/incomplete') {
+        const { user } = await requireUser(request, env);
         const body = await readJson(request);
         const paymentObj = body?.payment || {};
         const paymentId = String(body?.paymentId || paymentObj?.identifier || paymentObj?.id || '').trim();
@@ -1573,6 +1574,9 @@ export default {
 
           if (!intent) {
             return errorResponse('Payment intent not found for incomplete Pi payment', 404, env, undefined, origin);
+          }
+          if (intent.user_id !== user.id) {
+            return errorResponse('Access denied to incomplete Pi payment recovery', 403, env, undefined, origin);
           }
 
           const owner = {
