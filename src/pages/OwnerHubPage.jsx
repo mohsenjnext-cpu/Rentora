@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
@@ -24,7 +24,8 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
     items = [], 
     rentals = [], 
     toggleItemStatus, 
-    confirmReturnOneTap 
+    confirmReturnOneTap,
+    refreshApp 
   } = useRentora();
 
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'active' | 'inactive'
@@ -33,6 +34,25 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
   const [actionError, setActionError] = useState('');
   const [actionErrorRentalId, setActionErrorRentalId] = useState(null);
   const [showAllRequests, setShowAllRequests] = useState(false);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    const loadDashboard = async () => {
+      if (!isAuthenticated) { if (active) setDashboardLoading(false); return; }
+      setDashboardLoading(true);
+      setDashboardError('');
+      try {
+        const result = await refreshApp?.();
+        if (result?.success === false) throw new Error(result.error || l('خطا در دریافت داده‌های داشبورد.', 'Unable to load dashboard data.', 'تعذر تحميل بيانات لوحة التحكم.', '无法加载仪表板数据。'));
+      } catch (e) {
+        if (active) setDashboardError(e?.message || l('خطا در دریافت داده‌های داشبورد.', 'Unable to load dashboard data.', 'تعذر تحميل بيانات لوحة التحكم.', '无法加载仪表板数据。'));
+      } finally { if (active) setDashboardLoading(false); }
+    };
+    loadDashboard();
+    return () => { active = false; };
+  }, [isAuthenticated, currentUser?.uid, refreshApp, l]);
 
   if (!isAuthenticated) {
     return (
@@ -52,6 +72,36 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
           className="btn-primary px-5 py-2.5 text-xs font-bold cursor-pointer"
         >
           {t('navLogin')}
+        </button>
+      </div>
+    );
+  }
+
+  if (dashboardLoading) {
+    return (
+      <div className="py-16 text-center max-w-md mx-auto space-y-3 animate-fadeIn" role="status" aria-live="polite">
+        <div className="w-10 h-10 mx-auto rounded-xl bg-[#EEEDFE] dark:bg-[#26215C] text-[#534AB7] flex items-center justify-center animate-pulse">
+          <Briefcase className="w-5 h-5" />
+        </div>
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {l('در حال بارگذاری داشبورد...', 'Loading dashboard...', 'جارٍ تحميل لوحة التحكم...', '正在加载仪表板...')}
+        </p>
+      </div>
+    );
+  }
+
+  if (dashboardError) {
+    return (
+      <div className="py-16 text-center max-w-md mx-auto space-y-3 animate-fadeIn" role="alert" aria-live="assertive">
+        <div className="w-10 h-10 mx-auto rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 flex items-center justify-center">
+          <AlertTriangle className="w-5 h-5" />
+        </div>
+        <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+          {l('بارگذاری داشبورد ناموفق بود', 'Dashboard could not be loaded', 'تعذر تحميل لوحة التحكم', '仪表板加载失败')}
+        </h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400">{dashboardError}</p>
+        <button type="button" onClick={() => window.location.reload()} className="btn-primary px-4 py-2 text-xs font-bold cursor-pointer">
+          {l('تلاش مجدد', 'Try again', 'إعادة المحاولة', '重试')}
         </button>
       </div>
     );
