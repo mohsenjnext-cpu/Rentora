@@ -1556,19 +1556,58 @@ export default {
         try {
           const response = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}`);
           const payment = await response.json().catch(() => ({}));
-          if (response.ok) {
-            const resolvedTxid = txid || payment?.transaction?.txid;
-            if (payment?.status?.developer_completed) {
-              await env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE pi_payment_id=?3").bind(resolvedTxid || null, now(), paymentId).run().catch(() => {});
-            } else if (payment?.status?.transaction_verified && resolvedTxid) {
-              await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, { method: 'POST', body: JSON.stringify({ txid: resolvedTxid }) }).catch(() => {});
-              await env.RENTORA_DB.prepare("UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE pi_payment_id=?3").bind(resolvedTxid, now(), paymentId).run().catch(() => {});
-            } else if (!payment?.status?.developer_approved) {
-              await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/approve`, { method: 'POST', body: '{}' }).catch(() => {});
+          if (!response.ok) return errorResponse('Unable to verify incomplete Pi payment', 502, env, undefined, origin);
+
+          const intent = await env.RENTORA_DB.prepare(
+            `SELECT pi.*, u.id AS owner_user_id, u.pi_uid AS owner_pi_uid, u.username AS owner_username
+             FROM payment_intents pi
+             JOIN users u ON u.id = pi.user_id
+             WHERE pi.pi_payment_id=?1 LIMIT 1`
+          ).bind(paymentId).first();
+
+          if (!intent) {
+            return errorResponse('Payment intent not found for incomplete Pi payment', 404, env, undefined, origin);
+          }
+
+          const owner = {
+            id: intent.owner_user_id,
+            pi_uid: intent.owner_pi_uid,
+            username: intent.owner_username
+          };
+          const status = validatePiPayment(payment, intent, owner);
+          if (!['approved', 'completed', 'complete'].includes(status)) {
+            return errorResponse('Incomplete Pi payment is not eligible for recovery', 409, env, undefined, origin);
+          }
+
+          const resolvedTxid = txid || payment?.transaction?.txid || '';
+          const developerCompleted = status === 'completed' || status === 'complete';
+
+          if (!resolvedTxid || payment?.status?.transaction_verified !== true) {
+            return errorResponse('Incomplete Pi payment has no verified transaction', 409, env, undefined, origin);
+          }
+
+          if (!developerCompleted) {
+            const completionResponse = await piFetch(env, `/payments/${encodeURIComponent(paymentId)}/complete`, {
+              method: 'POST',
+              body: JSON.stringify({ txid: resolvedTxid })
+            });
+            const completion = await completionResponse.json().catch(() => ({}));
+            if (!completionResponse.ok && !['completed', 'complete'].includes(String(completion?.status || '').toLowerCase())) {
+              return errorResponse('Pi payment completion failed during recovery', 502, env, { details: completion }, origin);
             }
           }
-        } catch (_) {}
-        return jsonResponse({ handled: true }, 200, env, origin);
+
+          await env.RENTORA_DB.batch([
+            env.RENTORA_DB.prepare(`UPDATE payment_intents SET status='completed', pi_txid=?1, updated_at=?2 WHERE id=?3 AND status IN ('created','approved','completed')`).bind(resolvedTxid, now(), intent.id),
+            env.RENTORA_DB.prepare(`UPDATE rentals SET payment_status='completed',status='confirmed',updated_at=?1 WHERE id=?2`).bind(now(), intent.rental_id),
+            env.RENTORA_DB.prepare(`INSERT OR IGNORE INTO transactions(id,payment_intent_id,pi_payment_id,pi_txid,user_id,amount,type,status,created_at) VALUES(?1,?2,?3,?4,?5,?6,'platform_fee','completed',?7)`).bind(`tx_${crypto.randomUUID()}`, intent.id, paymentId, resolvedTxid, intent.user_id, intent.amount, now())
+          ]);
+          await env.RENTORA_KV.put(`payment-complete:${intent.id}`, JSON.stringify({ paymentId, txid: resolvedTxid, at: now(), recovered: true }), { expirationTtl: 60 * 60 * 24 * 30 }).catch(() => {});
+
+          return jsonResponse({ handled: true, completed: true, paymentId, txid: resolvedTxid }, 200, env, origin);
+        } catch (err) {
+          return errorResponse(err?.message || 'Incomplete Pi payment recovery failed', err?.status || 500, env, undefined, origin);
+        }
       }
       if (method === 'POST' && path === '/api/sync/item') { const { user } = await requireUser(request, env); const item = await readJson(request);
         if (!item?.id || !String(item.title || '').trim()) return errorResponse('Invalid listing', 400, env, undefined, origin);
