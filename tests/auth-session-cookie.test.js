@@ -7,7 +7,7 @@ const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8'
 test('server auth session uses an HttpOnly host cookie for browser API requests', () => {
   assert.match(worker, /__Host-rentora_session=/);
   assert.match(worker, /HttpOnly; Secure; SameSite=Lax/);
-  assert.match(worker, /Max-Age=\\$\\{SESSION_TTL\\}/);
+  assert.match(worker, /Max-Age=\$\{SESSION_TTL\}/);
   assert.match(worker, /request\\.headers\\.get\\('Cookie'\\)/);
   assert.match(worker, /decodeURIComponent\\(match\\[1\\]\\)/);
 });
