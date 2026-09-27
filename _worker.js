@@ -1576,8 +1576,12 @@ export default {
           if (existing.owner_user_id !== user.id && !isAdmin(user.pi_uid, env)) return errorResponse('Listing ownership denied', 403, env, undefined, origin);
           const isDeleting = item.status === 'deleted' && existing.status !== 'deleted';
           const existingMeta = parseMetadata(existing.metadata);
-          const price = Number(existing.price_per_day); const deposit = Number(existing.deposit_amount);
-          await env.RENTORA_DB.prepare(`UPDATE listings SET title=?1,description=?2,category=?3,location=?4,status=?5,metadata=?6,updated_at=?7 WHERE id=?8`).bind(String(item.title).trim(), item.description || '', item.category || null, item.location || null, item.status || 'active', JSON.stringify(sanitizedItem), now(), item.id).run();
+          const price = Number(item.pricePerDay ?? existing.price_per_day);
+          const deposit = Number(item.deposit ?? existing.deposit_amount);
+          if (!Number.isFinite(price) || price < 0 || !Number.isFinite(deposit) || deposit < 0) {
+            return errorResponse('Invalid listing price', 400, env, undefined, origin);
+          }
+          await env.RENTORA_DB.prepare(`UPDATE listings SET title=?1,description=?2,category=?3,location=?4,price_per_day=?5,deposit_amount=?6,status=?7,metadata=?8,updated_at=?9 WHERE id=?10`).bind(String(item.title).trim(), item.description || '', item.category || null, item.location || null, price, deposit, item.status || 'active', JSON.stringify(sanitizedItem), now(), item.id).run();
           if (cInfo && typeof cInfo === 'object') {
             const cName = String(cInfo.contactName || cInfo.name || '').trim() || null;
             const cPhone = String(cInfo.contactPhone || cInfo.phone || cInfo.phoneContact || '').trim() || null;

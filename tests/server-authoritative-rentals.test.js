@@ -211,3 +211,24 @@ test('Phase 1: Valid rental creation produces atomic rental with status "pending
   assert.equal(rental.platform_fee, 1.5);
   assert.equal(rental.rental_amount, 30.0);
 });
+
+
+test('Listing update route persists the owner-provided price and deposit instead of reusing stale D1 values', async () => {
+  const worker = await (await import('fs/promises')).readFile('_worker.js', 'utf8');
+  assert.ok(
+    worker.includes('const price = Number(item.pricePerDay ?? existing.price_per_day);'),
+    'listing updates must read the requested current price'
+  );
+  assert.ok(
+    worker.includes('const deposit = Number(item.deposit ?? existing.deposit_amount);'),
+    'listing updates must read the requested current deposit'
+  );
+  assert.ok(
+    worker.includes('price_per_day=?5,deposit_amount=?6,status=?7'),
+    'listing updates must persist price_per_day and deposit_amount'
+  );
+  assert.ok(
+    !worker.includes("const price = Number(existing.price_per_day); const deposit = Number(existing.deposit_amount);"),
+    'listing updates must not silently keep stale price and deposit values'
+  );
+});
