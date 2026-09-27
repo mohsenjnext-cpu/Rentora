@@ -6,7 +6,7 @@ import { useRentora } from '../context/RentoraContext';
 import {
   X, PlusCircle, Clock, Briefcase, LayoutDashboard, User, Settings,
   LogOut, ShieldCheck, ShieldAlert, ReceiptText, Moon, Sun, Globe,
-  ChevronDown, Check, MessageSquare, Bell, Home, Search
+  ChevronDown, Check, MessageSquare, Bell, Home, Search, HelpCircle
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -165,6 +165,12 @@ export default function Sidebar({
         <div className="my-2 border-t border-slate-100 dark:border-slate-800/80" />
 
         <NavButton item={{ id: 'settings', label: t('navSettings'), icon: Settings }} />
+
+        <button type="button" onClick={() => { onOpenHelp?.('guide'); setMobileOpen?.(false); }}
+          aria-label={l('راهنما و گزارش مشکل','Help & report an issue','المساعدة والإبلاغ عن مشكلة','帮助与问题反馈')}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-white/5 cursor-pointer">
+          <HelpCircle className="w-[17px] h-[17px] text-[var(--primary-mid)]"/>{l('راهنما و گزارش مشکل','Help & report an issue','المساعدة والإبلاغ عن مشكلة','帮助与问题反馈')}
+        </button>
 
         {isAuthenticated && <button type="button" onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 cursor-pointer">
