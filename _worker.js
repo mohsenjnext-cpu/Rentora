@@ -1441,6 +1441,24 @@ export default {
 
         const canonicalAmount = toCanonicalDecimal(rental.platform_fee);
         const existing = await env.RENTORA_DB.prepare('SELECT * FROM payment_intents WHERE rental_id=?1 LIMIT 1').bind(rental.id).first();
+        if (existing && ['approved', 'completed'].includes(String(existing.status || '').toLowerCase())) {
+          return jsonResponse({
+            paymentIntentId: existing.id,
+            id: existing.id,
+            amount: toCanonicalDecimal(existing.amount),
+            memo: existing.memo,
+            metadata: {
+              paymentIntentId: existing.id,
+              rentalId: rental.id,
+              expectedAmount: toCanonicalDecimal(existing.amount),
+              currency: 'PI',
+              memo: existing.memo
+            },
+            expiresAt: existing.expires_at,
+            status: existing.status,
+            idempotent: true
+          }, 200, env, origin);
+        }
         const rentalMeta = parseMetadata(rental.metadata);
         const id = (existing && existing.status !== 'cancelled' && new Date(existing.expires_at) > new Date()) ? existing.id : `pii_${crypto.randomUUID()}`;
         const memo = `Rentora Booking Fee #${String(rental.id).slice(-12)}`;
