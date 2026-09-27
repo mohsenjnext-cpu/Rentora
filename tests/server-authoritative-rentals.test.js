@@ -213,4 +213,22 @@ test('Phase 1: Valid rental creation produces atomic rental with status "pending
 });
 
 
-test('Listing update route persists the owner-provided price and deposit instead of reusing stale D1 values', async () => {\n  const worker = await (await import('fs/promises')).readFile('_worker.js', 'utf8');\n  assert.match(worker, /const price = Number\\(item\\.pricePerDay \\?\\? existing\\.price_per_day\\);\\s*const deposit = Number\\(item\\.deposit \\?\\? existing\\.deposit_amount\\);/, 'listing updates must validate the requested current price and deposit');\n  assert.match(worker, /UPDATE listings SET title=\\?1,description=\\?2,category=\\?3,location=\\?4,price_per_day=\\?5,deposit_amount=\\?6,status=\\?7/, 'listing updates must persist price_per_day and deposit_amount');\n  assert.doesNotMatch(worker, /const price = Number\\(existing\\.price_per_day\\); const deposit = Number\\(existing\\.deposit_amount\\);\\s*await env\\.RENTORA_DB\\.prepare\\(.*UPDATE listings SET title=\\?1,description=\\?2,category=\\?3,location=\\?4,status=\\?5/s, 'listing updates must not silently keep stale price and deposit values');\n});\n
+test('Listing update route persists the owner-provided price and deposit instead of reusing stale D1 values', async () => {
+  const worker = await (await import('fs/promises')).readFile('_worker.js', 'utf8');
+  assert.ok(
+    worker.includes('const price = Number(item.pricePerDay ?? existing.price_per_day);'),
+    'listing updates must read the requested current price'
+  );
+  assert.ok(
+    worker.includes('const deposit = Number(item.deposit ?? existing.deposit_amount);'),
+    'listing updates must read the requested current deposit'
+  );
+  assert.ok(
+    worker.includes('price_per_day=?5,deposit_amount=?6,status=?7'),
+    'listing updates must persist price_per_day and deposit_amount'
+  );
+  assert.ok(
+    !worker.includes("const price = Number(existing.price_per_day); const deposit = Number(existing.deposit_amount);"),
+    'listing updates must not silently keep stale price and deposit values'
+  );
+});
