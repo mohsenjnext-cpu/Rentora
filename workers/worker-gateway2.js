@@ -1033,6 +1033,7 @@ async function adminRoute(request, env, path) {
     }
   }
 
+  if (!(user.role === 'admin' && adminAllowed(user.pi_uid, env))) return json({ error: 'Admin access required' }, 403, request, env);
   if (path === '/api/admin/users') {
     const rows = await env.RENTORA_DB.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
     return json({ success: true, users: (rows.results || []).map((row) => userView(row, env)) }, 200, request, env);
