@@ -124,7 +124,10 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
       <div className="md:hidden space-y-5 pb-4" onClick={(e) => e.stopPropagation()}>
         <section className="banner-purple rounded-[24px] p-5 min-h-[244px] flex flex-col items-end text-end">
           <div className="flex items-center gap-2 mb-2">
-            {currentUser ? <span className="text-[10px] font-semibold text-[var(--primary-mid)]">@{currentUser.username}</span> : <span className="text-[10px] text-slate-500">{l('مهمان', 'Guest', 'زائر', '访客')}</span>}
+            <div className="w-7 h-7 rounded-lg overflow-hidden border border-white/70 dark:border-slate-700 bg-white/70 dark:bg-[#211E45] flex items-center justify-center shrink-0">
+              {currentUser?.avatar ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" /> : <UserRound className="w-4 h-4 text-[var(--primary-mid)]" aria-hidden="true" />}
+            </div>
+            {currentUser ? <span className="text-[10px] font-semibold text-[var(--primary-mid)] truncate">@{currentUser.username}</span> : <span className="text-[10px] text-slate-500">{l('مهمان', 'Guest', 'زائر', '访客')}</span>}
             <span className="w-2 h-2 rounded-full bg-[var(--trust-text)]" />
           </div>
           <h1 className="text-[26px] leading-[1.4] font-black text-[#26215C] dark:text-white max-w-[320px]">{t('homeHeroTitle')}</h1>
@@ -194,8 +197,8 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
                 <h1 className="text-2xl sm:text-4xl font-black text-[#26215C] dark:text-white leading-tight">{t('homeHeroTitle')}</h1>
                 <p className="text-sm text-[#534AB7] dark:text-[#AFA9EC] font-semibold max-w-2xl">{t('homeHeroSubtitle')}</p>
               </div>
-              <div className="hidden lg:flex w-14 h-14 rounded-2xl bg-white/70 dark:bg-[#211E45] items-center justify-center text-[var(--primary-mid)] shrink-0">
-                <UserRound className="w-7 h-7" />
+              <div className="hidden lg:flex w-14 h-14 rounded-2xl overflow-hidden bg-white/70 dark:bg-[#211E45] items-center justify-center text-[var(--primary-mid)] shrink-0 border border-white/70 dark:border-slate-700">
+                {currentUser?.avatar ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" /> : <UserRound className="w-7 h-7" aria-hidden="true" />}
               </div>
             </div>
             <button type="button" onClick={() => onNavigate('list-item')} className="btn-primary px-4 py-2.5 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-sm">
