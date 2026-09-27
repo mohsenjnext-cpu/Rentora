@@ -57,6 +57,7 @@ export default function ListItemPage({
   const [successNotice, setSuccessNotice] = useState(false);
   const [contactLoadError, setContactLoadError] = useState('');
   const [contactRetryNonce, setContactRetryNonce] = useState(0);
+  const [isContactLoading, setIsContactLoading] = useState(false);
 
   // Private Contact & Coordination State
   const [contactName, setContactName] = useState('');
@@ -70,6 +71,7 @@ export default function ListItemPage({
   useEffect(() => {
     let active = true;
     setContactLoadError('');
+    setIsContactLoading(Boolean(itemToEdit?.id && !itemToEdit?.contactInfo && fetchListingContact));
     if (itemToEdit) {
       setTitle(itemToEdit.title || '');
       setCategory(itemToEdit.category || 'tools');
@@ -99,9 +101,12 @@ export default function ListItemPage({
           }
         }).catch(err => {
           if (active) setContactLoadError(err?.message || l('اطلاعات تماس آگهی بارگذاری نشد. دوباره تلاش کنید.', 'Listing contact details could not be loaded. Try again.', 'تعذر تحميل بيانات اتصال الإعلان. حاول مجدداً.', '无法加载物品联系方式，请重试。'));
+        }).finally(() => {
+          if (active) setIsContactLoading(false);
         });
       }
     } else {
+      setIsContactLoading(false);
       setTitle('');
       setCategory('tools');
       setDescription('');
@@ -337,16 +342,23 @@ export default function ListItemPage({
 
       {/* Error Alert */}
       {errorMessage && (
-        <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+        <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn" role="alert" aria-live="assertive">
           <AlertCircle className="w-4 h-4 shrink-0 stroke-[2]" />
           <span>{errorMessage}</span>
+        </div>
+      )}
+
+      {isContactLoading && isEditMode && (
+        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold flex items-center gap-2" role="status" aria-live="polite" aria-busy="true">
+          <Clock className="w-4 h-4 animate-pulse shrink-0" />
+          <span>{l('در حال بارگذاری اطلاعات تماس آگهی...', 'Loading listing contact details...', 'جارٍ تحميل بيانات اتصال الإعلان...', '正在加载物品联系方式...')}</span>
         </div>
       )}
 
       {contactLoadError && isEditMode && (
         <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center justify-between gap-3" role="alert">
           <span>{contactLoadError}</span>
-          <button type="button" onClick={() => setContactRetryNonce(v => v + 1)} className="shrink-0 underline font-bold cursor-pointer">
+          <button type="button" onClick={() => setContactRetryNonce(v => v + 1)} aria-label={l('تلاش مجدد برای اطلاعات تماس', 'Retry listing contact details', 'إعادة محاولة تحميل بيانات الاتصال', '重试物品联系方式')} className="shrink-0 underline font-bold cursor-pointer">
             {l('تلاش مجدد', 'Try again', 'حاول مجدداً', '重试')}
           </button>
         </div>
