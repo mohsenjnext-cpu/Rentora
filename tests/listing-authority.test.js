@@ -12,9 +12,10 @@ test('existing listing updates enforce ownership or explicit admin authority', (
   assert.match(worker, /existing\.owner_user_id !== user\.id && !isAdmin\(user\.pi_uid, env\)/);
 });
 
-test('listing updates preserve server-owned price and deposit', () => {
-  assert.match(worker, /const price = Number\(existing\.price_per_day\); const deposit = Number\(existing\.deposit_amount\)/);
-  assert.match(worker, /pricePerDay: price, deposit \}/);
+test('listing updates persist the owner-provided price and deposit', () => {
+  assert.match(worker, /const price = Number\(item\.pricePerDay \?\? existing\.price_per_day\);/);
+  assert.match(worker, /const deposit = Number\(item\.deposit \?\? existing\.deposit_amount\);/);
+  assert.match(worker, /price_per_day=\?5,deposit_amount=\?6,status=\?7/);
 });
 
 test('new listings bind ownership to the authenticated D1 user', () => {
