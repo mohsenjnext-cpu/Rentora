@@ -1575,6 +1575,9 @@ export default {
           if (!intent) {
             return errorResponse('Payment intent not found for incomplete Pi payment', 404, env, undefined, origin);
           }
+          if (intent.user_id !== user.id) {
+            return errorResponse('Access denied to incomplete Pi payment recovery', 403, env, undefined, origin);
+          }
 
           const owner = {
             id: intent.owner_user_id,
