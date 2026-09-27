@@ -8,3 +8,8 @@ assert.match(chat, /aria-label=\{l\('به‌روزرسانی گفتگوها', 'R
 assert.match(notifications, /aria-pressed=\{filter === key\}/, 'notification filters must expose their selected state');
 
 console.log('Notifications and chat accessibility checks passed.');
+
+
+assert.match(notifications, /items \|\| \[\]\)\.filter\(item => \{/, 'listing notifications must filter to current user owned listings');
+assert.match(notifications, /ownerUid && ownerUid === currentUser\.uid/, 'listing notifications must match the authenticated owner UID');
+assert.match(notifications, /ownerUsername && username && ownerUsername === username/, 'listing notifications must fall back to the authenticated owner username');
