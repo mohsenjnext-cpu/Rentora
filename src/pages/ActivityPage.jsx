@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
@@ -42,7 +42,9 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
     items = [],
     fetchRentalContact,
     confirmHandoverOneTap,
-    confirmReturnOneTap
+    confirmReturnOneTap,
+    isRefreshing = false,
+    refreshApp
   } = useRentora();
 
   const [activeTab, setActiveTab] = useState('active'); // 'active' | 'history'
@@ -93,6 +95,30 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
   const [processingId, setProcessingId] = useState(null);
   const [handoverError, setHandoverError] = useState('');
   const [handoverErrorRentalId, setHandoverErrorRentalId] = useState(null);
+  const [pageLoadError, setPageLoadError] = useState('');
+  const [isPageLoading, setIsPageLoading] = useState(false);
+
+  const refreshActivity = async () => {
+    setIsPageLoading(true);
+    setPageLoadError('');
+    try {
+      const result = await refreshApp?.();
+      if (result?.success === false) {
+        throw new Error(result.error || l('دریافت اطلاعات فعالیت ناموفق بود.', 'Unable to load activity data.', 'تعذر تحميل بيانات النشاط.', '无法加载活动数据。'));
+      }
+      return result;
+    } catch (error) {
+      setPageLoadError(error?.message || l('دریافت اطلاعات فعالیت ناموفق بود.', 'Unable to load activity data.', 'تعذر تحميل بيانات النشاط.', '无法加载活动数据。'));
+      return { success: false, error: error?.message };
+    } finally {
+      setIsPageLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated || (rentals.length || transactions.length || conversations.length || items.length)) return;
+    refreshActivity();
+  }, [isAuthenticated]);
 
   const activityFeed = useMemo(() => {
     const events = [];
@@ -288,6 +314,22 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
           </p>
         </div>
       </div>
+
+      {pageLoadError && !isPageLoading && (
+        <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center justify-between gap-3" role="alert" aria-live="assertive">
+          <span className="min-w-0">{pageLoadError}</span>
+          <button type="button" onClick={refreshActivity} className="btn-secondary px-3 py-1.5 text-xs font-bold shrink-0 cursor-pointer">
+            {l('تلاش مجدد', 'Try again', 'إعادة المحاولة', '重试')}
+          </button>
+        </div>
+      )}
+
+      {isPageLoading && (
+        <div className="rentora-card p-6 text-center text-xs text-slate-400" role="status" aria-live="polite" aria-busy="true">
+          <RotateCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#534AB7]" />
+          {l('در حال دریافت فعالیت‌های حساب...', 'Loading account activity...', 'جارٍ تحميل نشاط الحساب...', '正在加载账户活动...')}
+        </div>
+      )}
 
       {handoverError && (
         <div className="p-3 rounded-xl badge-amber text-xs font-bold flex items-center justify-between gap-3 animate-fadeIn" role="alert">
