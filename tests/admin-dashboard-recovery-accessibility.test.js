@@ -21,3 +21,15 @@ test('admin dashboard navigation exposes expanded and current state', () => {
   assert.ok(source.includes('aria-current={section===n.id ? "page" : undefined}'));
   assert.ok(source.includes('aria-current={section===c[0] ? "page" : undefined}'));
 });
+
+
+test('admin payout and moderation controls expose explicit accessible names', () => {
+  assert.ok(source.includes('aria-label="مبلغ پرداخت از خزانه به پی"'));
+  assert.ok(source.includes('aria-label="آدرس کیف پول Pi برای پرداخت خزانه"'));
+  assert.ok(source.includes('aria-label="یادداشت پرداخت خزانه"'));
+  assert.ok(source.includes('تلاش مجدد برای تطبیق پرداخت'));
+  assert.ok(source.includes('تعلیق کاربر'));
+  assert.ok(source.includes('تایید KYC کاربر'));
+  assert.ok(source.includes('مشاهده جزئیات کاربر'));
+  assert.ok(source.includes('اجرای پاکسازی پایگاه داده'));
+});
