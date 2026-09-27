@@ -80,13 +80,20 @@ jobs:
       # D1 migrations must be reviewed and applied as a separate, explicit operation.
       # This prevents a frontend/worker deployment from dropping tables, rebuilding data,
       # or changing production constraints without an auditable migration.
-      - name: Verify deployment does not mutate D1
+      - name: Verify reviewed D1 migrations are applied
         shell: bash
         run: |
           set -euo pipefail
           test -f wrangler.toml
-          echo "D1 schema mutation is disabled in the deployment workflow."
-          echo "Apply reviewed D1 migrations separately before deploying code that requires them."
+          echo "Checking remote D1 migration state without mutating the database."
+          npx wrangler d1 migrations list rentora --remote
+          pending="$(npx wrangler d1 migrations list rentora --remote | grep -E '(^|[[:space:]])pending([[:space:]]|$)' || true)"
+          if [ -n "$pending" ]; then
+            echo "Pending D1 migrations detected. Apply reviewed migrations separately before deploying code that requires them."
+            echo "$pending"
+            exit 1
+          fi
+          echo "Remote D1 migration ledger has no pending migrations."
 
       - name: Deploy Worker and static assets
         run: npx wrangler deploy
