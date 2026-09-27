@@ -172,16 +172,12 @@ export function RentoraProvider({ children }) {
 
   const addItem = async (itemData) => {
     if (!currentUser) throw new Error("برای ثبت آگهی ابتدا وارد حساب پای خود شوید.");
-    const defaultImages = {
-      tools: "https://images.unsplash.com/photo-1504148455328-c376907d081c?w=900&auto=format&fit=crop&q=80",
-      cameras: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=900&auto=format&fit=crop&q=80",
-      camping: "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=900&auto=format&fit=crop&q=80",
-      sports: "https://images.unsplash.com/photo-1517649763962-0c623266ddc0?w=900&auto=format&fit=crop&q=80",
-      vehicles: "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=900&auto=format&fit=crop&q=80",
-      events: "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=900&auto=format&fit=crop&q=80",
-      home: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=900&auto=format&fit=crop&q=80"
-    };
-    const finalImage = itemData.images?.length ? itemData.images : [defaultImages[itemData.category] || defaultImages.tools];
+    if (!itemData?.title?.trim()) throw new Error("عنوان آگهی الزامی است.");
+    if (!Array.isArray(itemData.images) || itemData.images.length === 0) {
+      throw new Error("برای ثبت آگهی حداقل یک تصویر واقعی از کالا لازم است.");
+    }
+
+    const images = itemData.images.filter(Boolean);
     const newItem = {
       id: "item_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
       title: itemData.title.trim(),
@@ -189,13 +185,13 @@ export function RentoraProvider({ children }) {
       description: itemData.description || '',
       pricePerDay: parseFloat(itemData.pricePerDay),
       deposit: parseFloat(itemData.deposit) || 0,
-      location: itemData.location || 'ایران',
-      city: itemData.location?.split('،')?.[0]?.trim() || itemData.location || 'ایران',
-      images: Array.isArray(finalImage) ? finalImage : [finalImage],
+      location: itemData.location || '',
+      city: itemData.location?.split('،')?.[0]?.trim() || itemData.location || '',
+      images,
       ownerUid: currentUser.uid,
       ownerUsername: currentUser.username,
-      ownerAvatar: currentUser.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.username}`,
-      ownerBio: currentUser.bio || 'کاربر شبکه پای در رنتورا',
+      ownerAvatar: currentUser.avatar || null,
+      ownerBio: currentUser.bio || '',
       ownerKYC: currentUser?.kycStatus === 'verified' && !!currentUser?.isOfficialSdk,
       ownerReputation: null,
       rating: null,
