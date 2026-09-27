@@ -5,12 +5,12 @@ import { usePiAuth } from '../context/PiAuthContext';
 import CategoryBar from '../components/CategoryBar';
 import ItemCard from '../components/ItemCard';
 import EmptyState from '../components/EmptyState';
-import { Search, ShieldCheck, Package, Users, Plus, CheckCircle2, Heart, MapPin, Coins, X, ArrowUpLeft, UserRound } from 'lucide-react';
+import { Search, ShieldCheck, Package, Plus, CheckCircle2, Heart, MapPin, Coins, X, ArrowUpLeft, UserRound } from 'lucide-react';
 
 export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
   const { t, l } = useLanguage();
   const { items = [], isRefreshing = false, refreshApp } = useRentora();
-  const { users = [], currentUser } = usePiAuth();
+  const { currentUser } = usePiAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [dataState, setDataState] = useState(() => ({ loading: (items || []).length === 0, error: null }));
@@ -36,7 +36,7 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
     [items]
   );
   const featuredItems = activeItems.slice(0, 8);
-  const totalPioneersCount = Math.max(users.length, currentUser ? 1 : 0);
+  const activeCategoryCount = new Set(activeItems.map(item => item.category).filter(Boolean)).size;
 
   const suggestions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -185,7 +185,7 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
 
         <section className="grid grid-cols-3 gap-2.5">
           <div className="h-[76px] rounded-2xl bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 text-center pt-2.5 shadow-sm"><div className="text-[18px] font-black text-[var(--primary-mid)]">{activeItems.length}</div><div className="text-[9px] text-slate-400 mt-1">{t('homeStatItems')}</div></div>
-          <div className="h-[76px] rounded-2xl bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 text-center pt-2.5 shadow-sm"><div className="text-[18px] font-black text-[var(--trust-text)]">{totalPioneersCount}</div><div className="text-[9px] text-slate-400 mt-1">{t('homeStatPioneers')}</div></div>
+          <div className="h-[76px] rounded-2xl bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 text-center pt-2.5 shadow-sm"><div className="text-[18px] font-black text-[var(--trust-text)]">{activeCategoryCount}</div><div className="text-[9px] text-slate-400 mt-1">{l('دسته‌های فعال', 'Active categories', 'الفئات النشطة', '活跃分类')}</div></div>
           <div className="h-[76px] rounded-2xl bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 text-center pt-2.5 shadow-sm"><CheckCircle2 className="w-5 h-5 mx-auto text-[var(--trust-text)]" /><div className="text-[10px] font-bold text-[var(--trust-text)] mt-1">{t('homeStatHandover')}</div><div className="text-[8px] text-slate-400 mt-1 px-1">{l('تأیید تحویل در محل','Pickup handover confirmation','تأكيد التسليم عند الاستلام','现场交接确认')}</div></div>
         </section>
 
@@ -251,7 +251,7 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
 
         <section className="grid grid-cols-3 gap-3">
           <div className="p-4 rounded-2xl rentora-card text-center space-y-1"><Package className="w-5 h-5 mx-auto text-[var(--primary-mid)]" /><div className="text-lg font-black text-slate-900 dark:text-white">{activeItems.length}</div><div className="text-[10px] text-slate-400">{t('homeStatItems')}</div></div>
-          <div className="p-4 rounded-2xl rentora-card text-center space-y-1"><Users className="w-5 h-5 mx-auto text-[var(--trust-text)]" /><div className="text-lg font-black text-slate-900 dark:text-white">{totalPioneersCount}</div><div className="text-[10px] text-slate-400">{t('homeStatPioneers')}</div></div>
+          <div className="p-4 rounded-2xl rentora-card text-center space-y-1"><Package className="w-5 h-5 mx-auto text-[var(--trust-text)]" /><div className="text-lg font-black text-slate-900 dark:text-white">{activeCategoryCount}</div><div className="text-[10px] text-slate-400">{l('دسته‌های فعال', 'Active categories', 'الفئات النشطة', '活跃分类')}</div></div>
           <div className="p-4 rounded-2xl rentora-card text-center space-y-1"><CheckCircle2 className="w-5 h-5 mx-auto text-[var(--trust-text)]" /><div className="flex items-center justify-center gap-1 text-[var(--trust-text)]"><CheckCircle2 className="w-4 h-4" aria-hidden="true" /><span className="text-[10px] font-bold">{t('homeStatHandover')}</span></div><div className="text-[9px] text-slate-400">{l('تأیید تحویل در محل','Pickup handover confirmation','تأكيد التسليم عند الاستلام','现场交接确认')}</div></div>
         </section>
 
