@@ -1401,9 +1401,7 @@ export default {
       }
       if (method === 'POST' && path === '/api/auth/logout') {
         requireBindings(env);
-        const header = request.headers.get('Authorization') || '';
-        if (header.startsWith('Bearer ')) {
-          const token = header.slice(7).trim();
+        const header = request.headers.get('Authorization') || '';\n        const cookie = request.headers.get('Cookie') || '';\n        const cookieMatch = cookie.match(/(?:^|;\\s*)__Host-rentora_session=([^;]+)/);\n        const token = header.startsWith('Bearer ') ? header.slice(7).trim() : (cookieMatch ? decodeURIComponent(cookieMatch[1]) : '');
           if (token) {
             const hash = await sha256(token);
             const rawSession = await env.RENTORA_KV.get(`session:${hash}`);
