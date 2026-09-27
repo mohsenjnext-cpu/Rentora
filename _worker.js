@@ -1527,6 +1527,12 @@ export default {
           return errorResponse(`Pi payment cannot be completed from status ${status || 'unknown'}`, 409, env, undefined, origin);
         }
 
+        const verifiedTxid = String(payment?.transaction?.txid || '').trim();
+        const requestedTxid = String(body.txid || '').trim();
+        if (!verifiedTxid || verifiedTxid !== requestedTxid) {
+          return errorResponse('Pi transaction ID does not match the verified payment transaction', 409, env, undefined, origin);
+        }
+
         const completionResponse = await piFetch(env, `/payments/${encodeURIComponent(body.paymentId)}/complete`, {
           method: 'POST',
           body: JSON.stringify({ txid: body.txid })
