@@ -259,8 +259,14 @@ export default function AdminDashboardPage({ onNavigate }) {
         <button type="button" aria-label="تازه‌سازی پنل مدیریت" onClick={load} className="h-9 px-3 rounded-lg border text-xs font-bold flex items-center gap-1.5"><RefreshCw className={`w-4 h-4 ${loading?'animate-spin':''}`}/> رفرش</button></div>
     </header>
     {error && <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 text-xs flex gap-2"><AlertTriangle className="w-4 h-4"/>{error}</div>}
+    <div className="lg:hidden rentora-card p-3">
+      <label htmlFor="admin-mobile-section" className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-2">بخش مدیریت</label>
+      <select id="admin-mobile-section" aria-label="انتخاب بخش مدیریت" value={section} onChange={(e)=>go(e.target.value)} className="w-full h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#16152B] px-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-[#534AB7]/30">
+        {NAV.map(n => <React.Fragment key={n.id}><option value={n.id}>{n.label}</option>{n.children?.map(c => <option key={c[0]} value={c[0]}>↳ {c[1]}</option>)}</React.Fragment>)}
+      </select>
+    </div>
     <div className="grid lg:grid-cols-[245px_1fr] gap-4">
-      <aside aria-label="ناوبری پنل مدیریت" className="rentora-card p-2 h-fit lg:sticky lg:top-3">
+      <aside aria-label="ناوبری پنل مدیریت" className="hidden lg:block rentora-card p-2 h-fit lg:sticky lg:top-3">
         {NAV.map(n => { const Icon=n.icon, open=expanded[n.id] || section===n.id || n.children?.some(c=>c[0]===section); return <div key={n.id}>
           <button type="button" aria-expanded={n.children ? open : undefined} aria-current={section===n.id ? "page" : undefined} onClick={()=> n.children ? setExpanded(e=>({...e,[n.id]:!open})) : go(n.id)} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold ${section===n.id?'bg-[#EEEDFE] text-[#26215C] dark:bg-[#211E45] dark:text-white':''}`}>
             <Icon className="w-4 h-4"/><span className="flex-1 text-right">{n.label}</span>{n.children&&<ChevronDown className={`w-3.5 h-3.5 transition ${open?'rotate-180':''}`}/>}
