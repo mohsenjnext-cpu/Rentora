@@ -2807,7 +2807,18 @@ export default {
             return errorResponse(`Profile field too long: ${key}`, 400, env, undefined, origin);
           }
         }
-        const meta = { ...parseMetadata(user.metadata), ...Object.fromEntries(Object.entries(allowed).filter(([,v]) => v !== undefined)) };
+
+        // Identity, role, status, KYC, Pi identifiers, and account state remain server-authoritative.
+        // Client sync may only update explicitly user-editable profile presentation fields.
+        const editableMeta = Object.fromEntries(
+          Object.entries({
+            bio: body.bio,
+            location: body.location,
+            phoneMasked: body.phoneMasked
+          }).filter(([, value]) => value !== undefined)
+        );
+        const currentMeta = parseMetadata(user.metadata);
+        const meta = { ...currentMeta, ...editableMeta };
         const newAvatar = body.avatar !== undefined ? String(body.avatar).trim() : user.avatar_url;
         const newDisplayName = body.displayName !== undefined ? String(body.displayName).trim() : user.display_name;
         const oldAvatar = user.avatar_url;
