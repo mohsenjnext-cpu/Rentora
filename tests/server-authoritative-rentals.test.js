@@ -48,8 +48,13 @@ test('Phase 1: Valid Quote calculation derives exact amounts from D1 listing par
     status: 'active'
   };
 
-  const startDate = '2026-09-25T10:00:00.000Z';
-  const endDate = '2026-09-28T10:00:00.000Z'; // 3 days
+  const start = new Date();
+  start.setUTCHours(10, 0, 0, 0);
+  start.setUTCDate(start.getUTCDate() + 1);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 3);
+  const startDate = start.toISOString();
+  const endDate = end.toISOString(); // 3 days
 
   const financials = calculateAuthoritativeFinancials(
     listing.price_per_day,
@@ -154,8 +159,8 @@ test('Phase 1: Listing price change after quote creation invalidates stale quote
 test('Phase 1: Client tampering of amount, deposit, or platform fee is ignored in favor of server D1 calculations', () => {
   const clientProvidedBody = {
     listingId: 'lst_drill_01',
-    startDate: '2026-09-25T10:00:00.000Z',
-    endDate: '2026-09-28T10:00:00.000Z',
+    startDate: (() => { const d = new Date(); d.setUTCHours(10, 0, 0, 0); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString(); })(),
+    endDate: (() => { const d = new Date(); d.setUTCHours(10, 0, 0, 0); d.setUTCDate(d.getUTCDate() + 4); return d.toISOString(); })(),
     amount: 0.0001, // Attacker trying to set price to 0.0001
     deposit: 0,
     platformFee: 0.0001,
