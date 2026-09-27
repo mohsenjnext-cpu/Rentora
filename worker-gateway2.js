@@ -2,12 +2,10 @@ import legacyWorker from './_worker.js';
 import { Horizon, TransactionBuilder, Operation, Asset, Keypair, Memo } from '@stellar/stellar-sdk';
 
 function now() { return new Date().toISOString(); }
-function adminAllowed(piUid, username, env) {
-  const uid = String(piUid || '').trim().toLowerCase();
-  const name = String(username || '').trim().toLowerCase();
-  const allowedUids = String(env?.ADMIN_PI_UIDS || '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean);
-  const allowedUsernames = String(env?.ADMIN_PI_USERNAMES || '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean);
-  return Boolean((uid && allowedUids.includes(uid)) || (name && allowedUsernames.includes(name)));
+function adminAllowed(value, env) {
+  const id = String(value || '').trim().toLowerCase();
+  const allowed = String(env?.ADMIN_PI_UIDS || '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean);
+  return Boolean(id && allowed.includes(id));
 }
 async function sha256(value) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
@@ -379,7 +377,7 @@ async function reconcileStalePayoutOperations(env) {
 function userView(row, env, options = {}) {
   let meta = {};
   try { meta = row.metadata ? JSON.parse(row.metadata) : {}; } catch (_) {}
-  const isAdmin = adminAllowed(row.pi_uid, row.username, env) && row.role === 'admin';
+  const isAdmin = adminAllowed(row.pi_uid, env) && row.role === 'admin';
   const piKycStatus = meta.kycStatus || row.kyc_status;
   const resolvedKycStatus = piKycStatus === 'verified' ? 'verified' : (piKycStatus === 'unverified' ? 'unverified' : 'unknown');
   const { adminKycStatus, ...publicMeta } = meta;
