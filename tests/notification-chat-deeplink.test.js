@@ -11,4 +11,5 @@ if (!app.includes('onOpenChat={(conversationId) => handleNavigate(\'chat\', { co
 if (!notifications.includes('onOpenChat(n.targetId)')) throw new Error('Notification click must pass conversation target');
 if (!notifications.includes("add('message:' + (c.id || c.lastMessageAt), 'messages'")) throw new Error('Message notification must retain conversation id');
 if (!chat.includes('initialConversationId')) throw new Error('ChatPage must accept an initial conversation id');
+if (!chat.includes('setSelectedId(initialConversationId)')) throw new Error('ChatPage must select the notification target');
 console.log('notification chat deep-link wiring assertions passed');
