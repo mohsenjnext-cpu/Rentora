@@ -234,11 +234,15 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
                 className="flex items-center gap-1.5 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
               >
                 <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
-                  <img
-                    src={currentUser?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser?.username}`}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
+                  {currentUser?.avatar ? (
+                    <img
+                      src={currentUser.avatar}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-4 h-4 text-slate-500 stroke-[1.8] mx-auto mt-2" />
+                  )}
                 </div>
               </button>
             ) : (
