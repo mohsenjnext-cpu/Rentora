@@ -1973,6 +1973,7 @@ export default {
         let existing = await env.RENTORA_DB.prepare(`
           SELECT * FROM conversations
           WHERE listing_id = ?1 AND renter_user_id = ?2 AND type = ?3
+            AND status != 'archived'
           LIMIT 1
         `).bind(targetListingId, targetRenterId, convType).first();
 
@@ -2084,6 +2085,9 @@ export default {
         const isParticipant = (conv.owner_user_id === user.id || conv.renter_user_id === user.id);
         const isAdminUser = isAdmin(user.pi_uid, env) && user.role === 'admin';
         if (!isParticipant && !isAdminUser) return errorResponse('Access denied to send message in this conversation', 403, env, undefined, origin);
+        if (conv.status === 'archived') {
+          return errorResponse('Archived conversation cannot accept new messages', 409, env, undefined, origin);
+        }
 
         const isPaid = conv.rental_payment_status === 'completed' && ['confirmed', 'active', 'completed'].includes(conv.rental_status);
         const isPreBooking = !isPaid || conv.type === 'pre_booking';

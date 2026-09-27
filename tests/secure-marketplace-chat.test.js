@@ -56,7 +56,12 @@ function createMockEnv(initialData = {}) {
                 };
               }
               if (query.includes('FROM conversations') && query.includes('WHERE listing_id = ?1 AND renter_user_id = ?2 AND type = ?3')) {
-                return dbData.conversations.find(c => c.listing_id === params[0] && c.renter_user_id === params[1] && c.type === params[2]) || null;
+                return dbData.conversations.find(c =>
+                  c.listing_id === params[0] &&
+                  c.renter_user_id === params[1] &&
+                  c.type === params[2] &&
+                  (!query.includes('status != \'archived\'') || c.status !== 'archived')
+                ) || null;
               }
               if (query.includes('FROM conversations') && query.includes('WHERE c.id = ?1') || query.includes('WHERE id=?1')) {
                 const c = dbData.conversations.find(item => item.id === params[0]);
@@ -508,4 +513,33 @@ test('Secure Chat 14: Anti-Bypass does not reject ordinary prices, years, model 
     }), env);
     assert.equal(res.status, 201, `Expected 201 for legitimate text: "${text}"`);
   }
+});
+
+
+test('Secure Chat 15: Archived conversations cannot be reopened or receive new messages', async () => {
+  const owner = { id: 'usr_owner', pi_uid: 'uid_owner', username: 'owner_user', status: 'active', role: 'user' };
+  const renter = { id: 'usr_renter', pi_uid: 'uid_renter', username: 'renter_user', status: 'active', role: 'user' };
+  const listing = { id: 'item_archived', owner_user_id: 'usr_owner', title: 'Archived Camera', price_per_day: 10, status: 'active' };
+  const conv = { id: 'conv_archived', listing_id: 'item_archived', owner_user_id: 'usr_owner', renter_user_id: 'usr_renter', type: 'pre_booking', status: 'archived' };
+
+  const { env, kvStore, dbData } = createMockEnv({ users: [owner, renter], listings: [listing], conversations: [conv] });
+  const token = 'renter_archived_tok';
+  kvStore.set(`session:${await sha256(token)}`, JSON.stringify({ uid: renter.pi_uid, username: renter.username, role: renter.role }));
+
+  const postRes = await gateway.fetch(new Request('https://rentora.example/api/conversations/conv_archived/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ text: 'Can I still send this?' })
+  }), env);
+  assert.equal(postRes.status, 409);
+
+  const createRes = await gateway.fetch(new Request('https://rentora.example/api/conversations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ listingId: listing.id })
+  }), env);
+  assert.equal(createRes.status, 201);
+  const createJson = await createRes.json();
+  assert.notEqual(createJson.conversationId, conv.id);
+  assert.equal(dbData.conversations.filter(c => c.status === 'active').length, 1);
 });
