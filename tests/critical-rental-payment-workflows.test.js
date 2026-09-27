@@ -36,7 +36,19 @@ test('critical rental workflow keeps quote -> rental authority on the server', (
   assert.match(rentalBlock, /'pending_payment'/);
 });
 
-test('payment intent derives the Pi amount from the persisted rental fee', () => {
+test('payment intent derives the Pi amount from the persisted rental fee', () => {test('payment intent reuses an approved/completed intent without resetting the rental or Pi binding', () => {
+  const start = worker.indexOf("path === '/api/payments/intent'");
+  const end = worker.indexOf("path === '/api/payments/approve'", start);
+  assert.ok(start >= 0 && end > start, 'payment intent route must exist');
+  const block = worker.slice(start, end);
+  assert.match(block, /\['approved', 'completed'\]\.includes\(String\(existing\.status \|\| ''\)\.toLowerCase\(\)\)/);
+  assert.match(block, /idempotent: true/);
+  assert.match(block, /existing\.pi_txid|existing\.expires_at/);
+  assert.doesNotMatch(block, /UPDATE payment_intents SET id=\?1, amount=\?2, memo=\?3, status='created'/);
+  assert.doesNotMatch(block, /UPDATE rentals SET payment_status='pending', status='pending_payment'/);
+});
+
+
   const start = worker.indexOf("path === '/api/payments/intent'");
   const end = worker.indexOf("path === '/api/payments/approve'", start);
   assert.ok(start >= 0 && end > start, 'payment intent route must exist');
