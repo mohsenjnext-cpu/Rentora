@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useRentora } from '../context/RentoraContext';
 import ItemCard from '../components/ItemCard';
@@ -20,7 +20,24 @@ import {
 
 export default function DiscoverPage({ initialCategory = 'all', initialQuery = '', onSelectItem, onRentItem }) {
   const { lang, dir, t, l } = useLanguage();
-  const { items = [] } = useRentora();
+  const { items = [], isRefreshing = false, refreshApp } = useRentora();
+  const [dataState, setDataState] = useState(() => ({ loading: (items || []).length === 0, error: null }));
+
+  useEffect(() => {
+    let mounted = true;
+    if ((items || []).length > 0) {
+      setDataState(prev => prev.loading || prev.error ? { loading: false, error: null } : prev);
+      return undefined;
+    }
+    setDataState({ loading: true, error: null });
+    refreshApp?.().then((result) => {
+      if (!mounted) return;
+      setDataState(result?.success ? { loading: false, error: null } : { loading: false, error: result?.error || l('دریافت آگهی‌ها ناموفق بود.', 'Unable to load listings.', 'تعذر تحميل الإعلانات.', '无法加载物品。') });
+    }).catch((error) => {
+      if (mounted) setDataState({ loading: false, error: error?.message || l('دریافت آگهی‌ها ناموفق بود.', 'Unable to load listings.', 'تعذر تحميل الإعلانات.', '无法加载物品。') });
+    });
+    return () => { mounted = false; };
+  }, [items, refreshApp, l]);
 
   const [query, setQuery] = useState(initialQuery);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
@@ -169,7 +186,16 @@ export default function DiscoverPage({ initialCategory = 'all', initialQuery = '
         </div>
       </div>
 
-      {filteredItems.length === 0 ? (
+      {dataState.loading || isRefreshing ? (
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5" aria-busy="true" aria-label={l('در حال بارگذاری آگهی‌ها', 'Loading listings', 'جار تحميل الإعلانات', '正在加载物品')}>
+          {Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-64 rounded-2xl bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 animate-pulse" />)}
+        </div>
+      ) : dataState.error ? (
+        <EmptyState type="search" title={l('خطا در دریافت آگهی‌ها', 'Could not load listings', 'تعذر تحميل الإعلانات', '无法加载物品')} message={dataState.error} actionLabel={l('تلاش دوباره', 'Retry', 'إعادة المحاولة', '重试')} onAction={() => {
+          setDataState({ loading: true, error: null });
+          refreshApp?.().then(result => setDataState(result?.success ? { loading: false, error: null } : { loading: false, error: result?.error || l('دریافت آگهی‌ها ناموفق بود.', 'Unable to load listings.', 'تعذر تحميل الإعلانات.', '无法加载物品.') })).catch(error => setDataState({ loading: false, error: error?.message || l('دریافت آگهی‌ها ناموفق بود.', 'Unable to load listings.', 'تعذر تحميل الإعلانات.', '无法加载物品.') }));
+        }} />
+      ) : {filteredItems.length === 0 ? (
         <EmptyState
           type="search"
           title={t('discoverEmptyTitle')}
