@@ -25,3 +25,6 @@ assert.match(source, /if \(currentUser && normalizeUsername\(currentUser\.userna
 
 assert.match(source, /onNavigate=\{\(page\) => \{ setEditingItem\(null\); handleNavigate\(page\); \}\}/, 'listing page navigation must preserve browser history');
 assert.match(source, /onBookingSuccess=\{\(\) => \{ setIsDirectBookingOpen\(false\); setDirectBookingItem\(null\); handleNavigate\('activity'\); \}\}/, 'successful booking navigation must preserve browser history');
+
+assert.match(source, /onItemCreated=\{\(newItem\) => \{ setEditingItem\(null\); handleSelectItem\(newItem\); \}\}/, 'listing creation must preserve browser history when opening the new detail');
+assert.match(source, /onItemUpdated=\{\(updatedItem\) => \{ setEditingItem\(null\); handleSelectItem\(updatedItem\); \}\}/, 'listing update must preserve browser history when opening the updated detail');
