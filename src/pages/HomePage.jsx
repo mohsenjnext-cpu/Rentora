@@ -169,7 +169,7 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
         <section className="grid grid-cols-3 gap-2.5">
           <div className="h-[76px] rounded-2xl bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 text-center pt-2.5 shadow-sm"><div className="text-[18px] font-black text-[var(--primary-mid)]">{activeItems.length}</div><div className="text-[9px] text-slate-400 mt-1">{t('homeStatItems')}</div></div>
           <div className="h-[76px] rounded-2xl bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 text-center pt-2.5 shadow-sm"><div className="text-[18px] font-black text-[var(--trust-text)]">{totalPioneersCount}</div><div className="text-[9px] text-slate-400 mt-1">{t('homeStatPioneers')}</div></div>
-          <div className="h-[76px] rounded-2xl bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 text-center pt-2.5 shadow-sm"><div className="text-[18px] font-black text-[var(--trust-text)]"></div><div className="text-[10px] font-bold text-[var(--trust-text)] mt-1">{t('homeStatHandover')}</div></div>
+          <div className="h-[76px] rounded-2xl bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 text-center pt-2.5 shadow-sm"><CheckCircle2 className="w-5 h-5 mx-auto text-[var(--trust-text)]" /><div className="text-[10px] font-bold text-[var(--trust-text)] mt-1">{t('homeStatHandover')}</div><div className="text-[8px] text-slate-400 mt-1 px-1">{l('تأیید تحویل در محل','Pickup handover confirmation','تأكيد التسليم عند الاستلام','现场交接确认')}</div></div>
         </section>
 
         <section>
