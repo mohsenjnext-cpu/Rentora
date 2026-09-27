@@ -99,11 +99,17 @@ export default function Sidebar({
         {isAuthenticated ? (
           <div className="rentora-sidebar-user rounded-2xl p-3 bg-slate-50 dark:bg-[#18172B]">
             <button type="button" onClick={() => handleNavClick('profile')} className="w-full flex items-center gap-3 text-start cursor-pointer">
-              <img
-                src={currentUser?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser?.username}`}
-                alt={currentUser?.username || ''}
-                className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
-              />
+              {currentUser?.avatar ? (
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser?.username || ''}
+                  className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                />
+              ) : (
+                <span className="w-10 h-10 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0 bg-white dark:bg-[#211F39] flex items-center justify-center" aria-hidden="true">
+                  <User className="w-5 h-5 text-slate-500 stroke-[1.8]" />
+                </span>
+              )}
               <span className="min-w-0 flex-1">
                 <span className="block text-xs font-bold truncate" dir="ltr">@{currentUser?.username}</span>
                 <span className={`inline-flex items-center gap-1 mt-1 text-[9px] font-semibold ${
