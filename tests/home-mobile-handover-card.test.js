@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 
 test('Home mobile handover card uses an explicit confirmation state without a fake metric', () => {
   const source = fs.readFileSync(new URL('../src/pages/HomePage.jsx', import.meta.url), 'utf8');
-  assert.match(source, /CheckCircle2 className="w-5 h-5 mx-auto text-\\[var\\(--trust-text\\)\\]"/);
-  assert.match(source, /Pickup handover confirmation/);
-  assert.doesNotMatch(source, /<div className="text-\\[18px\\] font-black text-\\[var\\(--trust-text\\]\\]"><\\/div>/);
+  assert.ok(source.includes('CheckCircle2 className="w-5 h-5 mx-auto text-[var(--trust-text)]"'));
+  assert.ok(source.includes('Pickup handover confirmation'));
+  assert.ok(!source.includes('<div className="text-[18px] font-black text-[var(--trust-text)]"></div>'));
 });
