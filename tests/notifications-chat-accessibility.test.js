@@ -19,3 +19,8 @@ assert.match(notifications, /role="status" aria-live="polite"/, 'notifications m
 assert.match(notifications, /role="alert"/, 'notifications must expose a recoverable load error');
 assert.match(notifications, /onClick=\{refreshNotifications\}/, 'notifications retry must refresh authoritative account data');
 assert.match(notifications, /const result = await refreshApp\?\.\(\)/, 'notifications refresh must use the real app sync path');
+
+
+assert.match(chat, /role="status" aria-live="polite"/, 'chat must expose a loading status for conversations or messages');
+assert.match(chat, /role="alert" aria-live="polite"/, 'chat warnings must be exposed as live alerts');
+assert.match(chat, /onClick=\{loadMessages\(selectedId\)\}/, 'chat message retry must reload the selected conversation');
