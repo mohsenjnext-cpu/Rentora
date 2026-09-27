@@ -18,3 +18,9 @@ test('profile controls keep explicit button semantics', () => {
   assert.match(source, /<button type="button" onClick=\{\(\) => fileInputRef\.current\?\.click\(\)\} aria-label=/);
   assert.match(source, /<button type="button" onClick=\{\(\) => onNavigate\('settings'\)\} aria-label=/);
 });
+
+test('profile account shortcuts keep their real navigation and wallet actions', () => {
+  assert.match(source, /onClick=\{\(\) => setIsWalletModalOpen\(true\)\}/);
+  assert.match(source, /onClick=\{\(\) => onNavigate\('notifications'\)\}/);
+  assert.match(source, /onClick=\{\(\) => onNavigate\('chat'\)\}/);
+});
