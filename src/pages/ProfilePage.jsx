@@ -24,13 +24,20 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [userReviewsData, setUserReviewsData] = useState(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewLoadError, setReviewLoadError] = useState('');
   const [reviewRetryNonce, setReviewRetryNonce] = useState(0);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileLoadError, setProfileLoadError] = useState('');
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    if (!currentUser?.username) return;
+    if (!currentUser?.username) {
+      setReviewLoading(false);
+      return;
+    }
     let mounted = true;
+    setReviewLoading(true);
     setReviewLoadError('');
     fetchUserReviews(currentUser.username)
       .then(data => {
@@ -41,9 +48,22 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
       .catch(err => {
         if (!mounted) return;
         setReviewLoadError(err?.message || l('خطا در بارگذاری اعتبار کاربر.', 'Failed to load reputation data.', 'فشل تحميل بيانات السمعة.', '加载信誉数据失败。'));
+      })
+      .finally(() => {
+        if (mounted) setReviewLoading(false);
       });
     return () => { mounted = false; };
   }, [currentUser?.username, fetchUserReviews, reviewRetryNonce]);
+
+  useEffect(() => {
+    if (currentUser?.uid) {
+      setProfileLoading(false);
+      setProfileLoadError('');
+    } else {
+      setProfileLoading(false);
+      setProfileLoadError(l('اطلاعات پروفایل از سرور دریافت نشد.', 'Unable to load your profile from the server.', 'تعذر تحميل ملفك الشخصي من الخادم.', '无法从服务器加载个人资料。'));
+    }
+  }, [currentUser?.uid]);
 
   useEffect(() => {
     setDisplayName(currentUser?.displayName || currentUser?.username || '');
@@ -67,6 +87,12 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
   ).length, [myRentals]);
 
   const rep = getUserReputationSummary(currentUser?.username, userReviewsData || rentals);
+
+  if (profileLoading) return (
+    <div role="status" aria-live="polite" className="w-full max-w-2xl mx-auto py-20 text-center text-sm text-slate-500">
+      {l('در حال بارگذاری پروفایل...', 'Loading profile...', 'جارٍ تحميل الملف الشخصي...', '正在加载个人资料...')}
+    </div>
+  );
 
   if (!isAuthenticated) return (
     <div className="max-w-md mx-auto py-16 text-center space-y-4">
@@ -113,6 +139,7 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
           <button type="button" onClick={() => onNavigate('settings')} aria-label={l('تنظیمات پروفایل', 'Profile settings', 'إعدادات الملف الشخصي', '个人资料设置')} className="p-2 rounded-xl border border-slate-200 dark:border-slate-700"><Settings aria-hidden="true" className="w-4 h-4" /></button>
         </div>
       </div>
+      {profileLoadError && <div role="alert" className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300 text-xs font-semibold flex items-center justify-between gap-3"><span>{profileLoadError}</span><button type="button" onClick={() => window.location.reload()} className="shrink-0 btn-secondary px-3 py-1.5 text-[11px] font-bold">{l('تلاش مجدد', 'Try again', 'حاول مجدداً', '重试')}</button></div>}
       {profileError && <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-600 text-xs font-bold flex gap-2"><AlertCircle className="w-4 h-4" />{profileError}</div>}
       {saveSuccess && <div className="p-3 rounded-xl badge-trust text-xs font-bold flex gap-2"><CheckCircle2 className="w-4 h-4" />{l('پروفایل بروزرسانی شد.', 'Profile updated successfully.', 'تم تحديث الملف الشخصي.', '个人资料已更新。')}</div>}
 
@@ -129,6 +156,7 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
             <div className="min-w-0 flex-1"><h2 className="text-2xl font-bold text-slate-900 dark:text-white">{currentUser.displayName || currentUser.username}</h2><p className="text-sm text-slate-500" dir="ltr">@{currentUser.username}</p><div className="mt-2 flex flex-wrap gap-2">{currentUser.kycStatus === 'verified' && <span className="badge-trust px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5" />KYC Verified</span>}<span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300">{l('پروفایل عمومی', 'Public profile', 'ملف عام', '公开主页')}</span></div><p className="text-sm text-slate-500 dark:text-slate-400 mt-3 max-w-2xl">{currentUser.bio || l('پروفایل معتبر کاربر Rentora.', 'Rentora member profile.', 'ملف عضو Rentora.', 'Rentora 用户资料。')}</p></div>
           </div>}
           {reviewLoadError && <div role="alert" className="mt-5 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300 text-xs font-semibold flex items-center justify-between gap-3"><span>{reviewLoadError}</span><button type="button" onClick={() => setReviewRetryNonce(v => v + 1)} className="shrink-0 btn-secondary px-3 py-1.5 text-[11px] font-bold">{l('تلاش مجدد', 'Try again', 'حاول مجدداً', '重试')}</button></div>}
+          {reviewLoading && <div role="status" aria-live="polite" className="mt-5 text-xs text-slate-400">{l('در حال بارگذاری اعتبار...', 'Loading reputation...', 'جارٍ تحميل السمعة...', '正在加载信誉...')}</div>}
           <div className="grid grid-cols-3 gap-2 mt-6 pt-5 border-t border-slate-200 dark:border-slate-800">
             <div className="text-center"><div className="text-lg font-bold text-amber-500 flex justify-center gap-1"><Star className="w-4 h-4 fill-amber-400 mt-1" />{rep.formattedScore}</div><span className="text-[11px] text-slate-400">{t('itemReviewsTitle')}</span></div>
             <div className="text-center"><div className="text-lg font-bold">{rep.reviewCount}</div><span className="text-[11px] text-slate-400">{l('نظرات', 'Reviews', 'المراجعات', '评价')}</span></div>
