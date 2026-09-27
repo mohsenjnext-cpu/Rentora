@@ -407,12 +407,12 @@ export function RentoraProvider({ children }) {
       piTxRef: txid,
       paidAt: new Date().toISOString()
     };
+    const authoritativeRental = await cloudSyncService.broadcastNewRental(confirmedRental);
     setRentals(prev => {
-      const updated = [confirmedRental, ...prev.filter(r => r.id !== confirmedRental.id)];
+      const updated = [authoritativeRental, ...prev.filter(r => r.id !== authoritativeRental.id)];
       cloudSyncService.saveCachedRentals(updated);
       return updated;
     });
-    await cloudSyncService.broadcastNewRental(confirmedRental);
     return paymentResult;
   };
 
