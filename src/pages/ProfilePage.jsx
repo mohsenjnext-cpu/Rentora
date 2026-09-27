@@ -13,7 +13,7 @@ function Avatar({ src, username, className = 'w-20 h-20' }) {
 
 export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProfile }) {
   const { t, l } = useLanguage();
-  const { currentUser, isAuthenticated, setAuthModalOpen, logout, updateProfile, updateUserProfile } = usePiAuth();
+  const { currentUser, isAuthenticated, setAuthModalOpen, setIsWalletModalOpen, logout, updateProfile, updateUserProfile } = usePiAuth();
   const { items = [], rentals = [], fetchUserReviews } = useRentora();
   const [isEditing, setIsEditing] = useState(false);
   const [displayName, setDisplayName] = useState('');
@@ -184,6 +184,23 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
             <strong className="block mt-0.5 text-base font-black text-slate-700 dark:text-slate-200">{rentalHistoryCount}</strong>
           </button>
         </div>{myRentals.length ? <div className="space-y-2">{myRentals.slice(0,4).map(r => <div key={r.id || r.bookingNumber} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between gap-3"><div className="min-w-0"><p className="text-xs font-bold truncate">{r.itemTitle || r.title || r.listingTitle || l('اجاره', 'Rental', 'إيجار', '租赁')}</p><p className="text-[10px] text-slate-400">{r.status || 'pending'}</p></div><span className="text-[10px] font-mono text-slate-500">{r.startDate || r.start_date || ''}</span></div>)}</div> : <p className="text-xs text-slate-400 text-center py-4">{l('هنوز اجاره‌ای ندارید.', 'No rentals yet.', 'لا توجد إيجارات بعد.', '暂无租赁记录。')}</p>}</section>
+      <section className="rentora-card rounded-2xl p-4">
+        <h2 className="text-sm font-bold text-slate-900 dark:text-white mb-3">{l('دسترسی‌های حساب', 'Account shortcuts', 'اختصارات الحساب', '账户快捷入口')}</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <button type="button" onClick={() => setIsWalletModalOpen(true)} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 text-start hover:border-[#534AB7]/40 transition">
+            <span className="block text-xs font-bold">{l('فعالیت‌های پای', 'Pi Activity & Ledger', 'نشاطات باي', 'Pi 交易账本')}</span>
+            <span className="block mt-1 text-[10px] text-slate-400">{l('مشاهده کیف پول و فعالیت‌های پای', 'Open wallet and Pi activity', 'فتح المحفظة ونشاطات باي', '打开钱包和 Pi 活动')}</span>
+          </button>
+          <button type="button" onClick={() => onNavigate('notifications')} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 text-start hover:border-[#534AB7]/40 transition">
+            <span className="block text-xs font-bold">{l('اعلان‌ها', 'Notifications', 'الإشعارات', '通知')}</span>
+            <span className="block mt-1 text-[10px] text-slate-400">{l('مشاهده اعلان‌های حساب', 'View account notifications', 'عرض إشعارات الحساب', '查看账户通知')}</span>
+          </button>
+          <button type="button" onClick={() => onNavigate('chat')} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3 text-start hover:border-[#534AB7]/40 transition">
+            <span className="block text-xs font-bold">{l('گفت‌وگوها', 'Chat', 'المحادثات', '聊天')}</span>
+            <span className="block mt-1 text-[10px] text-slate-400">{l('ورود به گفت‌وگوهای شما', 'Open your conversations', 'فتح محادثاتك', '打开你的对话')}</span>
+          </button>
+        </div>
+      </section>
       <button type="button" onClick={logout} className="w-full py-3 rounded-xl border border-rose-200 dark:border-rose-900 text-rose-600 text-xs font-bold flex justify-center gap-2"><LogOut className="w-4 h-4" />{t('navLogout')}</button>
     </div>
   );
