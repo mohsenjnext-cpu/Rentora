@@ -263,14 +263,19 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
               <p className="text-[10px] text-slate-400 mt-0.5">{l('آگهی‌های فعال', 'Active listings', 'الإعلانات النشطة', '活跃物品')}</p>
             </div>
           </div>
-          {featuredItems.length === 0 ? (
+          {dataState.loading || isRefreshing ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5" aria-busy="true" aria-label={l('در حال بارگذاری آگهی‌ها', 'Loading listings', 'جار تحميل الإعلانات', '正在加载物品')}>
+              {Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-64 rounded-2xl bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 animate-pulse" />)}
+            </div>
+          ) : dataState.error ? (
+            <EmptyState type="package" title={l('خطا در دریافت آگهی‌ها', 'Could not load listings', 'تعذر تحميل الإعلانات', '无法加载物品')} message={dataState.error} actionLabel={l('تلاش دوباره', 'Retry', 'إعادة المحاولة', '重试')} onAction={() => { setDataState({ loading: true, error: null }); refreshApp?.().then(result => setDataState(result?.success ? { loading: false, error: null } : { loading: false, error: result?.error || l('دریافت آگهی‌ها ناموفق بود.', 'Unable to load listings.', 'تعذر تحميل الإعلانات.', '无法加载物品。') })).catch(error => setDataState({ loading: false, error: error?.message || l('دریافت آگهی‌ها ناموفق بود.', 'Unable to load listings.', 'تعذر تحميل الإعلانات.', '无法加载物品。') })); }} />
+          ) : featuredItems.length === 0 ? (
             <EmptyState type="package" title={t('homeNoItemsTitle')} message={t('homeNoItemsDesc')} actionLabel={t('homePostFirstItem')} onAction={() => onNavigate('list-item')} />
           ) : (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
               {featuredItems.map(item => <ItemCard key={item.id} item={item} onSelect={onSelectItem} onRentClick={onRentItem} />)}
             </div>
-          )}
-        </section>
+          )}        </section>
       </div>
     </div>
   );
