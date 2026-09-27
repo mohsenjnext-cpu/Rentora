@@ -263,9 +263,6 @@ export default function ListItemPage({
           onItemUpdated(updatedItem || { ...itemToEdit, title, category, description, pricePerDay: parseFloat(pricePerDay), deposit: parseFloat(deposit) || 0, location, contactInfo: contactData, images: finalImages });
         }
 
-        setTimeout(() => {
-          if (onNavigate) onNavigate('owner-hub');
-        }, 1200);
       } else {
         // Create Mode
         const newItem = await createItemListing({
@@ -283,9 +280,6 @@ export default function ListItemPage({
         setSuccessNotice(true);
         if (onItemCreated) onItemCreated(newItem);
 
-        setTimeout(() => {
-          if (onNavigate) onNavigate('owner-hub');
-        }, 1200);
       }
     } catch (err) {
       setErrorMessage(err.message || l('خطا در پردازش آگهی.', 'Failed to process listing.', 'فشل في معالجة الإعلان.', '处理失败，请重试。'));
