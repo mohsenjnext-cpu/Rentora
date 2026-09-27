@@ -130,14 +130,19 @@ export default function ItemDetailPage({
 
   if (!detailItem || detailError) {
     return (
-      <div className="w-full max-w-3xl mx-auto min-h-[55vh] flex items-center justify-center pb-28">
+      <div className="w-full max-w-3xl mx-auto min-h-[55vh] flex items-center justify-center pb-28" role="alert" aria-live="assertive">
         <div className="rentora-card w-full max-w-md p-8 text-center space-y-4">
           <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center border border-rose-200 dark:border-rose-900"><Lock className="w-6 h-6" /></div>
           <div className="space-y-1.5">
             <h1 className="text-base font-black text-slate-900 dark:text-white">{localized('آگهی در دسترس نیست', 'Listing unavailable', 'الإعلان غير متاح', '商品不可用')}</h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 leading-6">{detailError || localized('اطلاعات این آگهی در حال حاضر قابل دریافت نیست.', 'This listing cannot be loaded right now.', 'لا يمكن تحميل بيانات هذا الإعلان حالياً.', '当前无法加载此商品信息。')}</p>
           </div>
-          <div className="flex items-center justify-center gap-2">\n            {itemId && !initialItem && (\n              <button type="button" onClick={() => setDetailRetryNonce(v => v + 1)} className="btn-secondary px-4 py-2.5 text-xs font-bold cursor-pointer">{localized('تلاش مجدد', 'Try again', 'إعادة المحاولة', '重试')}</button>\n            )}\n            <button type="button" onClick={onBack} className="btn-primary px-4 py-2.5 text-xs font-bold cursor-pointer">{localized('بازگشت', 'Go back', 'رجوع', '返回')}</button>\n          </div>
+          <div className="flex items-center justify-center gap-2">
+            {itemId && !initialItem && (
+              <button type="button" onClick={() => setDetailRetryNonce(v => v + 1)} className="btn-secondary px-4 py-2.5 text-xs font-bold cursor-pointer">{localized('تلاش مجدد', 'Try again', 'إعادة المحاولة', '重试')}</button>
+            )}
+            <button type="button" onClick={onBack} className="btn-primary px-4 py-2.5 text-xs font-bold cursor-pointer">{localized('بازگشت', 'Go back', 'رجوع', '返回')}</button>
+          </div>
         </div>
       </div>
     );
