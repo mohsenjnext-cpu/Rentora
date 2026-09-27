@@ -522,19 +522,18 @@ export function RentoraProvider({ children }) {
 
   const submitReport = async (reportData) => {
     const saved = await cloudSyncService.submitReport(reportData);
-    const rep = saved || { id: "rep_" + Date.now(), reporterUsername: currentUser?.username || 'anonymous', createdAt: new Date().toISOString(), ...reportData };
-    setReports(prev => [rep, ...prev]);
-    return rep;
+    if (!saved) throw new Error('گزارش در سرور ثبت نشد.');
+    setReports(prev => [saved, ...prev.filter(r => r.id !== saved.id)]);
+    return saved;
   };
 
   const addReport = submitReport;
 
   const resolveReport = async (reportId) => {
-    try {
-      await cloudSyncService.resolveReport(reportId, 'resolved');
-    } catch (_) {}
+    const result = await cloudSyncService.resolveReport(reportId, 'resolved');
+    if (!result?.success) throw new Error('به‌روزرسانی گزارش در سرور ناموفق بود.');
     setReports(prev => prev.filter(r => r.id !== reportId));
-    return { success: true };
+    return result;
   };
 
   // =========================================================================
