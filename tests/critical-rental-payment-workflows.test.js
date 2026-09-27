@@ -43,7 +43,7 @@ test('payment intent derives the Pi amount from the persisted rental fee', () =>
   const block = worker.slice(start, end);
   assert.match(block, /\['approved', 'completed'\]\.includes\(String\(existing\.status \|\| ''\)\.toLowerCase\(\)\)/);
   assert.match(block, /idempotent: true/);
-  assert.match(block, /existing\.pi_txid|existing\.expires_at/);
+  assert.match(block, /existing\.expires_at/);
   assert.doesNotMatch(block, /UPDATE payment_intents SET id=\?1, amount=\?2, memo=\?3, status='created'/);
   assert.doesNotMatch(block, /UPDATE rentals SET payment_status='pending', status='pending_payment'/);
 });
