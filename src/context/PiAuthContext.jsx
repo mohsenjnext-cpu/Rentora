@@ -4,7 +4,7 @@ import { cloudSyncService } from '../services/cloudSyncService';
 import { getApiBaseUrl } from '../services/apiConfig';
 
 const PiAuthContext = createContext();
-function installSessionFetchBridge(onSessionInvalid) {
+function installSessionFetchBridge(onSessionInvalid, isSessionActive = () => false) {
   if (typeof window === 'undefined' || typeof window.fetch !== 'function') return () => {};
   if (window.__rentoraSessionFetchBridge) return () => {};
   const originalFetch = window.fetch.bind(window);
@@ -13,6 +13,7 @@ function installSessionFetchBridge(onSessionInvalid) {
     const url = typeof input === 'string' ? input : input?.url || '';
     const isApiRequest = (apiBase && url.startsWith(apiBase)) || url.startsWith('/api/');
     const isPiLogin = url.includes('/api/auth/pi-login');
+    const sessionWasActive = Boolean(isSessionActive());
     try {
       if (isApiRequest) {
         const headers = new Headers(input instanceof Request ? input.headers : undefined);
@@ -22,7 +23,7 @@ function installSessionFetchBridge(onSessionInvalid) {
         headers.delete('x-pi-username');
         headers.set('X-Rentora-Client', 'web');
         const res = await originalFetch(input, { ...init, headers, credentials: init.credentials || 'include' });
-        if (res.status === 401 && !isPiLogin && typeof onSessionInvalid === 'function') onSessionInvalid();
+        if (res.status === 401 && !isPiLogin && sessionWasActive && typeof onSessionInvalid === 'function') onSessionInvalid();
         return res;
       }
     } catch (error) {
@@ -54,7 +55,7 @@ export function PiAuthProvider({ children }) {
 
   useEffect(() => {
     try { localStorage.removeItem('rentora_live_v1_session'); } catch (_) {}
-    const restoreFetch = installSessionFetchBridge(handleSessionInvalid);
+    const restoreFetch = installSessionFetchBridge(handleSessionInvalid, () => Boolean(currentUserRef.current?.uid));
     return restoreFetch;
   }, [handleSessionInvalid]);
 
