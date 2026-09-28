@@ -27,3 +27,16 @@ test('Pi SDK initialization does not claim success after init throws', () => {
   assert.ok(source.includes('window.__PI_INITIALIZED__ = false;'));
   assert.ok(source.includes('return false;'));
 });
+
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+test('gateway forwards the current host-only session cookie', () => {
+  for (const file of ['worker-gateway2.js', 'workers/worker-gateway2.js']) {
+    const source = fs.readFileSync(file, 'utf8');
+    assert.ok(source.includes("parseCookies(request)['__Host-rentora_session']"));
+    assert.doesNotMatch(source, /parseCookies\(request\)\.rentora_session/);
+  }
+});
