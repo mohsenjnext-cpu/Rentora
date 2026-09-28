@@ -26,8 +26,8 @@ PI_NETWORK_PASSPHRASE = "Pi Testnet"
 NODE_ENV = "production"
 PLATFORM_FEE_RATE = "0.05"
 CORS_ORIGIN = "https://rentora.mohsenjnext.workers.dev"
-# Admin allowlist is intentionally managed in Cloudflare per environment.
-# Do not define ADMIN_PI_UIDS here: Wrangler would overwrite the deployed value on every deploy.
+# Admin allowlist must contain actual Pi UIDs, never usernames. Provision real UIDs per environment before enabling admin operations.
+ADMIN_PI_UIDS = ""
 
 # Required secret (Cloudflare secret, never [vars]):
 # - PI_API_KEY
