@@ -1427,7 +1427,6 @@ export default {
             }
             await env.RENTORA_KV.delete(`session:${hash}`);
           }
-        }
         const response = jsonResponse({ success: true }, 200, env, origin); response.headers.set('Set-Cookie', '__Host-rentora_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax'); return response;
       }
       if (method === 'POST' && path === '/api/payments/intent') {
