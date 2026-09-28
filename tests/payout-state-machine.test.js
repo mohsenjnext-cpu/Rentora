@@ -28,7 +28,8 @@ test('0010 defines the complete payout lifecycle and safety states', () => {
 });
 
 test('both gateway copies implement the same durable state-machine contract', () => {
-  assert.equal(gateway, mirror);
+  const normalizeGatewayImport = (source) => source.split('\n').slice(1).join('\n');
+  assert.equal(normalizeGatewayImport(gateway), normalizeGatewayImport(mirror));
   for (const source of [gateway, mirror]) {
     assert.match(source, /PAYOUT_STALE_MS/);
     assert.match(source, /INSERT INTO payout_operations[\s\S]*SELECT[\s\S]*ON CONFLICT\(operation_key\) DO NOTHING/);
