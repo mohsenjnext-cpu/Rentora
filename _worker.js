@@ -1049,19 +1049,23 @@ export default {
       }
       if (method === 'GET' && path === '/api/admin/console') {
         const { user } = await requireAdmin(request, env);
+        const queryOptional = async (sql) => { try { const result = await env.RENTORA_DB.prepare(sql).all(); return { rows: result.results || [], error: null }; } catch (error) { return { rows: [], error: String(error?.message || 'Database query failed') }; } };
+        const firstOptional = async (sql) => { try { return { row: await env.RENTORA_DB.prepare(sql).first(), error: null }; } catch (error) { return { row: null, error: String(error?.message || 'Database query failed') }; } };
         const [
           usersRes, listingsRes, rentalsRes, reportsRes, transactionsRes
         ] = await Promise.all([
-          env.RENTORA_DB.prepare("SELECT * FROM users ORDER BY created_at DESC LIMIT 500").all(),
-          env.RENTORA_DB.prepare("SELECT l.*, u.username owner_username, u.pi_uid owner_pi_uid FROM listings l JOIN users u ON u.id=l.owner_user_id ORDER BY l.created_at DESC LIMIT 500").all(),
-          env.RENTORA_DB.prepare("SELECT r.*, l.title listing_title, u.username renter_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users u ON u.id=r.renter_user_id ORDER BY r.created_at DESC LIMIT 500").all(),
-          env.RENTORA_DB.prepare("SELECT rp.*, u.username reporter_username FROM reports rp JOIN users u ON u.id=rp.reporter_user_id ORDER BY rp.created_at DESC LIMIT 500").all(),
-          env.RENTORA_DB.prepare("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 500").all()
+          queryOptional("SELECT * FROM users ORDER BY created_at DESC LIMIT 500"),
+          queryOptional("SELECT l.*, u.username owner_username, u.pi_uid owner_pi_uid FROM listings l JOIN users u ON u.id=l.owner_user_id ORDER BY l.created_at DESC LIMIT 500"),
+          queryOptional("SELECT r.*, l.title listing_title, u.username renter_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users u ON u.id=r.renter_user_id ORDER BY r.created_at DESC LIMIT 500"),
+          queryOptional("SELECT rp.*, u.username reporter_username FROM reports rp JOIN users u ON u.id=rp.reporter_user_id ORDER BY rp.created_at DESC LIMIT 500"),
+          queryOptional("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 500")
         ]);
 
-        const revenue = await env.RENTORA_DB.prepare(
-          "SELECT COALESCE(SUM(CASE WHEN status='completed' AND (type='platform_fee' OR type IS NULL) THEN amount ELSE 0 END),0) totalRevenue, COALESCE(SUM(CASE WHEN status='completed' AND type='admin_payout' THEN amount ELSE 0 END),0) paidOut FROM transactions"
-        ).first();
+        const degraded = [];
+        for (const [name, result] of Object.entries({ users: usersRes, listings: listingsRes, rentals: rentalsRes, reports: reportsRes, transactions: transactionsRes })) if (result.error) degraded.push(name);
+        if (usersRes.error || listingsRes.error || rentalsRes.error) throw Object.assign(new Error('Admin console core data unavailable'), { status: 503 });
+        const revenue = await firstOptional("SELECT COALESCE(SUM(CASE WHEN status='completed' AND (type='platform_fee' OR type IS NULL) THEN amount ELSE 0 END),0) totalRevenue, COALESCE(SUM(CASE WHEN status='completed' AND type='admin_payout' THEN amount ELSE 0 END),0) paidOut FROM transactions");
+        if (revenue.error) degraded.push('revenue');
 
         let payouts = [];
         try {
@@ -1080,13 +1084,13 @@ export default {
           try { auditLogs = await env.RENTORA_KV.get('rentora_admin_audit_logs', 'json') || []; } catch (_) {}
         }
 
-        const users = (usersRes.results || []).map(u => userView(u, env, { includeAdminReview: true }));
-        const listings = listingsRes.results || [];
-        const rentals = rentalsRes.results || [];
-        const reports = reportsRes.results || [];
-        const transactions = transactionsRes.results || [];
-        const totalRevenue = Number(revenue?.totalRevenue || 0);
-        const paidOut = Number(revenue?.paidOut || 0);
+        const users = (usersRes.rows || []).map(u => userView(u, env, { includeAdminReview: true }));
+        const listings = listingsRes.rows || [];
+        const rentals = rentalsRes.rows || [];
+        const reports = reportsRes.rows || [];
+        const transactions = transactionsRes.rows || [];
+        const totalRevenue = Number(revenue.row?.totalRevenue || 0);
+        const paidOut = Number(revenue.row?.paidOut || 0);
         const reserved = payouts.filter(p => ['reserved','creating','pi_created','approving','approved','completing'].includes(p.status))
           .reduce((sum,p) => sum + Number(p.amount || 0), 0);
         const available = Math.max(0, totalRevenue - paidOut - reserved);
@@ -1094,6 +1098,7 @@ export default {
         return jsonResponse({
           success: true,
           generatedAt: now(),
+          degraded: [...new Set(degraded)],
           overview: {
             users: users.length,
             listings: listings.filter(l => l.status !== 'deleted').length,
