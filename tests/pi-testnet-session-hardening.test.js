@@ -6,7 +6,7 @@ test('gateway authentication reads the secure host-only session cookie', () => {
   for (const file of ['worker-gateway2.js', 'workers/worker-gateway2.js']) {
     const source = fs.readFileSync(file, 'utf8');
     assert.match(source, /cookies\[['"]__Host-rentora_session['"]\]/);
-    assert.doesNotMatch(source, /cookies\.rentora_session/);
+    assert.doesNotMatch(source, /cookies\.rentora_session/);\n    assert.match(source, /__Host-rentora_session=\$\{encodeURIComponent\(data\.sessionToken\)\}; Path=\\/; Max-Age=28800; HttpOnly; Secure; SameSite=Lax/);\n    assert.doesNotMatch(source, /Set-Cookie[^\\n]*rentora_session=/);
   }
 });
 
