@@ -64,7 +64,7 @@ export default function AdminDashboardPage({ onNavigate }) {
     if (!isAdmin || !api) return;
     setLoading(true); setError('');
     try {
-      const res = await fetch(`${api}/api/admin/console?_t=${Date.now()}`, { headers: headers(), cache: 'no-store' });
+      const res = await fetch(`${api}/api/admin/console?_t=${Date.now()}`, { headers: headers(), credentials: 'include', cache: 'no-store' });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) throw new Error(json.error || 'دریافت داده‌های پنل مدیر ممکن نیست.');
       setData(json);
@@ -75,7 +75,7 @@ export default function AdminDashboardPage({ onNavigate }) {
   useEffect(() => {
     load();
     if (isAdmin && api) {
-      fetch(api + '/api/admin/platform-fee?_t=' + Date.now(), { headers: headers(), cache: 'no-store' })
+      fetch(api + '/api/admin/platform-fee?_t=' + Date.now(), { headers: headers(), credentials: 'include', cache: 'no-store' })
         .then(async (res) => {
           const json = await res.json().catch(() => ({}));
           if (!res.ok || !json.success) throw new Error(json.error || 'دریافت نرخ کارمزد ناموفق بود.');
@@ -120,7 +120,7 @@ export default function AdminDashboardPage({ onNavigate }) {
     setBusyId(report.id);
     try {
       const res = await fetch(`${api}/api/admin/reports/${encodeURIComponent(report.id)}/status`, {
-        method:'POST', headers:headers(), body:JSON.stringify({ status })
+        method:'POST', headers:headers(), credentials:'include', body:JSON.stringify({ status })
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) throw new Error(json.error || 'تغییر وضعیت گزارش ناموفق بود.');
@@ -132,7 +132,7 @@ export default function AdminDashboardPage({ onNavigate }) {
   const retryReconciliation = async (queueId) => {
     setBusyId(queueId); setError('');
     try {
-      const res = await fetch(`${api}/api/admin/reconciliation/${encodeURIComponent(queueId)}/retry`, { method:'POST', headers:headers() });
+      const res = await fetch(`${api}/api/admin/reconciliation/${encodeURIComponent(queueId)}/retry`, { method:'POST', headers:headers(), credentials:'include' });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) throw new Error(json.error || 'تطبیق پرداخت ناموفق بود.');
       await load();
@@ -150,7 +150,7 @@ export default function AdminDashboardPage({ onNavigate }) {
     setFeeSaving(true); setFeeMessage('');
     try {
       const res = await fetch(api + '/api/admin/platform-fee', {
-        method: 'POST', headers: headers(), body: JSON.stringify({ ratePercent: value })
+        method: 'POST', headers: headers(), credentials: 'include', body: JSON.stringify({ ratePercent: value })
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.success) throw new Error(json.error || 'ذخیره نرخ کارمزد ناموفق بود.');

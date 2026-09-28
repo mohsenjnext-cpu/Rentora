@@ -1014,6 +1014,10 @@ async function createPayoutPayment(env, operation, leaseOwner, paymentPayload) {
 async function adminRoute(request, env, path) {
   const user = await requireUser(request, env);
   if (!(user.role === 'admin' && adminAllowed(user.pi_uid, env))) return json({ error: 'Admin access required' }, 403, request, env);
+  if (path === '/api/admin/console' && request.method === 'GET') {
+    return legacyWorker.fetch(request, env);
+  }
+
   if (path === '/api/admin/platform-fee') {
     const raw = await env.RENTORA_KV.get('config:platform_fee_rate');
     const parsed = Number(raw);
@@ -1255,7 +1259,7 @@ export default {
         return json({ authenticated: true, user: { ...userView(user, env), isAdmin }, isAdmin }, 200, request, env);
       }
       if ((path === '/api/admin/platform-fee') && (request.method === 'GET' || request.method === 'POST')) return await adminRoute(request, env, path);
-      if ((request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users')) || (request.method === 'POST' && (path === '/api/admin/payout' || path === '/api/admin/cleanup'))) return await adminRoute(request, env, path);
+      if ((request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users' || path === '/api/admin/console')) || (request.method === 'POST' && (path === '/api/admin/payout' || path === '/api/admin/cleanup'))) return await adminRoute(request, env, path);
 
       // Static frontend assets must be served directly by the gateway worker. This keeps
       // React's production bundles independent from the API fallback and prevents an SPA
