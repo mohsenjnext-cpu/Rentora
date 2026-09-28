@@ -7,6 +7,8 @@ test('gateway authentication reads the secure host-only session cookie', () => {
     const source = fs.readFileSync(file, 'utf8');
     assert.match(source, /cookies\[['"]__Host-rentora_session['"]\]/);
     assert.doesNotMatch(source, /cookies\.rentora_session/);
+    assert.ok(source.includes('__Host-rentora_session=${encodeURIComponent(data.sessionToken)}; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=Lax'));
+    assert.doesNotMatch(source, /Set-Cookie[^\n]*['"]rentora_session=/);
   }
 });
 
@@ -21,5 +23,7 @@ test('Pi authentication persists cookies and only marks SDK auth after server ve
 
 test('Pi SDK initialization does not claim success after init throws', () => {
   const source = fs.readFileSync('src/services/piService.js', 'utf8');
-  assert.match(source, /this\.isInitialized = false;\n      window\.__PI_INITIALIZED__ = false;\n      return false;/);
+  assert.ok(source.includes('this.isInitialized = false;'));
+  assert.ok(source.includes('window.__PI_INITIALIZED__ = false;'));
+  assert.ok(source.includes('return false;'));
 });

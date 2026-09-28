@@ -22,7 +22,7 @@ test('logout revokes the exact server session before returning success', () => {
   const logout = worker.slice(logoutStart, logoutEnd);
   assert.ok(logout.includes('const hash = await sha256(token);'));
   assert.ok(logout.includes('await env.RENTORA_KV.delete(`session:${hash}`);'));
-  assert.ok(logout.includes("const response = jsonResponse({ success: true }, 200, env, origin);"))
+  assert.ok(logout.includes("const response = jsonResponse({ success: true }, 200, env, origin);"));
 assert.ok(logout.includes("response.headers.set('Set-Cookie', '__Host-rentora_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax');"));
 });
 
@@ -36,9 +36,10 @@ test('authenticated requests can only resolve sessions through the hashed KV rec
 });
 
 test('gateway forwards the session cookie into the legacy worker as an Authorization bearer token', () => {
-  assert.ok(gateway.includes('const cookieToken = parseCookies(request).rentora_session'));
+  assert.ok(gateway.includes("const cookies = parseCookies(request);"));
+  assert.ok(gateway.includes("cookies['__Host-rentora_session']"));
   assert.ok(gateway.includes("headers.set('Authorization', `Bearer ${cookieToken}`);"));
   assert.ok(gateway.includes("path === '/api/auth/pi-login'"));
-  assert.ok(gateway.includes("Max-Age=28800; HttpOnly; Secure; SameSite=None"));
+  assert.ok(gateway.includes("__Host-rentora_session=${encodeURIComponent(data.sessionToken)}; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=Lax"));
   assert.ok(gateway.includes('delete cleanData.sessionToken;'));
 });
