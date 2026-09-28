@@ -5,7 +5,7 @@ import fs from 'node:fs';
 const source = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
 
 const routeGuards = [
-  { name: 'admin console', route: /method === 'GET' && path === '\/api\/admin\/console'[\s\S]*?requireAdmin\(request, env\)/ },
+  { name: 'admin console', route: /handleAdminConsole\(request, env[\s\S]*?authenticatedUser = null/ },
   { name: 'admin overview', route: /method === 'GET' && path === '\/api\/admin\/overview'[\s\S]*?requireAdmin\(request, env\)/ },
   { name: 'admin cleanup', route: /method === 'POST' && path === '\/api\/admin\/cleanup'[\s\S]*?requireAdmin\(request, env\)/ },
   { name: 'admin payout', route: /method === 'POST' && path === '\/api\/admin\/payout'[\s\S]*?requireAdmin\(request, env\)/ },
