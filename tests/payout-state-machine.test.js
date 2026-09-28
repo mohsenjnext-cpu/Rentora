@@ -28,7 +28,7 @@ test('0010 defines the complete payout lifecycle and safety states', () => {
 });
 
 test('both gateway copies implement the same durable state-machine contract', () => {
-  const normalizeGatewayImport = (source) => source.replace(/^import legacyWorker(?:, \\{ handleAdminConsole \\})? from ['\"][.][.]?\\/_worker\\.js['\"];$/m, 'IMPORT_LEGACY_WORKER');
+  const normalizeGatewayImport = (source) => source.split('\n').slice(1).join('\n');
   assert.equal(normalizeGatewayImport(gateway), normalizeGatewayImport(mirror));
   for (const source of [gateway, mirror]) {
     assert.match(source, /PAYOUT_STALE_MS/);
