@@ -137,9 +137,9 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
   );
 
   return (
-    <div className="select-none" onClick={() => searchFocused && setSearchFocused(false)}>
+    <div className="home-page select-none" onClick={() => searchFocused && setSearchFocused(false)}>
       <div className="md:hidden space-y-5 pb-4" onClick={(e) => e.stopPropagation()}>
-        <section className="banner-purple rounded-[24px] p-5 min-h-[244px] flex flex-col items-end text-end">
+        <section className="home-hero banner-purple rounded-[24px] p-5 min-h-[244px] flex flex-col items-end text-end">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-7 h-7 rounded-lg overflow-hidden border border-white/70 dark:border-slate-700 bg-white/70 dark:bg-[#211E45] flex items-center justify-center shrink-0">
               {currentUser?.avatar ? <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" /> : <UserRound className="w-4 h-4 text-[var(--primary-mid)]" aria-hidden="true" />}
@@ -155,7 +155,7 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
           <div className="mt-3 w-full">{searchBox(true)}</div>
         </section>
 
-        <section>
+        <section className="home-quick-discovery">
           <div className="flex items-center justify-between mb-2">
             <button type="button" onClick={() => onNavigate('discover')} className="text-[10px] font-semibold text-[var(--primary-mid)]">{t('homeViewAll')} ›</button>
             <h2 className="text-[15px] font-bold text-slate-900 dark:text-white">{l('کشف سریع', 'Quick discovery', 'اكتشاف سريع', '快速发现')}</h2>
@@ -175,7 +175,7 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
           </div>
         </section>
 
-        <section className="rounded-2xl bg-[var(--trust-bg)] border border-emerald-200/60 dark:border-emerald-900/60 p-3.5 flex items-center gap-3">
+        <section className="home-trust rounded-2xl bg-[var(--trust-bg)] border border-emerald-200/60 dark:border-emerald-900/60 p-3.5 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-white/90 dark:bg-[#123F35] text-[var(--trust-text)] flex items-center justify-center shrink-0"><ShieldCheck className="w-5 h-5" /></div>
           <div className="text-end flex-1">
             <h4 className="text-[12px] font-bold text-[var(--trust-text)]">{t('homeTrustBadgeTitle')}</h4>
@@ -183,13 +183,13 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
           </div>
         </section>
 
-        <section className="grid grid-cols-3 gap-2.5">
+        <section className="home-stats grid grid-cols-3 gap-2.5">
           <div className="h-[76px] rounded-2xl bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 text-center pt-2.5 shadow-sm"><div className="text-[18px] font-black text-[var(--primary-mid)]">{activeItems.length}</div><div className="text-[9px] text-slate-400 mt-1">{t('homeStatItems')}</div></div>
           <div className="h-[76px] rounded-2xl bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 text-center pt-2.5 shadow-sm"><div className="text-[18px] font-black text-[var(--trust-text)]">{activeCategoryCount}</div><div className="text-[9px] text-slate-400 mt-1">{l('دسته‌های فعال', 'Active categories', 'الفئات النشطة', '活跃分类')}</div></div>
           <div className="h-[76px] rounded-2xl bg-white dark:bg-[#151426] border border-slate-200 dark:border-slate-800 text-center pt-2.5 shadow-sm"><CheckCircle2 className="w-5 h-5 mx-auto text-[var(--trust-text)]" /><div className="text-[10px] font-bold text-[var(--trust-text)] mt-1">{t('homeStatHandover')}</div><div className="text-[8px] text-slate-400 mt-1 px-1">{l('تأیید تحویل در محل','Pickup handover confirmation','تأكيد التسليم عند الاستلام','现场交接确认')}</div></div>
         </section>
 
-        <section>
+        <section className="home-featured">
           <div className="flex items-center justify-between mb-2.5">
             <button type="button" onClick={() => onNavigate('discover')} className="px-2.5 py-1.5 rounded-full bg-[var(--purple-tint)] text-[10px] font-semibold text-[var(--primary-mid)]">{t('homeViewAll')} ›</button>
             <h2 className="text-[16px] font-bold text-slate-900 dark:text-white">{t('homeFeaturedTitle')}</h2>
@@ -209,7 +209,7 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
       </div>
 
       <div className="hidden md:block space-y-6 pb-12">
-        <section className="banner-purple p-7 sm:p-8">
+        <section className="home-hero banner-purple p-7 sm:p-8">
           <div className="max-w-3xl space-y-4">
             <div className="flex items-center justify-between gap-4">
               <div className="space-y-1">
@@ -231,7 +231,7 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
           </div>
         </section>
 
-        <section className="space-y-2">
+        <section className="home-quick-discovery space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900 dark:text-white">{l('کشف سریع', 'Quick discovery', 'اكتشاف سريع', '快速发现')}</h2>
             <span className="text-[10px] text-slate-400">{l('جستجو و فیلتر در Discover', 'More filters in Discover', 'المزيد من المرشحات في البحث', '更多筛选在发现页')}</span>
@@ -239,7 +239,7 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
           <CategoryBar selectedCategory="all" onSelectCategory={(catId) => onNavigate('discover', { category: catId })} />
         </section>
 
-        <section className="p-4 rounded-2xl badge-trust flex items-center justify-between gap-4">
+        <section className="home-trust p-4 rounded-2xl badge-trust flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-white/90 dark:bg-[#0B382C] text-[var(--trust-text)] shrink-0"><ShieldCheck className="w-5 h-5" /></div>
             <div>
@@ -249,13 +249,13 @@ export default function HomePage({ onNavigate, onSelectItem, onRentItem }) {
           </div>
         </section>
 
-        <section className="grid grid-cols-3 gap-3">
+        <section className="home-stats grid grid-cols-3 gap-3">
           <div className="p-4 rounded-2xl rentora-card text-center space-y-1"><Package className="w-5 h-5 mx-auto text-[var(--primary-mid)]" /><div className="text-lg font-black text-slate-900 dark:text-white">{activeItems.length}</div><div className="text-[10px] text-slate-400">{t('homeStatItems')}</div></div>
           <div className="p-4 rounded-2xl rentora-card text-center space-y-1"><Package className="w-5 h-5 mx-auto text-[var(--trust-text)]" /><div className="text-lg font-black text-slate-900 dark:text-white">{activeCategoryCount}</div><div className="text-[10px] text-slate-400">{l('دسته‌های فعال', 'Active categories', 'الفئات النشطة', '活跃分类')}</div></div>
           <div className="p-4 rounded-2xl rentora-card text-center space-y-1"><CheckCircle2 className="w-5 h-5 mx-auto text-[var(--trust-text)]" /><div className="flex items-center justify-center gap-1 text-[var(--trust-text)]"><CheckCircle2 className="w-4 h-4" aria-hidden="true" /><span className="text-[10px] font-bold">{t('homeStatHandover')}</span></div><div className="text-[9px] text-slate-400">{l('تأیید تحویل در محل','Pickup handover confirmation','تأكيد التسليم عند الاستلام','现场交接确认')}</div></div>
         </section>
 
-        <section className="space-y-3">
+        <section className="home-featured space-y-3">
           <div className="flex items-center justify-between">
             <button type="button" onClick={() => onNavigate('discover')} className="text-xs font-semibold text-[var(--primary-mid)] hover:underline cursor-pointer">{t('homeViewAll')}</button>
             <div className="text-end">
