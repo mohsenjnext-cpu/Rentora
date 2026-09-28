@@ -13,6 +13,7 @@ function installSessionFetchBridge(onSessionInvalid, isSessionActive = () => fal
     const url = typeof input === 'string' ? input : input?.url || '';
     const isApiRequest = (apiBase && url.startsWith(apiBase)) || url.startsWith('/api/');
     const isPiLogin = url.includes('/api/auth/pi-login');
+    const isSessionCheck = url.includes('/api/auth/me');
     const sessionWasActive = Boolean(isSessionActive());
     try {
       if (isApiRequest) {
@@ -23,7 +24,10 @@ function installSessionFetchBridge(onSessionInvalid, isSessionActive = () => fal
         headers.delete('x-pi-username');
         headers.set('X-Rentora-Client', 'web');
         const res = await originalFetch(input, { ...init, headers, credentials: init.credentials || 'include' });
-        if (res.status === 401 && !isPiLogin && sessionWasActive && typeof onSessionInvalid === 'function') onSessionInvalid();
+        // Only the authoritative session endpoint may invalidate an active session.
+        // Other API 401s can be caused by permission, stale background work, or a
+        // request that raced with login; they must never log out a freshly signed-in user.
+        if (res.status === 401 && isSessionCheck && !isPiLogin && sessionWasActive && typeof onSessionInvalid === 'function') onSessionInvalid();
         return res;
       }
     } catch (error) {
