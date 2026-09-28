@@ -200,7 +200,7 @@ function piErrorMessage(data, fallback = 'Pi network error') {
 }
 async function verifyPiAccessToken(env, accessToken) { if (!accessToken || !env?.PI_API_KEY) throw new Error('Pi authentication is unavailable'); const base = String(env.PI_API_URL || 'https://api.minepi.com/v2').replace(/\/$/, ''); const response = await fetch(`${base}/me`, { headers: { Authorization: `Bearer ${accessToken}` } }); const data = await response.json().catch(() => ({})); if (!response.ok || !data?.uid || !data?.username) throw new Error('Pi authentication rejected'); return data; }
 async function createSession(env, user) { const token = randomToken('sess'); const hash = await sha256(token); await env.RENTORA_KV.put(`session:${hash}`, JSON.stringify({ uid: user.pi_uid, username: user.username, role: user.role }), { expirationTtl: SESSION_TTL }); return token; }
-async function getSession(request, env) { const header = request.headers.get('Authorization') || ''; if (!header.startsWith('Bearer ')) return null; const token = header.slice(7).trim(); if (!token) return null; const hash = await sha256(token); const raw = await env.RENTORA_KV.get(`session:${hash}`); if (!raw) return null; try { return JSON.parse(raw); } catch (_) { return null; } }
+async function getSession(request, env) { const header = request.headers.get('Authorization') || ''; let token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''; if (!token) { const cookie = request.headers.get('Cookie') || ''; const match = cookie.match(/(?:^|;\s*)__Host-rentora_session=([^;]+)/); token = match ? decodeURIComponent(match[1]) : ''; } if (!token) return null; const hash = await sha256(token); const raw = await env.RENTORA_KV.get(`session:${hash}`); if (!raw) return null; try { return JSON.parse(raw); } catch (_) { return null; } }
 async function requireUser(request, env) { requireBindings(env); const session = await getSession(request, env); if (!session?.uid) throw Object.assign(new Error('Authentication required'), { status: 401 }); const row = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE pi_uid = ?1 LIMIT 1').bind(session.uid).first(); if (!row || row.status !== 'active') throw Object.assign(new Error('User is not active'), { status: 403 }); return { session, user: row }; }
 const QUOTE_TTL = 900; // 15 minutes in seconds
 
@@ -1397,13 +1397,14 @@ export default {
         const user = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE id=?1').bind(userId).first();
         if (user.status !== 'active') return errorResponse('User is suspended', 403, env, undefined, origin);
         const sessionToken = await createSession(env, user);
-        return jsonResponse({ authenticated: true, verifiedWithPiApi: true, user: userView(user, env), sessionToken, uid, username }, 200, env, origin);
+        const response = jsonResponse({ authenticated: true, verifiedWithPiApi: true, user: userView(user, env), uid, username }, 200, env, origin); response.headers.set('Set-Cookie', `__Host-rentora_session=${encodeURIComponent(sessionToken)}; Max-Age=${SESSION_TTL}; Path=/; HttpOnly; Secure; SameSite=Lax`); return response;
       }
       if (method === 'POST' && path === '/api/auth/logout') {
         requireBindings(env);
         const header = request.headers.get('Authorization') || '';
-        if (header.startsWith('Bearer ')) {
-          const token = header.slice(7).trim();
+        const cookie = request.headers.get('Cookie') || '';
+        const cookieMatch = cookie.match(/(?:^|;\s*)__Host-rentora_session=([^;]+)/);
+        const token = header.startsWith('Bearer ') ? header.slice(7).trim() : (cookieMatch ? decodeURIComponent(cookieMatch[1]) : '');
           if (token) {
             const hash = await sha256(token);
             const rawSession = await env.RENTORA_KV.get(`session:${hash}`);
@@ -1426,8 +1427,7 @@ export default {
             }
             await env.RENTORA_KV.delete(`session:${hash}`);
           }
-        }
-        return jsonResponse({ success: true }, 200, env, origin);
+        const response = jsonResponse({ success: true }, 200, env, origin); response.headers.set('Set-Cookie', '__Host-rentora_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax'); return response;
       }
       if (method === 'POST' && path === '/api/payments/intent') {
         const { user } = await requireUser(request, env);

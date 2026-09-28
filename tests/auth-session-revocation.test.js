@@ -22,7 +22,8 @@ test('logout revokes the exact server session before returning success', () => {
   const logout = worker.slice(logoutStart, logoutEnd);
   assert.ok(logout.includes('const hash = await sha256(token);'));
   assert.ok(logout.includes('await env.RENTORA_KV.delete(`session:${hash}`);'));
-  assert.ok(logout.includes('return jsonResponse({ success: true }, 200, env, origin);'));
+  assert.ok(logout.includes("const response = jsonResponse({ success: true }, 200, env, origin);"))
+assert.ok(logout.includes("response.headers.set('Set-Cookie', '__Host-rentora_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax');"));
 });
 
 test('authenticated requests can only resolve sessions through the hashed KV record', () => {
