@@ -13,7 +13,7 @@ Rentora follows a **Server-Authoritative, Edge-First Architecture** designed for
                       │    Pi Browser / Pioneer Mobile App      │
                       │   (React 19 + Vite + Pi SDK v2.0)       │
                       └────────────────────┬────────────────────┘
-                                           │ HTTPS / Bearer Token
+                                           │ HTTPS / HttpOnly Session Cookie
                                            ▼
                       ┌─────────────────────────────────────────┐
                       │    Cloudflare Worker Gateway            │
@@ -94,11 +94,12 @@ npm run build
 ### 1. Configure Cloudflare Resources
 
 #### D1 Database
-Create the D1 database and apply the schema:
+Create the D1 database and apply the reviewed production migrations separately:
 ```bash
 npx wrangler d1 create rentora
-npx wrangler d1 execute rentora --remote --file=db/schema.sql
+npx wrangler d1 migrations apply rentora --remote
 ```
+Do not execute `db/schema.sql` directly against the live database. Production schema evolution belongs to the reviewed migration ledger.
 
 #### KV Namespace
 Create the KV namespace for session and quote management:
@@ -136,7 +137,7 @@ npx wrangler deploy
 ## 🧪 Pi Testnet Verification Checklist
 
 - [x] **SDK Mode:** `window.Pi.init({ version: "2.0", sandbox: false })`
-- [x] **Authentication:** Scopes `['payments', 'username', 'wallet_address']` with `onIncompletePaymentFound` recovery.
+- [x] **Authentication:** Scopes `['payments', 'username', 'wallet_address']` with a server-issued HttpOnly session cookie and `onIncompletePaymentFound` recovery.
 - [x] **Domain Verification:** `https://your-domain/validation-key.txt` serving valid domain verification hash.
 - [x] **Incomplete Payment Handling:** Dangling payments auto-resolved via `/api/payments/incomplete`.
 - [x] **Payout System:** Admin A2U payouts validated against available fee treasury.
