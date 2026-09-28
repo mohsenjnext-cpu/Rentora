@@ -4,6 +4,18 @@ import { cloudSyncService } from '../services/cloudSyncService';
 import { getApiBaseUrl } from '../services/apiConfig';
 
 const PiAuthContext = createContext();
+const PI_SESSION_INTENT_KEY = 'rentora_pi_session_intent_v1';
+
+function hasPiSessionIntent() {
+  try { return localStorage.getItem(PI_SESSION_INTENT_KEY) === '1'; } catch (_) { return false; }
+}
+
+function setPiSessionIntent(active) {
+  try {
+    if (active) localStorage.setItem(PI_SESSION_INTENT_KEY, '1');
+    else localStorage.removeItem(PI_SESSION_INTENT_KEY);
+  } catch (_) {}
+}
 function installSessionFetchBridge(onSessionInvalid, isSessionActive = () => false) {
   if (typeof window === 'undefined' || typeof window.fetch !== 'function') return () => {};
   if (window.__rentoraSessionFetchBridge) return () => {};
@@ -68,11 +80,42 @@ export function PiAuthProvider({ children }) {
   // Authoritatively verify session with server on initial mount & whenever currentUser changes
   useEffect(() => {
     let isMounted = true;
+    let restoreAttempted = false;
     const apiBase = getApiBaseUrl();
     if (!apiBase) return () => {};
+
+    const restoreFromPiIfNeeded = async () => {
+      if (!isMounted || restoreAttempted || !hasPiSessionIntent()) return;
+      restoreAttempted = true;
+      try {
+        const authData = await piService.authenticate();
+        if (!isMounted || !authData?.uid) return;
+        const isAdminRole = authData.user?.role === 'admin';
+        setIsServerVerifiedAdmin(isAdminRole);
+        const restoredUser = {
+          ...authData.user,
+          uid: authData.uid,
+          username: authData.username,
+          displayName: authData.user?.displayName || authData.username,
+          role: authData.user?.role || 'user',
+          kycStatus: authData.user?.kycStatus || 'unknown',
+          isOfficialSdk: true,
+          piWalletConnected: true,
+          status: authData.user?.status || 'active'
+        };
+        currentUserRef.current = restoredUser;
+        setCurrentUser(restoredUser);
+      } catch (_) {
+        // Keep the user signed out if Pi cannot restore the prior authenticated state.
+      }
+    };
+
     fetch(`${apiBase}/api/auth/me`, { method: 'GET', headers: { 'Cache-Control': 'no-cache' }, credentials: 'include' })
-      .then(res => {
-        if (res.status === 401) return null;
+      .then(async res => {
+        if (res.status === 401) {
+          await restoreFromPiIfNeeded();
+          return null;
+        }
         return res.json().catch(() => null);
       })
       .then(data => {
@@ -114,6 +157,7 @@ export function PiAuthProvider({ children }) {
         status: authData.user?.status || 'active'
       };
       currentUserRef.current = userObj;
+      setPiSessionIntent(true);
       setCurrentUser(userObj);
       setUsers(prev => {
         const updated = [userObj, ...prev.filter(u => u.uid !== userObj.uid)];
@@ -136,6 +180,7 @@ export function PiAuthProvider({ children }) {
     } catch (_) {
       // Local logout still happens even if the network is unavailable.
     } finally {
+      setPiSessionIntent(false);
       handleSessionInvalid();
     }
   };
