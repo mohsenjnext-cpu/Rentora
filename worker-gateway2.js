@@ -1014,6 +1014,10 @@ async function createPayoutPayment(env, operation, leaseOwner, paymentPayload) {
 async function adminRoute(request, env, path) {
   const user = await requireUser(request, env);
   if (!(user.role === 'admin' && adminAllowed(user.pi_uid, env))) return json({ error: 'Admin access required' }, 403, request, env);
+  if (path === '/api/admin/console' && request.method === 'GET') {
+    return legacyWorker.fetch(request, env);
+  }
+
   if (path === '/api/admin/platform-fee') {
     const raw = await env.RENTORA_KV.get('config:platform_fee_rate');
     const parsed = Number(raw);
