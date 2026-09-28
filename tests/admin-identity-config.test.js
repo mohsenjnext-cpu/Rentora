@@ -7,7 +7,9 @@ test('admin identity configuration requires explicit Pi UIDs and never usernames
   const gateway = fs.readFileSync(new URL('../worker-gateway2.js', import.meta.url), 'utf8');
   const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
 
-  assert.match(wrangler, /^ADMIN_PI_UIDS\s*=\s*""/m);
+  // ADMIN_PI_UIDS is intentionally not defined in wrangler.toml.
+  // The real allowlist is provisioned per environment in Cloudflare so deploys cannot overwrite it.
+  assert.doesNotMatch(wrangler, /^ADMIN_PI_UIDS\s*=/m);
   assert.doesNotMatch(wrangler, /^ADMIN_PI_USERNAMES\s*=/m);
   assert.match(gateway, /function adminAllowed\(value, env\)/);
   assert.doesNotMatch(gateway, /ADMIN_PI_USERNAMES/);
