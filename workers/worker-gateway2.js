@@ -1169,7 +1169,7 @@ async function adminRoute(request, env, path) {
 }
 export default {
   async fetch(request, env, ctx) {
-    const cookieToken = parseCookies(request).rentora_session ? decodeURIComponent(parseCookies(request).rentora_session) : '';
+    const cookieToken = parseCookies(request)['__Host-rentora_session'] ? decodeURIComponent(parseCookies(request)['__Host-rentora_session']) : '';
     if (cookieToken && !request.headers.get('Authorization')) {
       const headers = new Headers(request.headers);
       headers.set('Authorization', `Bearer ${cookieToken}`);
