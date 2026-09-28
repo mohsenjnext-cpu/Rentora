@@ -147,6 +147,7 @@ export function PiAuthProvider({ children }) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data?.user) throw new Error(data?.error || 'ذخیره پروفایل ناموفق بود.');
     const updated = { ...currentUser, ...data.user, isOfficialSdk: true, piWalletConnected: true };
+    currentUserRef.current = updated;
     setCurrentUser(updated);
     setUsers(prev => [updated, ...prev.filter(u => u.uid !== updated.uid)]);
     cloudSyncService.saveCachedUsers([updated, ...users.filter(u => u.uid !== updated.uid)]);
