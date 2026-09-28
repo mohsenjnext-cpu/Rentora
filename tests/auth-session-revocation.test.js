@@ -36,7 +36,8 @@ test('authenticated requests can only resolve sessions through the hashed KV rec
 });
 
 test('gateway forwards the session cookie into the legacy worker as an Authorization bearer token', () => {
-  assert.ok(gateway.includes("const cookies = parseCookies(request);"));\n  assert.ok(gateway.includes("cookies['__Host-rentora_session']"));
+  assert.ok(gateway.includes("const cookies = parseCookies(request);"));
+  assert.ok(gateway.includes("cookies['__Host-rentora_session']"));
   assert.ok(gateway.includes("headers.set('Authorization', `Bearer ${cookieToken}`);"));
   assert.ok(gateway.includes("path === '/api/auth/pi-login'"));
   assert.ok(gateway.includes("__Host-rentora_session=${encodeURIComponent(data.sessionToken)}; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=Lax"));
