@@ -42,9 +42,9 @@ class PiNetworkService {
       window.__PI_INITIALIZED__ = true;
       return true;
     } catch (_) {
-      this.isInitialized = true;
-      window.__PI_INITIALIZED__ = true;
-      return true;
+      this.isInitialized = false;
+      window.__PI_INITIALIZED__ = false;
+      return false;
     }
   }
 
@@ -98,8 +98,6 @@ class PiNetworkService {
         const sdkUser = authResult?.user;
         if (!accessToken || !sdkUser?.uid || !sdkUser?.username) throw new Error('اطلاعات معتبر از Pi Browser دریافت نشد.');
 
-        this.isSdkAuthenticated = true;
-
         const isUserKyc = Boolean(
           sdkUser?.kyc_status === true ||
           sdkUser?.kyc_status === 'verified' ||
@@ -116,6 +114,7 @@ class PiNetworkService {
         const response = await fetch(`${apiBase}/api/auth/pi-login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             accessToken,
             user: sdkUser,
@@ -124,6 +123,7 @@ class PiNetworkService {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || !data?.user?.uid) throw new Error(data?.error || 'احراز هویت Pi در سرور رد شد.');
+        this.isSdkAuthenticated = true;
         return {
           accessToken,
           uid: data.user.uid,
