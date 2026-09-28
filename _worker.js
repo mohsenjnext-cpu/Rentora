@@ -871,6 +871,92 @@ function validatePiPayment(payment, intent, user) {
   }
   return String(payment?.status || 'pending').toLowerCase();
 }
+
+async function handleAdminConsole(request, env, origin, authenticatedUser = null) {
+  const user = authenticatedUser || (await requireAdmin(request, env)).user;
+const queryOptional = async (sql) => { try { const result = await env.RENTORA_DB.prepare(sql).all(); return { rows: result.results || [], error: null }; } catch (error) { return { rows: [], error: String(error?.message || 'Database query failed') }; } };
+  const firstOptional = async (sql) => { try { return { row: await env.RENTORA_DB.prepare(sql).first(), error: null }; } catch (error) { return { row: null, error: String(error?.message || 'Database query failed') }; } };
+  const [
+    usersRes, listingsRes, rentalsRes, reportsRes, transactionsRes
+  ] = await Promise.all([
+    queryOptional("SELECT * FROM users ORDER BY created_at DESC LIMIT 500"),
+    queryOptional("SELECT l.*, u.username owner_username, u.pi_uid owner_pi_uid FROM listings l JOIN users u ON u.id=l.owner_user_id ORDER BY l.created_at DESC LIMIT 500"),
+    queryOptional("SELECT r.*, l.title listing_title, u.username renter_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users u ON u.id=r.renter_user_id ORDER BY r.created_at DESC LIMIT 500"),
+    queryOptional("SELECT rp.*, u.username reporter_username FROM reports rp JOIN users u ON u.id=rp.reporter_user_id ORDER BY rp.created_at DESC LIMIT 500"),
+    queryOptional("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 500")
+  ]);
+
+  const degraded = [];
+  for (const [name, result] of Object.entries({ users: usersRes, listings: listingsRes, rentals: rentalsRes, reports: reportsRes, transactions: transactionsRes })) if (result.error) degraded.push(name);
+  if (usersRes.error || listingsRes.error || rentalsRes.error) throw Object.assign(new Error('Admin console core data unavailable'), { status: 503 });
+  const revenue = await firstOptional("SELECT COALESCE(SUM(CASE WHEN status='completed' AND (type='platform_fee' OR type IS NULL) THEN amount ELSE 0 END),0) totalRevenue, COALESCE(SUM(CASE WHEN status='completed' AND type='admin_payout' THEN amount ELSE 0 END),0) paidOut FROM transactions");
+  if (revenue.error) degraded.push('revenue');
+
+  let payouts = [];
+  try {
+    const p = await env.RENTORA_DB.prepare("SELECT * FROM payout_operations ORDER BY updated_at DESC LIMIT 500").all();
+    payouts = p.results || [];
+  } catch (_) {}
+
+  let reconciliation = [];
+  try {
+    const q = await env.RENTORA_DB.prepare("SELECT * FROM payout_reconciliation_queue WHERE status='reconciliation_required' ORDER BY updated_at DESC LIMIT 200").all();
+    reconciliation = q.results || [];
+  } catch (_) {}
+
+  let auditLogs = [];
+  if (env?.RENTORA_KV && typeof env.RENTORA_KV.get === 'function') {
+    try { auditLogs = await env.RENTORA_KV.get('rentora_admin_audit_logs', 'json') || []; } catch (_) {}
+  }
+
+  const users = (usersRes.rows || []).map(u => userView(u, env, { includeAdminReview: true }));
+  const listings = listingsRes.rows || [];
+  const rentals = rentalsRes.rows || [];
+  const reports = reportsRes.rows || [];
+  const transactions = transactionsRes.rows || [];
+  const totalRevenue = Number(revenue.row?.totalRevenue || 0);
+  const paidOut = Number(revenue.row?.paidOut || 0);
+  const reserved = payouts.filter(p => ['reserved','creating','pi_created','approving','approved','completing'].includes(p.status))
+    .reduce((sum,p) => sum + Number(p.amount || 0), 0);
+  const available = Math.max(0, totalRevenue - paidOut - reserved);
+
+  return jsonResponse({
+    success: true,
+    generatedAt: now(),
+    degraded: [...new Set(degraded)],
+    overview: {
+      users: users.length,
+      listings: listings.filter(l => l.status !== 'deleted').length,
+      rentals: rentals.length,
+      revenue: totalRevenue,
+      availableTreasury: available,
+      reservedTreasury: reserved,
+      paidOut,
+      openAlerts: reports.filter(r => r.status === 'open').length +
+        payouts.filter(p => p.status === 'reconciliation_required').length
+    },
+    treasury: { totalRevenue, available, reserved, paidOut },
+    users,
+    listings,
+    rentals,
+    reports,
+    transactions,
+    payouts,
+    reconciliation,
+    auditLogs: Array.isArray(auditLogs) ? auditLogs.slice(0, 200) : [],
+    system: {
+      platformFeeRate: Number(env?.PLATFORM_FEE_RATE ?? 0.05),
+      piApiConfigured: Boolean(env?.PI_API_KEY || env?.PI_SERVER_API_KEY),
+      d1Configured: Boolean(env?.RENTORA_DB),
+      kvConfigured: Boolean(env?.RENTORA_KV),
+      r2Configured: Boolean(env?.RENTORA_MEDIA),
+      adminUid: user?.pi_uid || null
+    }
+  }, 200, env, origin);
+}
+
+export { handleAdminConsole };
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url); const path = url.pathname; const method = request.method; const origin = request.headers.get('Origin');
@@ -1046,88 +1132,6 @@ export default {
         ).bind(now(), JSON.stringify({ resolvedBy: adminUser.pi_uid, txid, paymentId: queue.pi_payment_id }), queueId).run();
         await writeAuditLog(env, adminUser, 'payout_reconciliation_resolved', queueId, { txid, paymentId: queue.pi_payment_id, amount: payoutAmount }).catch(() => {});
         return jsonResponse({ success: true, resolved: true, txid, paymentId: queue.pi_payment_id, amount: payoutAmount }, 200, env, origin);
-      }
-      if (method === 'GET' && path === '/api/admin/console') {
-        const { user } = await requireAdmin(request, env);
-        const queryOptional = async (sql) => { try { const result = await env.RENTORA_DB.prepare(sql).all(); return { rows: result.results || [], error: null }; } catch (error) { return { rows: [], error: String(error?.message || 'Database query failed') }; } };
-        const firstOptional = async (sql) => { try { return { row: await env.RENTORA_DB.prepare(sql).first(), error: null }; } catch (error) { return { row: null, error: String(error?.message || 'Database query failed') }; } };
-        const [
-          usersRes, listingsRes, rentalsRes, reportsRes, transactionsRes
-        ] = await Promise.all([
-          queryOptional("SELECT * FROM users ORDER BY created_at DESC LIMIT 500"),
-          queryOptional("SELECT l.*, u.username owner_username, u.pi_uid owner_pi_uid FROM listings l JOIN users u ON u.id=l.owner_user_id ORDER BY l.created_at DESC LIMIT 500"),
-          queryOptional("SELECT r.*, l.title listing_title, u.username renter_username FROM rentals r JOIN listings l ON l.id=r.listing_id JOIN users u ON u.id=r.renter_user_id ORDER BY r.created_at DESC LIMIT 500"),
-          queryOptional("SELECT rp.*, u.username reporter_username FROM reports rp JOIN users u ON u.id=rp.reporter_user_id ORDER BY rp.created_at DESC LIMIT 500"),
-          queryOptional("SELECT * FROM transactions ORDER BY created_at DESC LIMIT 500")
-        ]);
-
-        const degraded = [];
-        for (const [name, result] of Object.entries({ users: usersRes, listings: listingsRes, rentals: rentalsRes, reports: reportsRes, transactions: transactionsRes })) if (result.error) degraded.push(name);
-        if (usersRes.error || listingsRes.error || rentalsRes.error) throw Object.assign(new Error('Admin console core data unavailable'), { status: 503 });
-        const revenue = await firstOptional("SELECT COALESCE(SUM(CASE WHEN status='completed' AND (type='platform_fee' OR type IS NULL) THEN amount ELSE 0 END),0) totalRevenue, COALESCE(SUM(CASE WHEN status='completed' AND type='admin_payout' THEN amount ELSE 0 END),0) paidOut FROM transactions");
-        if (revenue.error) degraded.push('revenue');
-
-        let payouts = [];
-        try {
-          const p = await env.RENTORA_DB.prepare("SELECT * FROM payout_operations ORDER BY updated_at DESC LIMIT 500").all();
-          payouts = p.results || [];
-        } catch (_) {}
-
-        let reconciliation = [];
-        try {
-          const q = await env.RENTORA_DB.prepare("SELECT * FROM payout_reconciliation_queue WHERE status='reconciliation_required' ORDER BY updated_at DESC LIMIT 200").all();
-          reconciliation = q.results || [];
-        } catch (_) {}
-
-        let auditLogs = [];
-        if (env?.RENTORA_KV && typeof env.RENTORA_KV.get === 'function') {
-          try { auditLogs = await env.RENTORA_KV.get('rentora_admin_audit_logs', 'json') || []; } catch (_) {}
-        }
-
-        const users = (usersRes.rows || []).map(u => userView(u, env, { includeAdminReview: true }));
-        const listings = listingsRes.rows || [];
-        const rentals = rentalsRes.rows || [];
-        const reports = reportsRes.rows || [];
-        const transactions = transactionsRes.rows || [];
-        const totalRevenue = Number(revenue.row?.totalRevenue || 0);
-        const paidOut = Number(revenue.row?.paidOut || 0);
-        const reserved = payouts.filter(p => ['reserved','creating','pi_created','approving','approved','completing'].includes(p.status))
-          .reduce((sum,p) => sum + Number(p.amount || 0), 0);
-        const available = Math.max(0, totalRevenue - paidOut - reserved);
-
-        return jsonResponse({
-          success: true,
-          generatedAt: now(),
-          degraded: [...new Set(degraded)],
-          overview: {
-            users: users.length,
-            listings: listings.filter(l => l.status !== 'deleted').length,
-            rentals: rentals.length,
-            revenue: totalRevenue,
-            availableTreasury: available,
-            reservedTreasury: reserved,
-            paidOut,
-            openAlerts: reports.filter(r => r.status === 'open').length +
-              payouts.filter(p => p.status === 'reconciliation_required').length
-          },
-          treasury: { totalRevenue, available, reserved, paidOut },
-          users,
-          listings,
-          rentals,
-          reports,
-          transactions,
-          payouts,
-          reconciliation,
-          auditLogs: Array.isArray(auditLogs) ? auditLogs.slice(0, 200) : [],
-          system: {
-            platformFeeRate: Number(env?.PLATFORM_FEE_RATE ?? 0.05),
-            piApiConfigured: Boolean(env?.PI_API_KEY || env?.PI_SERVER_API_KEY),
-            d1Configured: Boolean(env?.RENTORA_DB),
-            kvConfigured: Boolean(env?.RENTORA_KV),
-            r2Configured: Boolean(env?.RENTORA_MEDIA),
-            adminUid: user?.pi_uid || null
-          }
-        }, 200, env, origin);
       }
       if (method === 'GET' && path === '/api/admin/overview') {
         const { user } = await requireAdmin(request, env);
