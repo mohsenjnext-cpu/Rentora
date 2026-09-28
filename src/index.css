@@ -401,3 +401,106 @@
     min-height: calc(100vh - 56px);
   }
 }
+
+
+/* Home Final UI v1: shared visual hierarchy without changing data behavior. */
+.home-page {
+  --home-surface: #ffffff;
+  --home-muted: #6f7083;
+  --home-line: rgba(148, 163, 184, 0.18);
+}
+
+.dark .home-page {
+  --home-surface: #151426;
+  --home-muted: #a7a7ba;
+  --home-line: rgba(255, 255, 255, 0.08);
+}
+
+.home-page section {
+  scroll-margin-top: 72px;
+}
+
+.home-page .home-hero {
+  border: 1px solid rgba(83, 74, 183, 0.12);
+  box-shadow: 0 14px 36px rgba(38, 33, 92, 0.06);
+}
+
+.home-page .home-quick-discovery h2,
+.home-page .home-featured h2 {
+  letter-spacing: -0.015em;
+}
+
+.home-page .home-trust {
+  box-shadow: 0 8px 24px rgba(15, 110, 86, 0.05);
+}
+
+.home-page .home-stats > div {
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.home-page .home-stats > div:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(30, 30, 47, 0.06);
+  border-color: rgba(83, 74, 183, 0.18);
+}
+
+@media (min-width: 768px) {
+  .home-page {
+    max-width: 1180px;
+    margin-inline: auto;
+  }
+
+  .home-page .home-hero {
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    padding: 38px 42px;
+    border-radius: 28px;
+  }
+
+  .home-page .home-hero > div {
+    max-width: 820px;
+  }
+
+  .home-page .home-quick-discovery {
+    padding-inline: 4px;
+  }
+
+  .home-page .home-trust {
+    min-height: 82px;
+    padding: 18px 20px;
+    border-radius: 20px;
+  }
+
+  .home-page .home-stats > div {
+    min-height: 112px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border-radius: 20px;
+  }
+}
+
+@media (max-width: 767px) {
+  .home-page {
+    padding-inline: 2px;
+  }
+
+  .home-page .home-hero {
+    box-shadow: 0 14px 32px rgba(38, 33, 92, 0.08);
+  }
+
+  .home-page .home-quick-discovery,
+  .home-page .home-featured {
+    padding-inline: 2px;
+  }
+
+  .home-page .home-trust {
+    border-radius: 18px;
+  }
+
+  .home-page .home-stats > div {
+    border-radius: 18px;
+  }
+}
