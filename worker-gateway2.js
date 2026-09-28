@@ -1255,7 +1255,7 @@ export default {
         return json({ authenticated: true, user: { ...userView(user, env), isAdmin }, isAdmin }, 200, request, env);
       }
       if ((path === '/api/admin/platform-fee') && (request.method === 'GET' || request.method === 'POST')) return await adminRoute(request, env, path);
-      if ((request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users')) || (request.method === 'POST' && (path === '/api/admin/payout' || path === '/api/admin/cleanup'))) return await adminRoute(request, env, path);
+      if ((request.method === 'GET' && (path === '/api/admin/overview' || path === '/api/admin/users' || path === '/api/admin/console')) || (request.method === 'POST' && (path === '/api/admin/payout' || path === '/api/admin/cleanup'))) return await adminRoute(request, env, path);
 
       // Static frontend assets must be served directly by the gateway worker. This keeps
       // React's production bundles independent from the API fallback and prevents an SPA
