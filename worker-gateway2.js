@@ -15,7 +15,7 @@ function parseCookies(request) { const raw = request.headers.get('Cookie') || ''
 async function requireUser(request, env) {
   if (!env?.RENTORA_DB || !env?.RENTORA_KV) throw Object.assign(new Error('Storage bindings (RENTORA_DB, RENTORA_KV) are required'), { status: 503 });
   const cookies = parseCookies(request);
-  const cookieToken = cookies.rentora_session ? decodeURIComponent(cookies.rentora_session) : '';
+  const cookieToken = cookies['__Host-rentora_session'] ? decodeURIComponent(cookies['__Host-rentora_session']) : '';
   const auth = request.headers.get('Authorization') || '';
   if (cookieToken) { const headers = new Headers(request.headers); headers.set('Authorization', `Bearer ${cookieToken}`); request = new Request(request, { headers }); }
   if (!auth.startsWith('Bearer ')) throw Object.assign(new Error('Authentication required'), { status: 401 });
