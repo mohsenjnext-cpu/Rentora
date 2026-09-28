@@ -17,9 +17,11 @@ test('session fetch bridge keeps API classification available to its error recov
   assert.ok(source.includes('if (isApiRequest) throw error;'), 'API failures must propagate without unsafe retry');
 });
 
-test('session fetch bridge still invalidates authenticated state on a non-login 401', () => {
+test('session fetch bridge ignores a stale 401 from a request that started before login', () => {
+  assert.match(source, /const sessionWasActive = Boolean\(isSessionActive\(\)\);/);
   assert.match(
     source,
-    /if \(res\.status === 401 && !isPiLogin && typeof onSessionInvalid === 'function'\) onSessionInvalid\(\);/
+    /if \(res\.status === 401 && !isPiLogin && sessionWasActive && typeof onSessionInvalid === 'function'\) onSessionInvalid\(\);/
   );
+  assert.match(source, /installSessionFetchBridge\(handleSessionInvalid, \(\) => Boolean\(currentUserRef\.current\?\.uid\)\)/);
 });
