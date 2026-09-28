@@ -35,3 +35,15 @@ test('gateway forwards the current host-only session cookie', () => {
     assert.doesNotMatch(source, /parseCookies\(request\)\.rentora_session/);
   }
 });
+
+
+test('gateway reuses the cookie-derived Authorization token for session lookup', () => {
+  for (const file of ['worker-gateway2.js', 'workers/worker-gateway2.js']) {
+    const source = fs.readFileSync(file, 'utf8');
+    const cookieBlock = source.indexOf("if (cookieToken)");
+    const authCheck = source.indexOf("if (!auth.startsWith('Bearer '))", cookieBlock);
+    const authAssignment = source.indexOf("auth = headers.get('Authorization')", cookieBlock);
+    assert.ok(cookieBlock >= 0 && authAssignment > cookieBlock && authAssignment < authCheck);
+    assert.doesNotMatch(source.slice(cookieBlock, authCheck), /const auth = request\.headers\.get\('Authorization'\)/);
+  }
+});
