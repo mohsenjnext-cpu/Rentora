@@ -16,3 +16,12 @@ test('admin identity configuration requires explicit Pi UIDs and never usernames
   assert.match(worker, /function isAdmin\(uid, env\)/);
   assert.doesNotMatch(worker, /adminUsernames|ADMIN_PI_USERNAMES/);
 });
+
+
+test('admin console reuses the gateway-authenticated user context', () => {
+  const gateway = fs.readFileSync(new URL('../worker-gateway2.js', import.meta.url), 'utf8');
+  const worker = fs.readFileSync(new URL('../_worker.js', import.meta.url), 'utf8');
+  assert.match(gateway, /handleAdminConsole\(request, env, request\.headers\.get\('Origin'\), user\)/);
+  assert.match(worker, /async function handleAdminConsole\(request, env, origin, authenticatedUser = null\)/);
+  assert.match(worker, /authenticatedUser \|\| \(await requireAdmin\(request, env\)\)\.user/);
+});
