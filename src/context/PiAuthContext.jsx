@@ -41,6 +41,7 @@ function installSessionFetchBridge(onSessionInvalid, isSessionActive = () => fal
 export function PiAuthProvider({ children }) {
   const [users, setUsers] = useState(() => cloudSyncService.getCachedUsers());
   const [currentUser, setCurrentUser] = useState(null);
+  const currentUserRef = React.useRef(null);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState(null);
@@ -48,6 +49,7 @@ export function PiAuthProvider({ children }) {
   const [isServerVerifiedAdmin, setIsServerVerifiedAdmin] = useState(false);
 
   const handleSessionInvalid = useCallback(() => {
+    currentUserRef.current = null;
     try { cloudSyncService.clearUserSessionCache(); } catch (_) {}
     setCurrentUser(null);
     setIsServerVerifiedAdmin(false);
@@ -73,7 +75,9 @@ export function PiAuthProvider({ children }) {
         if (!isMounted || !data?.authenticated || !data.user) return;
         const verifiedAdmin = Boolean(data.isAdmin || data.user.isAdmin || data.user.role === 'admin');
         setIsServerVerifiedAdmin(verifiedAdmin);
-        setCurrentUser({ ...data.user, uid: data.user.uid, role: data.user.role || 'user', kycStatus: data.user.kycStatus || 'unknown', isOfficialSdk: true, piWalletConnected: true });
+        const restoredUser = { ...data.user, uid: data.user.uid, role: data.user.role || 'user', kycStatus: data.user.kycStatus || 'unknown', isOfficialSdk: true, piWalletConnected: true };
+        currentUserRef.current = restoredUser;
+        setCurrentUser(restoredUser);
       })
       .catch(() => {});
     return () => { isMounted = false; };
@@ -105,6 +109,7 @@ export function PiAuthProvider({ children }) {
         piWalletConnected: true,
         status: authData.user?.status || 'active'
       };
+      currentUserRef.current = userObj;
       setCurrentUser(userObj);
       setUsers(prev => {
         const updated = [userObj, ...prev.filter(u => u.uid !== userObj.uid)];
