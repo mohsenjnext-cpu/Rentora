@@ -29,7 +29,7 @@ test('session fetch bridge only invalidates an active session from the authorita
 
 
 test('Pi session intent enables re-authentication after a missing server cookie without storing the session token', async () => {
-  const source = await (await fetch('file://' + process.cwd() + '/src/context/PiAuthContext.jsx')).text().catch(() => '');
+  // The source fixture is loaded above for the regression guards below.
   // Source-level regression guard: the browser may lose the HttpOnly cookie across an app restart,
   // but the client must retain only a non-sensitive intent flag and recover through Pi.authenticate().
   assert.ok(source.includes("rentora_pi_session_intent_v1"), 'A non-sensitive session intent flag must exist');
