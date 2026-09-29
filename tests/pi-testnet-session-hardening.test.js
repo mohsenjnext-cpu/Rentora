@@ -7,7 +7,7 @@ test('gateway authentication reads the secure host-only session cookie', () => {
     const source = fs.readFileSync(file, 'utf8');
     assert.match(source, /cookies\[['"]__Host-rentora_session['"]\]/);
     assert.doesNotMatch(source, /cookies\.rentora_session/);
-    assert.ok(source.includes('__Host-rentora_session=' + '${encodeURIComponent(data.sessionToken)}' + '; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=None'));
+    assert.ok(source.includes('__Host-rentora_session=' + '${encodeURIComponent(data.sessionToken)}' + '; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=None; Partitioned'));
     assert.doesNotMatch(source, /Set-Cookie[^\n]*['"]rentora_session=/);
   }
 });
