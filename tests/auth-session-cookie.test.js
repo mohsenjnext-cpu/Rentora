@@ -23,3 +23,11 @@ test('login response sets the browser session cookie', () => {
   assert.ok(worker.includes('const sessionToken = await createSession(env, user);'));
   assert.ok(worker.includes("response.headers.set('Set-Cookie', \`__Host-rentora_session=\${encodeURIComponent(sessionToken)}; Max-Age=\${SESSION_TTL}; Path=/; HttpOnly; Secure; SameSite=Lax\`);"));
 });
+
+
+test('gateway session cookie supports Pi App Studio External App cross-site requests', () => {
+  const gateway = fs.readFileSync(new URL('../worker-gateway2.js', import.meta.url), 'utf8');
+  assert.ok(gateway.includes('SameSite=None'));
+  assert.ok(gateway.includes('__Host-rentora_session='));
+  assert.ok(gateway.includes('HttpOnly; Secure; SameSite=None'));
+});
