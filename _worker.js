@@ -1406,7 +1406,7 @@ export default {
         const user = await env.RENTORA_DB.prepare('SELECT * FROM users WHERE id=?1').bind(userId).first();
         if (user.status !== 'active') return errorResponse('User is suspended', 403, env, undefined, origin);
         const sessionToken = await createSession(env, user);
-        const response = jsonResponse({ authenticated: true, verifiedWithPiApi: true, user: userView(user, env), uid, username }, 200, env, origin); response.headers.set('Set-Cookie', `__Host-rentora_session=${encodeURIComponent(sessionToken)}; Max-Age=${SESSION_TTL}; Path=/; HttpOnly; Secure; SameSite=Lax`); return response;
+        const response = jsonResponse({ authenticated: true, verifiedWithPiApi: true, user: userView(user, env), uid, username }, 200, env, origin); response.headers.set('Set-Cookie', `__Host-rentora_session=${encodeURIComponent(sessionToken)}; Max-Age=${SESSION_TTL}; Path=/; HttpOnly; Secure; SameSite=Lax; Partitioned`); return response;
       }
       if (method === 'POST' && path === '/api/auth/logout') {
         requireBindings(env);
@@ -1436,7 +1436,7 @@ export default {
             }
             await env.RENTORA_KV.delete(`session:${hash}`);
           }
-        const response = jsonResponse({ success: true }, 200, env, origin); response.headers.set('Set-Cookie', '__Host-rentora_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax'); return response;
+        const response = jsonResponse({ success: true }, 200, env, origin); response.headers.set('Set-Cookie', '__Host-rentora_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax; Partitioned'); return response;
       }
       if (method === 'POST' && path === '/api/payments/intent') {
         const { user } = await requireUser(request, env);

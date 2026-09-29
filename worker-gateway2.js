@@ -1244,7 +1244,7 @@ export default {
         const data = await loginResponse.clone().json().catch(() => null);
         if (!data?.sessionToken) return loginResponse;
         const headers = new Headers(loginResponse.headers);
-        headers.set('Set-Cookie', `__Host-rentora_session=${encodeURIComponent(data.sessionToken)}; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=Lax`);
+        headers.set('Set-Cookie', `__Host-rentora_session=${encodeURIComponent(data.sessionToken)}; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=None; Partitioned`);
         const cleanData = { ...data };
         delete cleanData.sessionToken;
         headers.set('Content-Type', 'application/json; charset=utf-8');
