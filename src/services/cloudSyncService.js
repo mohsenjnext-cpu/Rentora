@@ -707,15 +707,23 @@ export class CloudSyncService {
     const apiBase = getApiBaseUrl();
     if (!apiBase) return [];
 
-    const res = await fetch(`${apiBase}/api/conversations?_t=${Date.now()}`, {
-      method: 'GET',
-      headers: {
-        ...this.getAuthHeaders(),
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache'
-      },
-      cache: 'no-store'
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    let res;
+    try {
+      res = await fetch(`${apiBase}/api/conversations?_t=${Date.now()}`, {
+        method: 'GET',
+        headers: {
+          ...this.getAuthHeaders(),
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
+        cache: 'no-store',
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.success) {
@@ -827,15 +835,23 @@ export class CloudSyncService {
 
     try {
       const url = `${apiBase}/api/sync/all?_t=${Date.now()}`;
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: {
-          ...this.getAuthHeaders(),
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache'
-        },
-        cache: 'no-store'
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      let res;
+      try {
+        res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            ...this.getAuthHeaders(),
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          },
+          cache: 'no-store',
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
