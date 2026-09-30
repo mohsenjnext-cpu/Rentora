@@ -321,7 +321,9 @@ export default function AdminDashboardPage({ onNavigate }) {
     <main className="admin-main min-w-0">
       {page()}
     </main>
-  </div>
+  </div>;
+}
+
 function Overview({cards,o,reports,payouts,go}) {
   return <div className="space-y-4"><div className="grid grid-cols-2 md:grid-cols-3 gap-3">{cards.map(([l,v,I])=><div key={l} className="rentora-card p-4"><I className="w-4 h-4 text-[#534AB7] mb-3"/><div className="text-lg font-black">{v}</div><div className="text-[10px] text-slate-500 mt-1">{l}</div></div>)}</div>
     <div className="grid md:grid-cols-2 gap-3"><div className="rentora-card p-4"><div className="flex justify-between"><b className="text-sm">هشدارهای عملیاتی</b><AlertTriangle className="w-4 h-4 text-amber-600"/></div><p className="text-xs text-slate-500 mt-3">{o.openAlerts||0} مورد نیازمند بررسی.</p><button onClick={()=>go('reports-open')} className="btn-secondary px-3 py-2 text-[11px] mt-3">مشاهده گزارش‌ها</button></div>
