@@ -4,11 +4,26 @@ import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import { getUserReputationSummary } from '../services/reputationService';
 import { cloudSyncService } from '../services/cloudSyncService';
-import { User, ShieldCheck, Star, Settings, Globe, LogOut, Edit3, Camera, Save, Package, CheckCircle2, AlertCircle, CalendarDays } from 'lucide-react';
+import { User, ShieldCheck, Star, Settings, Globe, LogOut, Edit3, Camera, Save, Package, CheckCircle2, AlertCircle, CalendarDays, MapPin, BadgeCheck, Clock3, BarChart3 } from 'lucide-react';
 
 function Avatar({ src, username, className = 'w-20 h-20' }) {
   return src ? <img src={src} alt="" className={className + ' rounded-2xl object-cover bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700'} /> :
     <div className={className + ' rounded-2xl bg-[#EEEDFE] dark:bg-[#26215C] text-[#534AB7] dark:text-[#EEEDFE] flex items-center justify-center font-bold text-2xl border border-slate-200 dark:border-slate-700'}>{(username || 'P').charAt(0).toUpperCase()}</div>;
+}
+
+function KycStatus({ status, compact = false }) {
+  const normalized = ['verified', 'pending', 'unverified'].includes(status) ? status : 'unknown';
+  const config = {
+    verified: { label: 'احراز هویت تأییدشده', sub: 'تأییدشده توسط بررسی Rentora', icon: BadgeCheck, cls: 'badge-trust' },
+    pending: { label: 'در انتظار بررسی', sub: 'بررسی احراز هویت هنوز تکمیل نشده', icon: Clock3, cls: 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900' },
+    unverified: { label: 'تأیید نشده', sub: 'هنوز تأیید هویت ثبت نشده است', icon: ShieldCheck, cls: 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' },
+    unknown: { label: 'بررسی نشده', sub: 'وضعیت احراز هویت در سرور ثبت نشده است', icon: ShieldCheck, cls: 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700' }
+  }[normalized];
+  const Icon = config.icon;
+  return <div className={`${config.cls} ${compact ? 'px-2.5 py-1.5' : 'p-3'} rounded-2xl flex items-center gap-2`}>
+    <Icon className={compact ? 'w-3.5 h-3.5 shrink-0' : 'w-5 h-5 shrink-0'} />
+    <div className="min-w-0"><div className={compact ? 'text-[10px] font-black' : 'text-xs font-black'}>{config.label}</div>{!compact && <div className="text-[10px] opacity-75 mt-0.5">{config.sub}</div>}</div>
+  </div>;
 }
 
 export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProfile }) {
@@ -143,29 +158,61 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
       {profileError && <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-600 text-xs font-bold flex gap-2"><AlertCircle className="w-4 h-4" />{profileError}</div>}
       {saveSuccess && <div className="p-3 rounded-xl badge-trust text-xs font-bold flex gap-2"><CheckCircle2 className="w-4 h-4" />{l('پروفایل بروزرسانی شد.', 'Profile updated successfully.', 'تم تحديث الملف الشخصي.', '个人资料已更新。')}</div>}
 
-      <section className="grid lg:grid-cols-[minmax(0,1fr)_300px] gap-5">
-        <div className="rentora-card rounded-3xl p-5 sm:p-7">
-          {isEditing ? <form onSubmit={save} className="space-y-5">
-            <div className="flex items-center gap-4"><Avatar src={avatar} username={currentUser.username} className="w-20 h-20" /><button type="button" disabled={isUploadingImage} onClick={() => fileInputRef.current?.click()} className="btn-secondary px-3 py-2 text-xs font-bold flex items-center gap-2"><Camera className="w-4 h-4" />{isUploadingImage ? l('در حال پردازش...', 'Processing...', 'جارٍ المعالجة...', '处理中...') : l('انتخاب تصویر', 'Choose photo', 'اختيار صورة', '选择头像')}</button></div>
-            
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">{l('نام نمایشی', 'Display name', 'الاسم المعروض', '显示名称')}<input value={displayName} onChange={e => setDisplayName(e.target.value)} maxLength={80} className="w-full mt-1 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white text-sm" /></label>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">{l('بیو', 'Bio', 'نبذة', '简介')}<textarea value={bio} onChange={e => setBio(e.target.value)} maxLength={500} rows="3" className="w-full mt-1 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white text-sm" /></label>
-            <div className="flex gap-2"><button disabled={isSaving} className="btn-primary px-5 py-2 text-xs font-bold flex gap-2"><Save className="w-4 h-4" />{isSaving ? l('در حال ذخیره...', 'Saving...', 'جارٍ الحفظ...', '保存中...') : t('btnSave')}</button><button type="button" onClick={() => setIsEditing(false)} className="btn-secondary px-4 py-2 text-xs font-bold">{t('btnCancel')}</button></div>
-          </form> : <div className="flex flex-col sm:flex-row sm:items-center gap-5">
-            <div className="relative shrink-0"><Avatar src={currentUser.avatar} username={currentUser.username} className="w-24 h-24" /><button type="button" onClick={() => fileInputRef.current?.click()} aria-label={l('تغییر تصویر پروفایل', 'Change profile photo', 'تغيير صورة الملف الشخصي', '更换头像')} className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-[#26215C] text-white border-2 border-white dark:border-[#151426] flex items-center justify-center"><Camera aria-hidden="true" className="w-4 h-4" /></button></div>
-            <div className="min-w-0 flex-1"><h2 className="text-2xl font-bold text-slate-900 dark:text-white">{currentUser.displayName || currentUser.username}</h2><p className="text-sm text-slate-500" dir="ltr">@{currentUser.username}</p><div className="mt-2 flex flex-wrap gap-2">{currentUser.kycStatus === 'verified' && <span className="badge-trust px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5" />KYC Verified</span>}<span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300">{l('پروفایل عمومی', 'Public profile', 'ملف عام', '公开主页')}</span></div><p className="text-sm text-slate-500 dark:text-slate-400 mt-3 max-w-2xl">{currentUser.bio || l('پروفایل معتبر کاربر Rentora.', 'Rentora member profile.', 'ملف عضو Rentora.', 'Rentora 用户资料。')}</p></div>
-          </div>}
-          {reviewLoadError && <div role="alert" className="mt-5 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300 text-xs font-semibold flex items-center justify-between gap-3"><span>{reviewLoadError}</span><button type="button" onClick={() => setReviewRetryNonce(v => v + 1)} className="shrink-0 btn-secondary px-3 py-1.5 text-[11px] font-bold">{l('تلاش مجدد', 'Try again', 'حاول مجدداً', '重试')}</button></div>}
-          {reviewLoading && <div role="status" aria-live="polite" className="mt-5 text-xs text-slate-400">{l('در حال بارگذاری اعتبار...', 'Loading reputation...', 'جارٍ تحميل السمعة...', '正在加载信誉...')}</div>}
-          <div className="grid grid-cols-3 gap-2 mt-6 pt-5 border-t border-slate-200 dark:border-slate-800">
-            <div className="text-center"><div className="text-lg font-bold text-amber-500 flex justify-center gap-1"><Star className="w-4 h-4 fill-amber-400 mt-1" />{rep.formattedScore}</div><span className="text-[11px] text-slate-400">{t('itemReviewsTitle')}</span></div>
-            <div className="text-center"><div className="text-lg font-bold">{rep.reviewCount}</div><span className="text-[11px] text-slate-400">{l('نظرات', 'Reviews', 'المراجعات', '评价')}</span></div>
-            <div className="text-center"><div className="text-lg font-bold">{myItems.length}</div><span className="text-[11px] text-slate-400">{t('ownerStatsListings')}</span></div>
+      <section className="grid xl:grid-cols-[minmax(0,1fr)_340px] gap-5">
+        <div className="rentora-card rounded-[28px] overflow-hidden">
+          <div className="relative p-5 sm:p-7 bg-gradient-to-br from-[#EEEDFE] via-white to-[#F8FAFC] dark:from-[#26215C] dark:via-[#151426] dark:to-[#111827]">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#534AB7] via-[#7F77DD] to-[#2F8F7B]" />
+            {isEditing ? <form onSubmit={save} className="space-y-5">
+              <div className="flex items-center gap-4">
+                <Avatar src={avatar} username={currentUser.username} className="w-20 h-20" />
+                <button type="button" disabled={isUploadingImage} onClick={() => fileInputRef.current?.click()} className="btn-secondary px-3 py-2 text-xs font-bold flex items-center gap-2"><Camera className="w-4 h-4" />{isUploadingImage ? l('در حال پردازش...', 'Processing...', 'جارٍ المعالجة...', '处理中...') : l('انتخاب تصویر', 'Choose photo', 'اختيار صورة', '选择头像')}</button>
+              </div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">{l('نام نمایشی', 'Display name', 'الاسم المعروض', '显示名称')}<input value={displayName} onChange={e => setDisplayName(e.target.value)} maxLength={80} className="w-full mt-1 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white text-sm" /></label>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">{l('بیو', 'Bio', 'نبذة', '简介')}<textarea value={bio} onChange={e => setBio(e.target.value)} maxLength={500} rows="3" className="w-full mt-1 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#151426] text-slate-900 dark:text-white text-sm" /></label>
+              <div className="flex gap-2"><button disabled={isSaving} className="btn-primary px-5 py-2 text-xs font-bold flex gap-2"><Save className="w-4 h-4" />{isSaving ? l('در حال ذخیره...', 'Saving...', 'جارٍ الحفظ...', '保存中...') : t('btnSave')}</button><button type="button" onClick={() => setIsEditing(false)} className="btn-secondary px-4 py-2 text-xs font-bold">{t('btnCancel')}</button></div>
+            </form> : <>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+                <div className="relative shrink-0"><Avatar src={currentUser.avatar} username={currentUser.username} className="w-24 h-24 sm:w-28 sm:h-28" /><button type="button" onClick={() => fileInputRef.current?.click()} aria-label={l('تغییر تصویر پروفایل', 'Change profile photo', 'تغيير صورة الملف الشخصي', '更换头像')} className="absolute -bottom-1 -right-1 w-9 h-9 rounded-xl bg-[#26215C] text-white border-2 border-white dark:border-[#151426] flex items-center justify-center"><Camera aria-hidden="true" className="w-4 h-4" /></button></div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2"><h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">{currentUser.displayName || currentUser.username}</h2><KycStatus status={currentUser.kycStatus} compact /></div>
+                  <p className="text-sm text-slate-500 mt-1" dir="ltr">@{currentUser.username}</p>
+                  <p className="text-sm leading-6 text-slate-600 dark:text-slate-300 mt-3 max-w-2xl">{currentUser.bio || l('برای این حساب هنوز معرفی کوتاهی ثبت نشده است.', 'No bio has been added to this account yet.', 'لم تتم إضافة نبذة لهذا الحساب بعد.', '此账户尚未添加简介。')}</p>
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    {currentUser.location && <span className="px-2.5 py-1.5 rounded-xl bg-white/80 dark:bg-white/5 border border-slate-200 dark:border-slate-700 text-[10px] font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{currentUser.location}</span>}
+                    {currentUser.joinedDate && <span className="px-2.5 py-1.5 rounded-xl bg-white/80 dark:bg-white/5 border border-slate-200 dark:border-slate-700 text-[10px] font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1"><CalendarDays className="w-3.5 h-3.5" />{l('عضویت از', 'Member since', 'عضو منذ', '加入于')} {currentUser.joinedDate}</span>}
+                  </div>
+                </div>
+              </div>
+            </>}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-200 dark:divide-slate-800 rtl:divide-x-reverse border-t border-slate-200 dark:border-slate-800">
+            <div className="p-4 text-center"><div className="text-xl font-black text-slate-900 dark:text-white">{myItems.length}</div><span className="text-[10px] text-slate-400">{t('ownerStatsListings')}</span></div>
+            <div className="p-4 text-center"><div className="text-xl font-black text-slate-900 dark:text-white">{activeRentalCount}</div><span className="text-[10px] text-slate-400">{l('اجاره جاری', 'Active rentals', 'الإيجارات النشطة', '进行中的租赁')}</span></div>
+            <div className="p-4 text-center"><div className="text-xl font-black text-slate-900 dark:text-white">{rentalHistoryCount}</div><span className="text-[10px] text-slate-400">{l('سوابق اجاره', 'Rental history', 'سجل الإيجار', '租赁历史')}</span></div>
+            <div className="p-4 text-center"><div className="text-xl font-black text-amber-500 flex justify-center items-center gap-1"><Star className="w-4 h-4 fill-amber-400" />{rep.formattedScore}</div><span className="text-[10px] text-slate-400">{l('امتیاز اعتبار', 'Reputation', 'السمعة', '信誉')}</span></div>
           </div>
         </div>
-        <div className="rounded-3xl bg-[#EEEDFE] dark:bg-[#26215C] p-5 space-y-3"><p className="text-xs font-bold text-[#26215C] dark:text-white">{l('پروفایل عمومی', 'Public profile', 'الملف العام', '公开主页')}</p><p className="text-xs text-slate-600 dark:text-slate-300">{l('آنچه دیگران از هویت، اعتبار و آگهی‌های فعال شما می‌بینند.', 'What other people can see about your identity, reputation and active listings.', 'ما يمكن للآخرين رؤيته عن هويتك وسمعتك وإعلاناتك.', '其他人可以看到你的身份、信誉和活跃物品。')}</p><button type="button" onClick={() => onOpenPublicProfile?.(currentUser.username)} className="w-full bg-[#26215C] text-white rounded-xl py-2.5 text-xs font-bold flex justify-center gap-2"><Globe className="w-4 h-4" />{l('مشاهده پروفایل عمومی', 'View public profile', 'عرض الملف العام', '查看公开主页')}</button></div>
+        <aside className="space-y-4">
+          <div className="rentora-card rounded-[28px] p-5">
+            <div className="flex items-center justify-between mb-3"><div><p className="text-[10px] font-bold text-[#534AB7]">{l('اعتماد و هویت', 'Trust & identity', 'الثقة والهوية', '信任与身份')}</p><h3 className="text-base font-black text-slate-900 dark:text-white mt-1">{l('وضعیت حساب', 'Account status', 'حالة الحساب', '账户状态')}</h3></div><ShieldCheck className="w-5 h-5 text-[#534AB7]" /></div>
+            <KycStatus status={currentUser.kycStatus} />
+            <p className="text-[10px] leading-5 text-slate-400 mt-3">{l('این وضعیت از رکورد احراز هویت ثبت‌شده در سرور Rentora می‌آید و صرفاً از ظاهر یا داده‌های محلی حساب حدس زده نمی‌شود.', 'This status comes from Rentora’s server-side verification record and is not inferred from local or client-side profile data.', 'تأتي هذه الحالة من سجل التحقق على خادم Rentora ولا يتم استنتاجها من بيانات العميل.', '此状态来自 Rentora 服务器端验证记录，而不是本地或客户端资料。')}</p>
+          </div>
+          <div className="rounded-[28px] bg-[#26215C] text-white p-5">
+            <div className="flex items-center gap-2 mb-3"><BarChart3 className="w-5 h-5 text-[#AFA9EC]" /><h3 className="text-sm font-black">{l('نمای کلی عملکرد', 'Profile overview', 'نظرة عامة', '资料概览')}</h3></div>
+            <div className="space-y-3 text-xs">
+              <div className="flex justify-between gap-3"><span className="text-white/60">{l('تعداد نظرات', 'Reviews', 'المراجعات', '评价')}</span><strong>{rep.reviewCount}</strong></div>
+              <div className="flex justify-between gap-3"><span className="text-white/60">{l('آگهی فعال', 'Active listings', 'الإعلانات النشطة', '活跃物品')}</span><strong>{myItems.length}</strong></div>
+              <div className="flex justify-between gap-3"><span className="text-white/60">{l('وضعیت حساب', 'Account', 'الحساب', '账户')}</span><strong>{currentUser.status === 'active' ? l('فعال', 'Active', 'نشط', '活跃') : currentUser.status}</strong></div>
+            </div>
+          </div>
+          <div className="rounded-[28px] bg-[#EEEDFE] dark:bg-[#211E45] p-5">
+            <p className="text-xs font-black text-[#26215C] dark:text-white">{l('پروفایل عمومی', 'Public profile', 'الملف العام', '公开主页')}</p>
+            <p className="text-[11px] leading-5 text-slate-600 dark:text-slate-300 mt-2">{l('نمایش عمومی هویت، اعتبار و آگهی‌های فعال شما.', 'A public view of your identity, reputation and active listings.', 'عرض عام لهويتك وسمعتك وإعلاناتك النشطة.', '公开展示你的身份、信誉和活跃物品。')}</p>
+            <button type="button" onClick={() => onOpenPublicProfile?.(currentUser.username)} className="w-full mt-4 bg-[#26215C] text-white rounded-xl py-2.5 text-xs font-bold flex justify-center gap-2"><Globe className="w-4 h-4" />{l('مشاهده پروفایل عمومی', 'View public profile', 'عرض الملف العام', '查看公开主页')}</button>
+          </div>
+        </aside>
       </section>
-
       <section><div className="flex items-center justify-between mb-3"><h2 className="text-lg font-bold text-slate-900 dark:text-white flex gap-2"><Package className="w-5 h-5 text-[#534AB7]" />{l('آگهی‌های من', 'My items', 'إعلاناتي', '我的物品')}</h2><button type="button" onClick={() => onNavigate('owner-hub')} aria-label={l('مدیریت آگهی‌های من', 'Manage my listings', 'إدارة إعلاناتي', '管理我的发布')} className="text-xs font-bold text-[#534AB7]">{l('مدیریت', 'Manage', 'إدارة', '管理')}</button></div>{myItems.length ? <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">{myItems.slice(0,8).map(item => <button type="button" key={item.id} onClick={() => onSelectItem(item)} className="rentora-card rounded-2xl overflow-hidden text-start"><div className="aspect-[4/3] bg-slate-100 dark:bg-slate-800">{item.images?.[0] || item.imageUrl || item.image_url ? <img src={item.images?.[0] || item.imageUrl || item.image_url} alt="" className="w-full h-full object-cover" /> : <div className="h-full flex items-center justify-center"><Package className="w-8 h-8 text-slate-300" /></div>}</div><div className="p-3"><p className="text-xs font-bold truncate text-slate-900 dark:text-white">{item.title || item.name}</p></div></button>)}</div> : <div className="rentora-card rounded-2xl p-8 text-center text-xs text-slate-400">{l('هنوز آگهی فعالی ندارید.', 'No active listings yet.', 'لا توجد إعلانات نشطة.', '暂无活跃物品。')}</div>}</section>
 
       <section className="rentora-card rounded-2xl p-4">
