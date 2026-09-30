@@ -119,13 +119,13 @@ export default function AdminDashboardPage({ onNavigate }) {
     finally { setBusyId(''); }
   };
 
-  const updateListing = async (item) => {
-    setBusyId(item.id);
+  const updateListing = async (item, nextStatus = item.status === 'active' ? 'paused' : 'active') => {
+    if (nextStatus === 'deleted' && !window.confirm(`حذف آگهی «${item.title || item.id}»؟ این عملیات آگهی را از بازار خارج می‌کند.`)) return;
+    setBusyId(item.id); setError('');
     try {
-      const next = item.status === 'active' ? 'paused' : 'active';
-      await cloudSyncService.setAdminListingStatus(item.id, next);
+      await cloudSyncService.setAdminListingStatus(item.id, nextStatus);
       await load();
-    } catch (e) { setError(e.message); }
+    } catch (e) { setError(e.message || 'تغییر وضعیت آگهی ناموفق بود.'); }
     finally { setBusyId(''); }
   };
 
@@ -409,7 +409,7 @@ function ListingsView({rows,section,busyId,updateListing,renderTable}) {
       {[['فعال',active],['متوقف',paused],['نظارت و بررسی',moderation]].map(([l,v]) => <div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
     </div>
     {section==='listings-moderation' && <div className="p-3 rounded-xl bg-[#EEEDFE] dark:bg-[#211E45] text-xs">صف بررسی محتوا و وضعیت آگهی‌ها. تغییر وضعیت فقط از مسیر مدیریتی و سرویس سمت سرور انجام می‌شود.</div>}
-    {renderTable([['Title','title'],['Owner',r=>`@${r.owner_username||'—'}`],['Price',r=>money(r.price_per_day)],['Status',r=><Status s={r.status}/>],['آخرین تغییر',r=>date(r.updated_at)],['عملیات',r=><button type="button" aria-label={`${r.status==='active'?'توقف' : 'فعال‌سازی'} آگهی ${r.title||r.id}`} disabled={busyId===r.id} onClick={()=>updateListing(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'Pause':'فعال‌سازی'}</button>]],rows,section==='listings-moderation'?'آگهی‌ای در صف بررسی نیست.':'آگهی‌ای وجود ندارد.')}
+    {renderTable([['Title','title'],['Owner',r=>`@${r.owner_username||'—'}`],['Price',r=>money(r.price_per_day)],['Status',r=><Status s={r.status}/>],['آخرین تغییر',r=>date(r.updated_at)],['عملیات',r=><div className="flex gap-1 flex-wrap"><button type="button" aria-label={`${r.status==='active'?'توقف' : 'فعال‌سازی'} آگهی ${r.title||r.id}`} disabled={busyId===r.id} onClick={()=>updateListing(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'توقف':'فعال‌سازی'}</button>{r.status!=='deleted'&&<button type="button" aria-label={`حذف آگهی ${r.title||r.id}`} disabled={busyId===r.id} onClick={()=>updateListing(r,'deleted')} className="px-2 py-1 rounded bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">حذف</button>}</div>]],rows,section==='listings-moderation'?'آگهی‌ای در صف بررسی نیست.':'آگهی‌ای وجود ندارد.')}
   </div>;
 }
 function ReportsView({rows,busyId,updateReport,renderTable}) {
