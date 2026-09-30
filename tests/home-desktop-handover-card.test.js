@@ -2,10 +2,13 @@ import fs from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-test('Home desktop handover card has an explicit confirmation state without an empty metric slot', () => {
+test('Home desktop keeps only the handover trust card', () => {
   const source = fs.readFileSync(new URL('../src/pages/HomePage.jsx', import.meta.url), 'utf8');
-  assert.ok(source.includes('<div className="flex items-center justify-center gap-1 text-[var(--trust-text)]">'));
-  assert.ok(source.includes('<CheckCircle2 className="w-4 h-4" aria-hidden="true" />'));
+  assert.ok(source.includes('grid grid-cols-1'));
   assert.ok(source.includes("t('homeStatHandover')"));
-  assert.ok(!source.includes('<div className="text-lg font-black text-slate-900 dark:text-white"></div>'));
+  assert.ok(source.includes("Pickup handover confirmation"));
+  assert.ok(!source.includes("t('homeStatItems')"));
+  assert.ok(!source.includes('دسته‌های فعال'));
+  assert.ok(!source.includes('activeCategoryCount'));
+  assert.ok(!source.includes('grid grid-cols-3'));
 });
