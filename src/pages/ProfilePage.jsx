@@ -28,7 +28,7 @@ function KycStatus({ status, compact = false }) {
 
 export default function ProfilePage({ onNavigate, onSelectItem }) {
   const { t, l } = useLanguage();
-  const { currentUser, isAuthenticated, setAuthModalOpen, setIsWalletModalOpen, logout, updateProfile, updateUserProfile } = usePiAuth();
+  const { currentUser, isAuthenticated, setAuthModalOpen, setIsWalletModalOpen, logout, updateProfile, updateUserProfile, refreshCurrentUser } = usePiAuth();
   const { items = [], rentals = [], fetchUserReviews } = useRentora();
   const [isEditing, setIsEditing] = useState(false);
   const [displayName, setDisplayName] = useState('');
@@ -72,6 +72,7 @@ export default function ProfilePage({ onNavigate, onSelectItem }) {
 
   useEffect(() => {
     if (currentUser?.uid) {
+      refreshCurrentUser?.();
       setProfileLoading(false);
       setProfileLoadError('');
     } else {
