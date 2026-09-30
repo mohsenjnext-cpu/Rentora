@@ -1325,13 +1325,12 @@ export default {
           return errorResponse('این کاربر یک اجاره فعال یا در حال انجام دارد و فعلاً قابل حذف نیست.', 409, env, undefined, origin);
         }
 
-        const username = String(target.username || target.id).replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 32) || 'user';
+        const previousUsername = String(target.username || target.id).replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 32) || 'user';
         const tombstone = `deleted_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
         const anonymizedMeta = JSON.stringify({
           accountDeleted: true,
           deletedAt: now(),
-          deletedBy: user.pi_uid,
-          previousUsername: username
+          deletedBy: user.pi_uid
         });
 
         await env.RENTORA_DB.batch([
@@ -1349,7 +1348,7 @@ export default {
         await recordAdminAuditLog(env, user, 'USER_ACCOUNT_DELETED', {
           targetUserId: target.id,
           targetPiUid: target.pi_uid,
-          previousUsername: username
+          previousUsername
         });
 
         const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
