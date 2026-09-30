@@ -71,6 +71,39 @@ export function PiAuthProvider({ children }) {
     setIsServerVerifiedAdmin(false);
   }, []);
 
+  const refreshCurrentUser = useCallback(async () => {
+    const apiBase = getApiBaseUrl();
+    if (!apiBase || !currentUserRef.current?.uid) return null;
+    try {
+      const response = await fetch(apiBase + '/api/auth/me', {
+        method: 'GET',
+        headers: { 'Cache-Control': 'no-cache' },
+        credentials: 'include'
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.authenticated || !data?.user?.uid) return null;
+      const refreshedUser = {
+        ...data.user,
+        uid: data.user.uid,
+        role: data.user.role || 'user',
+        kycStatus: data.user.kycStatus || 'unknown',
+        isOfficialSdk: true,
+        piWalletConnected: true
+      };
+      currentUserRef.current = refreshedUser;
+      setCurrentUser(refreshedUser);
+      setIsServerVerifiedAdmin(Boolean(data.isAdmin || refreshedUser.isAdmin || refreshedUser.role === 'admin'));
+      setUsers(prev => {
+        const updated = [refreshedUser, ...prev.filter(u => u.uid !== refreshedUser.uid)];
+        cloudSyncService.saveCachedUsers(updated);
+        return updated;
+      });
+      return refreshedUser;
+    } catch (_) {
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     try { localStorage.removeItem('rentora_live_v1_session'); } catch (_) {}
     const restoreFetch = installSessionFetchBridge(handleSessionInvalid, () => Boolean(currentUserRef.current?.uid));
@@ -232,6 +265,7 @@ export function PiAuthProvider({ children }) {
       currentUser,
       isAuthenticated: !!currentUser?.uid,
       isAdmin: isActuallyAdmin,
+      refreshCurrentUser,
       isLoading,
       authError,
       authModalOpen,
