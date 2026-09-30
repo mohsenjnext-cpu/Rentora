@@ -8,6 +8,6 @@ test('admin listings view exposes moderation state and operational counters', ()
   assert.match(page, /section==='listings-moderation'/);
   assert.match(page, /function ListingsView\(\{rows,section,busyId,updateListing,renderTable\}\)/);
   assert.match(page, /\['pending','moderation','pending_moderation','review'\]/);
-  assert.match(page, /\['Active',active\],\['Paused',paused\],\['Moderation',moderation\]/);
+  assert.match(page, /\['فعال',active\],\['متوقف',paused\],\['نظارت و بررسی',moderation\]/);
   assert.match(page, /تغییر وضعیت فقط از مسیر مدیریتی و سرویس سمت سرور انجام می‌شود/);
 });
