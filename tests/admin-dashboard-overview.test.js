@@ -6,7 +6,7 @@ const page = fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', impo
 
 test('admin overview exposes a needs-attention operational queue', () => {
   assert.match(page, /function NeedsAttention\(\{ reports, payouts, go \}\)/);
-  assert.match(page, /Needs Attention/);
+  assert.match(page, /نیازمند توجه/);
   assert.match(page, /reconciliation_required/);
   assert.match(page, /go\('reports-open'\)/);
   assert.match(page, /go\('payout-reconcile'\)/);
@@ -15,8 +15,8 @@ test('admin overview exposes a needs-attention operational queue', () => {
 
 test('admin audit view exposes operational audit summaries', () => {
   assert.match(fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', import.meta.url), 'utf8'), /function AuditView\(\{audit\}\)/);
-  assert.match(fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', import.meta.url), 'utf8'), /Total Events/);
-  assert.match(fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', import.meta.url), 'utf8'), /Action Types/);
+  assert.match(fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', import.meta.url), 'utf8'), /کل رویدادها/);
+  assert.match(fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', import.meta.url), 'utf8'), /نوع عملیات/);
   assert.match(fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', import.meta.url), 'utf8'), /داده‌های ثبت‌شده را فقط نمایش می‌دهد/);
 });
 
