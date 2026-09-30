@@ -9,7 +9,14 @@ export default function NotificationsPage({ onNavigate, onOpenChat }) {
   const { currentUser, isAuthenticated } = usePiAuth();
   const { rentals = [], transactions = [], conversations = [], items = [], refreshApp } = useRentora();
   const [filter, setFilter] = useState('all');
-  const [readIds, setReadIds] = useState(() => new Set());
+  const notificationReadKey = currentUser ? `rentora_notification_reads_${currentUser.username || currentUser.uid}` : null;
+  const [readIds, setReadIds] = useState(() => {
+    if (!notificationReadKey) return new Set();
+    try {
+      const raw = JSON.parse(localStorage.getItem(notificationReadKey) || '[]');
+      return new Set(Array.isArray(raw) ? raw : []);
+    } catch (_) { return new Set(); }
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
 
@@ -31,8 +38,15 @@ export default function NotificationsPage({ onNavigate, onOpenChat }) {
   };
 
   useEffect(() => {
+    if (!notificationReadKey) setReadIds(new Set());
+    else {
+      try {
+        const raw = JSON.parse(localStorage.getItem(notificationReadKey) || '[]');
+        setReadIds(new Set(Array.isArray(raw) ? raw : []));
+      } catch (_) { setReadIds(new Set()); }
+    }
     refreshNotifications();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, notificationReadKey]);
 
   const notifications = useMemo(() => {
     const events = [];
@@ -66,11 +80,17 @@ export default function NotificationsPage({ onNavigate, onOpenChat }) {
 
   const visible = filter === 'all' ? notifications : notifications.filter(n => n.type === filter);
   const unreadCount = notifications.filter(n => !readIds.has(n.id)).length;
-  const markAllRead = () => setReadIds(new Set(notifications.map(n => n.id)));
+  const persistReadIds = (next) => {
+    setReadIds(next);
+    if (notificationReadKey) {
+      try { localStorage.setItem(notificationReadKey, JSON.stringify([...next])); } catch (_) {}
+    }
+  };
+  const markAllRead = () => persistReadIds(new Set(notifications.map(n => n.id)));
   const formatTime = value => new Date(value).toLocaleString(lang === 'fa' ? 'fa-IR' : lang === 'ar' ? 'ar' : lang === 'zh' ? 'zh-CN' : 'en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   const openNotification = n => {
-    setReadIds(prev => new Set(prev).add(n.id));
+    persistReadIds(new Set([...readIds, n.id]));
     if (n.action === 'chat' && onOpenChat) return onOpenChat(n.targetId);
     onNavigate(n.action === 'profile' ? 'profile' : 'activity');
   };
