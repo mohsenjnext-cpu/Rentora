@@ -52,7 +52,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
     };
     loadDashboard();
     return () => { active = false; };
-  }, [isAuthenticated, currentUser?.uid, refreshApp, l]);
+  }, [isAuthenticated, currentUser?.uid, refreshApp, lang]);
 
   if (!isAuthenticated) {
     return (
