@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
 function resolvePublicKycStatus(meta = {}, legacyColumn = null) {
   const admin = ['verified', 'unverified', 'unknown', 'pending'].includes(meta.adminKycStatus) ? meta.adminKycStatus : 'unknown';
@@ -31,7 +32,7 @@ test('KYC 4: legacy status is only a fallback when no Rentora review exists', ()
 });
 
 test('KYC 5: profile UI uses explicit verification state instead of claiming Pi KYC from SDK identity', () => {
-  const source = require('node:fs').readFileSync('src/pages/ProfilePage.jsx', 'utf8');
+  const source = fs.readFileSync('src/pages/ProfilePage.jsx', 'utf8');
   assert.match(source, /KycStatus/);
   assert.match(source, /رکورد احراز هویت ثبت‌شده در سرور Rentora/);
   assert.doesNotMatch(source, /KYC Verified/);
