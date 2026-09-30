@@ -1,4 +1,4 @@
-import legacyWorker from './_worker.js';
+import legacyWorker, { handleAdminConsole } from './_worker.js';
 import { Horizon, TransactionBuilder, Operation, Asset, Keypair, Memo } from '@stellar/stellar-sdk';
 
 function now() { return new Date().toISOString(); }
@@ -1243,17 +1243,20 @@ export default {
         if (!loginResponse.ok) return loginResponse;
 
         // The legacy worker creates the server session and emits the cookie itself.
-        // Normalize the actual Set-Cookie header for Pi App Studio External App.
+        // Do not depend on a sessionToken in the JSON response: it is intentionally
+        // not exposed to the browser. For Pi App Studio External App, the API may be
+        // called cross-site, so the gateway must normalize the actual Set-Cookie header
+        // to SameSite=None while retaining HttpOnly/Secure/Partitioned.
         const headers = new Headers(loginResponse.headers);
         const setCookie = headers.get('Set-Cookie') || '';
         if (setCookie.includes('__Host-rentora_session=')) {
           let normalizedCookie = setCookie
-            .replace(/;\s*SameSite=Lax/ig, '; SameSite=None')
-            .replace(/;\s*SameSite=Strict/ig, '; SameSite=None');
-          if (!/;\s*SameSite=/i.test(normalizedCookie)) {
+            .replace(/;\\s*SameSite=Lax/ig, '; SameSite=None')
+            .replace(/;\\s*SameSite=Strict/ig, '; SameSite=None');
+          if (!/;\\s*SameSite=/i.test(normalizedCookie)) {
             normalizedCookie += '; SameSite=None';
           }
-          if (!/;\s*Partitioned/i.test(normalizedCookie)) {
+          if (!/;\\s*Partitioned/i.test(normalizedCookie)) {
             normalizedCookie += '; Partitioned';
           }
           headers.set('Set-Cookie', normalizedCookie);
