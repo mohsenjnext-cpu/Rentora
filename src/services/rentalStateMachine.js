@@ -18,6 +18,7 @@ export const RENTAL_STATES = {
   CONFIRMED: 'confirmed',
   ACTIVE: 'active',
   COMPLETED: 'completed',
+  EXPIRED: 'expired',
   REJECTED: 'rejected',
   CANCELLED: 'cancelled',
   DISPUTED: 'disputed'
@@ -51,6 +52,7 @@ export const ALLOWED_TRANSITIONS = {
     RENTAL_STATES.DISPUTED
   ],
   [RENTAL_STATES.COMPLETED]: [],   // Terminal
+  [RENTAL_STATES.EXPIRED]: [],      // Date-ended lifecycle state; does not assert physical return
   [RENTAL_STATES.REJECTED]: [],    // Terminal
   [RENTAL_STATES.CANCELLED]: [],   // Terminal
   [RENTAL_STATES.DISPUTED]: [
@@ -164,6 +166,12 @@ export class RentalStateMachine {
           label: l('پایان یافته و عودت داده شد', 'Completed', 'مكتمل ومسترجع', '已完结归还'),
           color: 'emerald',
           bg: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+        };
+      case 'expired':
+        return {
+          label: l('منقضی‌شده بر اساس تاریخ', 'Expired by date', 'منتهي حسب التاريخ', '按日期结束'),
+          color: 'slate',
+          bg: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
         };
       case 'cancelled':
         return {
