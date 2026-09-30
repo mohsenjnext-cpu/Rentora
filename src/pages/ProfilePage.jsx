@@ -4,7 +4,7 @@ import { usePiAuth } from '../context/PiAuthContext';
 import { useRentora } from '../context/RentoraContext';
 import { getUserReputationSummary } from '../services/reputationService';
 import { cloudSyncService } from '../services/cloudSyncService';
-import { User, ShieldCheck, Star, Settings, Globe, LogOut, Edit3, Camera, Save, Package, CheckCircle2, AlertCircle, CalendarDays, MapPin, BadgeCheck, Clock3, BarChart3 } from 'lucide-react';
+import { User, ShieldCheck, Star, Settings, LogOut, Edit3, Camera, Save, Package, CheckCircle2, AlertCircle, CalendarDays, MapPin, BadgeCheck, Clock3, BarChart3 } from 'lucide-react';
 
 function Avatar({ src, username, className = 'w-20 h-20' }) {
   return src ? <img src={src} alt="" className={className + ' rounded-2xl object-cover bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700'} /> :
@@ -26,7 +26,7 @@ function KycStatus({ status, compact = false }) {
   </div>;
 }
 
-export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProfile }) {
+export default function ProfilePage({ onNavigate, onSelectItem }) {
   const { t, l } = useLanguage();
   const { currentUser, isAuthenticated, setAuthModalOpen, setIsWalletModalOpen, logout, updateProfile, updateUserProfile } = usePiAuth();
   const { items = [], rentals = [], fetchUserReviews } = useRentora();
@@ -207,11 +207,6 @@ export default function ProfilePage({ onNavigate, onSelectItem, onOpenPublicProf
               <div className="flex justify-between gap-3"><span className="text-white/60">{l('آگهی فعال', 'Active listings', 'الإعلانات النشطة', '活跃物品')}</span><strong>{myItems.length}</strong></div>
               <div className="flex justify-between gap-3"><span className="text-white/60">{l('وضعیت حساب', 'Account', 'الحساب', '账户')}</span><strong>{currentUser.status === 'active' ? l('فعال', 'Active', 'نشط', '活跃') : currentUser.status}</strong></div>
             </div>
-          </div>
-          <div className="rounded-[28px] bg-[#EEEDFE] dark:bg-[#211E45] p-5">
-            <p className="text-xs font-black text-[#26215C] dark:text-white">{l('پروفایل عمومی', 'Public profile', 'الملف العام', '公开主页')}</p>
-            <p className="text-[11px] leading-5 text-slate-600 dark:text-slate-300 mt-2">{l('نمایش عمومی هویت، اعتبار و آگهی‌های فعال شما.', 'A public view of your identity, reputation and active listings.', 'عرض عام لهويتك وسمعتك وإعلاناتك النشطة.', '公开展示你的身份、信誉和活跃物品。')}</p>
-            <button type="button" onClick={() => onOpenPublicProfile?.(currentUser.username)} className="w-full mt-4 bg-[#26215C] text-white rounded-xl py-2.5 text-xs font-bold flex justify-center gap-2"><Globe className="w-4 h-4" />{l('مشاهده پروفایل عمومی', 'View public profile', 'عرض الملف العام', '查看公开主页')}</button>
           </div>
         </aside>
       </section>
