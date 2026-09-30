@@ -1241,14 +1241,28 @@ export default {
       if (request.method === 'POST' && path === '/api/auth/pi-login') {
         const loginResponse = await legacyWorker.fetch(request, env, ctx);
         if (!loginResponse.ok) return loginResponse;
-        const data = await loginResponse.clone().json().catch(() => null);
-        if (!data?.sessionToken) return loginResponse;
+
+        // The legacy worker creates the server session and emits the cookie itself.
+        // Normalize the actual Set-Cookie header for Pi App Studio External App.
         const headers = new Headers(loginResponse.headers);
-        headers.set('Set-Cookie', `__Host-rentora_session=${encodeURIComponent(data.sessionToken)}; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=None; Partitioned`);
-        const cleanData = { ...data };
-        delete cleanData.sessionToken;
-        headers.set('Content-Type', 'application/json; charset=utf-8');
-        return new Response(JSON.stringify(cleanData), { status: loginResponse.status, headers });
+        const setCookie = headers.get('Set-Cookie') || '';
+        if (setCookie.includes('__Host-rentora_session=')) {
+          let normalizedCookie = setCookie
+            .replace(/;\s*SameSite=Lax/ig, '; SameSite=None')
+            .replace(/;\s*SameSite=Strict/ig, '; SameSite=None');
+          if (!/;\s*SameSite=/i.test(normalizedCookie)) {
+            normalizedCookie += '; SameSite=None';
+          }
+          if (!/;\s*Partitioned/i.test(normalizedCookie)) {
+            normalizedCookie += '; Partitioned';
+          }
+          headers.set('Set-Cookie', normalizedCookie);
+        }
+        return new Response(loginResponse.body, {
+          status: loginResponse.status,
+          statusText: loginResponse.statusText,
+          headers
+        });
       }
       if (request.method === 'POST' && path === '/api/payments/incomplete') return await handleIncompletePayment(request, env);
       if (request.method === 'POST' && path === '/api/payments/approve') return await approvePayment(request, env);
