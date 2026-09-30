@@ -16,7 +16,7 @@ console.log('Activity state and authority checks passed.');
 
 
 assert.match(source, /const isRentalDateExpired = \(rental\) =>/, 'activity must detect rentals whose end date has passed');
-assert.match(source, /!\/\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/.test\(endDate\)/, 'activity expiry must validate ISO end dates correctly');
+assert.ok(source.includes('if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(endDate)) return false;'), 'activity expiry must validate ISO end dates correctly');
 assert.match(source, /const expiredRentals = useMemo/, 'expired rentals must have a separate view model');
 assert.match(source, /activeTab === 'expired'/, 'activity must expose an expired-rentals workspace');
 assert.match(source, /تاریخ اجاره گذشته/, 'expired rentals must be visibly labeled as expired');
