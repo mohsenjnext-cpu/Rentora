@@ -16,10 +16,16 @@ console.log('Activity state and authority checks passed.');
 
 
 assert.match(source, /const isRentalDateExpired = \(rental\) =>/, 'activity must detect rentals whose end date has passed');
+assert.match(source, /!\/\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/.test\(endDate\)/, 'activity expiry must validate ISO end dates correctly');
 assert.match(source, /const expiredRentals = useMemo/, 'expired rentals must have a separate view model');
 assert.match(source, /activeTab === 'expired'/, 'activity must expose an expired-rentals workspace');
 assert.match(source, /تاریخ اجاره گذشته/, 'expired rentals must be visibly labeled as expired');
 assert.match(source, /به‌صورت خودکار «تکمیل‌شده» نمی‌شود/, 'expiry must not falsely mark a rental as completed');
+assert.match(source, /const clearedActivityKey = currentUser \? `rentora_cleared_activity_/, 'activity cleanup must be scoped to the current user');
+assert.match(source, /const handleClearAllActivity = \(\) =>/, 'activity must expose one global cleanup action');
+assert.match(source, /setClearedActivityTime\(nowTime\)/, 'global cleanup must clear the activity feed from the local view');
+assert.match(source, /setClearedHistoryTime\(nowTime\)/, 'global cleanup must clear rental history from the local view');
+assert.match(source, /پاکسازی تمام بخش‌های فعالیت/, 'global cleanup confirmation must be explicit');
 
 const bottomNav = fs.readFileSync('src/components/BottomNav.jsx', 'utf8');
 assert.match(bottomNav, /const ACTIONABLE_RENTAL_STATUSES = new Set/, 'activity badge must be scoped to actionable states');
