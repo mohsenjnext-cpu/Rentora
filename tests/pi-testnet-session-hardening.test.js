@@ -12,7 +12,7 @@ test('gateway authentication reads the secure host-only session cookie', () => {
     assert.match(source, /Partitioned/);
     assert.match(source, /setCookie\.includes\('__Host-rentora_session='/);
     assert.doesNotMatch(source, /data\.sessionToken/);
-    assert.doesNotMatch(source, /Set-Cookie[^\\n]*['"]rentora_session=/);
+    assert.doesNotMatch(source, /Set-Cookie.*['"]rentora_session=/);
   }
 });
 
