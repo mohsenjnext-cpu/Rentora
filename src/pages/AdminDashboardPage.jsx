@@ -7,32 +7,33 @@ import {
 import { usePiAuth } from '../context/PiAuthContext';
 import { getApiBaseUrl } from '../services/apiConfig';
 import { cloudSyncService } from '../services/cloudSyncService';
+import '../styles/admin-dashboard.css';
 
 const NAV = [
-  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'treasury', label: 'Treasury', icon: WalletCards, children: [
-    ['treasury-total', 'Total Revenue'], ['treasury-available', 'Available'],
-    ['treasury-reserved', 'Reserved'], ['treasury-paid', 'Paid Out'], ['treasury-wallet', 'Wallet Status']
+  { id: 'overview', label: 'نمای کلی', icon: LayoutDashboard },
+  { id: 'treasury', label: 'خزانه', icon: WalletCards, children: [
+    ['treasury-total', 'کل درآمد'], ['treasury-available', 'قابل استفاده'],
+    ['treasury-reserved', 'رزروشده'], ['treasury-paid', 'پرداخت‌شده'], ['treasury-wallet', 'وضعیت کیف پول']
   ]},
-  { id: 'payouts', label: 'Payouts', icon: ArrowUpRight, children: [
-    ['payout-create', 'Create Payout'], ['payout-pending', 'Pending'], ['payout-processing', 'Processing'],
-    ['payout-completed', 'Completed'], ['payout-failed', 'Failed'], ['payout-reconcile', 'Reconciliation']
+  { id: 'payouts', label: 'پرداخت‌ها', icon: ArrowUpRight, children: [
+    ['payout-create', 'ایجاد پرداخت'], ['payout-pending', 'در انتظار'], ['payout-processing', 'در حال پردازش'],
+    ['payout-completed', 'تکمیل‌شده'], ['payout-failed', 'ناموفق'], ['payout-reconcile', 'تطبیق پرداخت']
   ]},
-  { id: 'users', label: 'Users', icon: Users, children: [['users-all','All Users'],['users-kyc','KYC'],['users-suspended','Suspended'],['users-details','User Details']]},
-  { id: 'listings', label: 'Listings', icon: Package, children: [['listings-all','All'],['listings-active','Active'],['listings-paused','Paused'],['listings-moderation','Moderation']]},
-  { id: 'reports', label: 'Reports', icon: AlertTriangle, children: [['reports-open','Open'],['reports-reviewing','Reviewing'],['reports-resolved','Resolved']]},
-  { id: 'transactions', label: 'Transactions', icon: CreditCard, children: [['tx-fees','Platform Fees'],['tx-payouts','Payouts'],['tx-details','TX Details']]},
-  { id: 'audit', label: 'Audit Logs', icon: ShieldCheck },
-  { id: 'system', label: 'System', icon: Settings, children: [['system-fee','Platform Fee'],['system-health','Backend Health'],['system-db','Database Maintenance'],['system-pi','Pi Integration']]}
+  { id: 'users', label: 'کاربران', icon: Users, children: [['users-all','همه کاربران'],['users-kyc','احراز هویت'],['users-suspended','تعلیق‌شده'],['users-details','جزئیات کاربر']]},
+  { id: 'listings', label: 'آگهی‌ها', icon: Package, children: [['listings-all','همه'],['listings-active','فعال'],['listings-paused','متوقف'],['listings-moderation','نظارت و بررسی']]},
+  { id: 'reports', label: 'گزارش‌ها', icon: AlertTriangle, children: [['reports-open','باز'],['reports-reviewing','در حال بررسی'],['reports-resolved','حل‌شده']]},
+  { id: 'transactions', label: 'تراکنش‌ها', icon: CreditCard, children: [['tx-fees','کارمزدهای پلتفرم'],['tx-payouts','پرداخت‌ها'],['tx-details','جزئیات تراکنش']]},
+  { id: 'audit', label: 'گزارش رویدادها', icon: ShieldCheck },
+  { id: 'system', label: 'سیستم', icon: Settings, children: [['system-fee','کارمزد پلتفرم'],['system-health','سلامت Backend'],['system-db','نگهداری پایگاه داده'],['system-pi','یکپارچه‌سازی Pi']]}
 ];
 
 function money(v) { return `${Number(v || 0).toFixed(4)} π`; }
 function date(v) { if (!v) return '—'; try { return new Date(v).toLocaleString('fa-IR'); } catch { return v; } }
 function statusLabel(s) {
-  const map = { open:'Open', reviewing:'Reviewing', resolved:'Resolved', dismissed:'Dismissed', completed:'Completed',
-    reserved:'Reserved', creating:'Creating', pi_created:'Pi Created', approving:'Approving', approved:'Approved',
-    completing:'Completing', reconciliation_required:'Reconciliation', cancelled:'Cancelled', active:'Active', paused:'Paused',
-    suspended:'Suspended', failed:'Failed' };
+  const map = { open:'باز', reviewing:'در حال بررسی', resolved:'حل‌شده', dismissed:'ردشده', completed:'تکمیل‌شده',
+    reserved:'رزروشده', creating:'در حال ایجاد', pi_created:'پرداخت Pi ایجاد شد', approving:'در حال تأیید', approved:'تأییدشده',
+    completing:'در حال تکمیل', reconciliation_required:'تطبیق پرداخت', cancelled:'لغوشده', active:'فعال', paused:'متوقف',
+    suspended:'تعلیق‌شده', failed:'ناموفق' };
   return map[s] || s || '—';
 }
 
@@ -92,7 +93,7 @@ export default function AdminDashboardPage({ onNavigate }) {
   };
 
   const currentParent = NAV.find(n => n.id === section || n.children?.some(c => c[0] === section));
-  const title = section.includes('-') ? (currentParent?.children?.find(c => c[0] === section)?.[1] || currentParent?.label) : (currentParent?.label || 'Overview');
+  const title = section.includes('-') ? (currentParent?.children?.find(c => c[0] === section)?.[1] || currentParent?.label) : (currentParent?.label || 'نمای کلی');
 
   const updateUser = async (user, kind) => {
     const id = user.id || user.uid;
@@ -191,8 +192,8 @@ export default function AdminDashboardPage({ onNavigate }) {
   const filtered = (rows, fields) => rows.filter(r => !q || fields.some(f => String(r?.[f] ?? '').toLowerCase().includes(q)));
 
   const cards = [
-    ['Users', o.users, Users], ['Listings', o.listings, Package], ['Rentals', o.rentals, Activity],
-    ['Revenue', money(o.revenue), WalletCards], ['Available Treasury', money(o.availableTreasury), Wallet], ['Active Alerts', o.openAlerts, AlertTriangle]
+    ['کاربران', o.users, Users], ['آگهی‌ها', o.listings, Package], ['Rentals', o.rentals, Activity],
+    ['درآمد', money(o.revenue), WalletCards], ['خزانه قابل استفاده', money(o.availableTreasury), Wallet], ['هشدارهای فعال', o.openAlerts, AlertTriangle]
   ];
 
   const renderTable = (columns, rows, empty='داده‌ای وجود ندارد.') => (
@@ -240,10 +241,10 @@ export default function AdminDashboardPage({ onNavigate }) {
       const pending=rows.filter(x=>['pending','processing','created','approved'].includes(x.status)).length;
       return <div className="space-y-3">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {[['Platform Fees',fees],['Payouts',payoutRows],['Completed',completed],['Pending',pending]].map(([l,v])=><div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
+          {[['کارمزدهای پلتفرم',fees],['پرداخت‌ها',payoutRows],['تکمیل‌شده',completed],['در انتظار',pending]].map(([l,v])=><div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
         </div>
         <div className="p-3 rounded-xl bg-[#EEEDFE] dark:bg-[#211E45] text-xs">تراکنش‌ها فقط برای مشاهده و تطبیق مدیریتی هستند. مبلغ و وضعیت مالی از داده‌های معتبر سرور خوانده می‌شود و این نما منطق پرداخت را تغییر نمی‌دهد.</div>
-        {renderTable([['ID','id'],['Type',r=>statusLabel(r.type)],['Amount',r=>money(r.amount)],['Status',r=><Status s={r.status}/>],['Pi Payment','pi_payment_id'],['TXID','pi_txid'],['Date',r=>date(r.created_at)]],rows,'تراکنشی برای این بخش وجود ندارد.')}
+        {renderTable([['ID','id'],['Type',r=>statusLabel(r.type)],['مبلغ',r=>money(r.amount)],['Status',r=><Status s={r.status}/>],['Pi Payment','pi_payment_id'],['TXID','pi_txid'],['تاریخ',r=>date(r.created_at)]],rows,'تراکنشی برای این بخش وجود ندارد.')}
       </div>;
     }
     if(section==='audit') return <AuditView audit={filtered(audit,['adminUsername','action'])}/>;
@@ -251,8 +252,8 @@ export default function AdminDashboardPage({ onNavigate }) {
     return null;
   };
 
-  return <div className="space-y-4 pb-16 max-w-7xl mx-auto" dir="rtl">
-    <header className="rentora-card p-4 flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
+  return <div className="admin-shell space-y-4 pb-16 max-w-7xl mx-auto" dir="rtl">
+    <header className="admin-header rentora-card p-4 flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
       <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-[#26215C] text-white flex items-center justify-center"><LayoutDashboard className="w-5 h-5"/></div>
         <div><h1 className="font-bold text-lg">مرکز مدیریت Rentora</h1><p className="text-[11px] text-slate-500">مدیریت عملیاتی، خزانه، پرداخت و نظارت</p></div></div>
       <div className="flex gap-2"><div className="relative"><Search className="absolute right-3 top-2.5 w-4 h-4 text-slate-400"/><input aria-label="جستجوی پنل مدیریت" value={query} onChange={e=>setQuery(e.target.value)} placeholder="جستجو..." className="h-9 w-48 rounded-lg border border-slate-200 dark:border-slate-700 bg-transparent pr-9 pl-3 text-xs"/></div>
@@ -265,8 +266,8 @@ export default function AdminDashboardPage({ onNavigate }) {
         {NAV.map(n => <React.Fragment key={n.id}><option value={n.id}>{n.label}</option>{n.children?.map(c => <option key={c[0]} value={c[0]}>↳ {c[1]}</option>)}</React.Fragment>)}
       </select>
     </div>
-    <div className="grid lg:grid-cols-[245px_1fr] gap-4">
-      <aside aria-label="ناوبری پنل مدیریت" className="hidden lg:block rentora-card p-2 h-fit lg:sticky lg:top-3">
+    <div className="admin-layout grid lg:grid-cols-[245px_1fr] gap-4">
+      <aside className="admin-sidebar" aria-label="ناوبری پنل مدیریت" className="hidden lg:block rentora-card p-2 h-fit lg:sticky lg:top-3">
         {NAV.map(n => { const Icon=n.icon, open=expanded[n.id] || section===n.id || n.children?.some(c=>c[0]===section); return <div key={n.id}>
           <button type="button" aria-expanded={n.children ? open : undefined} aria-current={section===n.id ? "page" : undefined} onClick={()=> n.children ? setExpanded(e=>({...e,[n.id]:!open})) : go(n.id)} className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold ${section===n.id?'bg-[#EEEDFE] text-[#26215C] dark:bg-[#211E45] dark:text-white':''}`}>
             <Icon className="w-4 h-4"/><span className="flex-1 text-right">{n.label}</span>{n.children&&<ChevronDown className={`w-3.5 h-3.5 transition ${open?'rotate-180':''}`}/>}
@@ -274,15 +275,15 @@ export default function AdminDashboardPage({ onNavigate }) {
           {open&&n.children&&<div className="mr-4 border-r pr-2 border-slate-200 dark:border-slate-700">{n.children.map(c=><button type="button" key={c[0]} aria-current={section===c[0] ? "page" : undefined} onClick={()=>go(c[0])} className={`block w-full text-right px-3 py-2 rounded-md text-[11px] ${section===c[0]?'font-bold text-[#534AB7] bg-slate-50 dark:bg-[#1b1930]':'text-slate-500'}`}>{c[1]}</button>)}</div>}
         </div>})}
       </aside>
-      <main className="min-w-0"><div className="mb-3"><h2 id="admin-section-title" className="text-base font-bold">{title}</h2><p className="text-[11px] text-slate-500">داده‌ها مستقیماً از API مدیریتی و D1 خوانده می‌شوند.</p></div>{page()}</main>
+      <main className="admin-main min-w-0"><div className="mb-3"><h2 id="admin-section-title" className="text-base font-bold">{title}</h2><p className="text-[11px] text-slate-500">داده‌ها مستقیماً از API مدیریتی و D1 خوانده می‌شوند.</p></div>{page()}</main>
     </div>
   </div>;
 }
 
 function Overview({cards,o,reports,payouts,go}) {
   return <div className="space-y-4"><div className="grid grid-cols-2 md:grid-cols-3 gap-3">{cards.map(([l,v,I])=><div key={l} className="rentora-card p-4"><I className="w-4 h-4 text-[#534AB7] mb-3"/><div className="text-lg font-black">{v}</div><div className="text-[10px] text-slate-500 mt-1">{l}</div></div>)}</div>
-    <div className="grid md:grid-cols-2 gap-3"><div className="rentora-card p-4"><div className="flex justify-between"><b className="text-sm">Operational Alerts</b><AlertTriangle className="w-4 h-4 text-amber-600"/></div><p className="text-xs text-slate-500 mt-3">{o.openAlerts||0} مورد نیازمند بررسی.</p><button onClick={()=>go('reports-open')} className="btn-secondary px-3 py-2 text-[11px] mt-3">مشاهده گزارش‌ها</button></div>
-      <div className="rentora-card p-4"><b className="text-sm">Payout Pipeline</b><div className="flex gap-2 mt-3 flex-wrap">{['reserved','creating','pi_created','approving','approved','completing','completed','reconciliation_required'].map(s=><span key={s} className="px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[9px]">{s}: {payouts.filter(p=>p.status===s).length}</span>)}</div></div></div>
+    <div className="grid md:grid-cols-2 gap-3"><div className="rentora-card p-4"><div className="flex justify-between"><b className="text-sm">هشدارهای عملیاتی</b><AlertTriangle className="w-4 h-4 text-amber-600"/></div><p className="text-xs text-slate-500 mt-3">{o.openAlerts||0} مورد نیازمند بررسی.</p><button onClick={()=>go('reports-open')} className="btn-secondary px-3 py-2 text-[11px] mt-3">مشاهده گزارش‌ها</button></div>
+      <div className="rentora-card p-4"><b className="text-sm">چرخه پرداخت</b><div className="flex gap-2 mt-3 flex-wrap">{['reserved','creating','pi_created','approving','approved','completing','completed','reconciliation_required'].map(s=><span key={s} className="px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[9px]">{s}: {payouts.filter(p=>p.status===s).length}</span>)}</div></div></div>
     <NeedsAttention reports={reports} payouts={payouts} go={go}/>
   </div>;
 }
@@ -309,7 +310,7 @@ function NeedsAttention({ reports, payouts, go }) {
 
   return <section className="rentora-card p-4">
     <div className="flex items-center justify-between gap-3">
-      <div><h3 className="font-bold text-sm">Needs Attention</h3><p className="text-[10px] text-slate-500 mt-1">موارد عملیاتی که قبل از ادامه کار باید بررسی شوند.</p></div>
+      <div><h3 className="font-bold text-sm">نیازمند توجه</h3><p className="text-[10px] text-slate-500 mt-1">موارد عملیاتی که قبل از ادامه کار باید بررسی شوند.</p></div>
       <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800">{items.length}</span>
     </div>
     {items.length ? <div className="mt-3 space-y-2">{items.map(item => {
@@ -324,20 +325,20 @@ function NeedsAttention({ reports, payouts, go }) {
 }
 
 function Treasury({t,system,go}) {
-  const rows=[['Total Revenue',t.totalRevenue],['Available',t.available],['Reserved',t.reserved],['Paid Out',t.paidOut]];
+  const rows=[['کل درآمد',t.totalRevenue],['قابل استفاده',t.available],['رزروشده',t.reserved],['پرداخت‌شده',t.paidOut]];
   return <div className="space-y-3"><div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">{rows.map(([l,v])=><div key={l} className="rentora-card p-4"><div className="text-[10px] text-slate-500">{l}</div><div className="text-xl font-black mt-2">{money(v)}</div></div>)}</div>
-    <div className="rentora-card p-5"><div className="flex items-center gap-2 font-bold"><Wallet className="w-4 h-4"/> Wallet Status</div><div className="mt-4 text-xs grid sm:grid-cols-3 gap-3"><span>Pi API: {system.piApiConfigured?'Configured':'Not configured'}</span><span>Available: {money(t.available)}</span><span>Reserved: {money(t.reserved)}</span></div><button type="button" aria-label="ایجاد پرداخت از خزانه" onClick={()=>go('payout-create')} className="btn-primary px-4 py-2 text-xs mt-4">Create Payout</button></div></div>;
+    <div className="rentora-card p-5"><div className="flex items-center gap-2 font-bold"><Wallet className="w-4 h-4"/>وضعیت کیف پول</div><div className="mt-4 text-xs grid sm:grid-cols-3 gap-3"><span>Pi API: {system.piApiConfigured?'پیکربندی‌شده':'پیکربندی نشده'}</span><span>Available: {money(t.available)}</span><span>Reserved: {money(t.reserved)}</span></div><button type="button" aria-label="ایجاد پرداخت از خزانه" onClick={()=>go('payout-create')} className="btn-primary px-4 py-2 text-xs mt-4">ایجاد پرداخت</button></div></div>;
 }
 
 function Payouts({payouts,reconciliation,section,submitPayout,payoutAmount,setPayoutAmount,payoutMemo,setPayoutMemo,walletAddress,setWalletAddress,payoutMessage,retryReconciliation,busyId}) {
-  if(section==='payout-create') return <form onSubmit={submitPayout} className="rentora-card p-5 max-w-xl space-y-3"><h3 className="font-bold">Create Treasury Payout</h3><label className="block text-xs font-bold">مبلغ پرداخت (π)<input aria-label="مبلغ پرداخت از خزانه به پی" value={payoutAmount} onChange={e=>setPayoutAmount(e.target.value)} type="number" min="0" step="0.0001" placeholder="Amount (π)" className="mt-1 w-full p-3 rounded-lg border bg-transparent text-sm"/></label><label className="block text-xs font-bold">آدرس کیف پول Pi<input aria-label="آدرس کیف پول Pi برای پرداخت خزانه" value={walletAddress} onChange={e=>setWalletAddress(e.target.value)} placeholder="Pi wallet address (optional)" className="mt-1 w-full p-3 rounded-lg border bg-transparent text-sm"/></label><label className="block text-xs font-bold">یادداشت پرداخت<input aria-label="یادداشت پرداخت خزانه" value={payoutMemo} onChange={e=>setPayoutMemo(e.target.value)} placeholder="Memo" className="mt-1 w-full p-3 rounded-lg border bg-transparent text-sm"/></label>{payoutMessage&&<div className="text-xs p-3 rounded-lg bg-slate-50 dark:bg-slate-800">{payoutMessage}</div>}<button className="btn-primary px-4 py-2 text-xs flex items-center gap-2"><ArrowUpRight className="w-4 h-4"/> ثبت پرداخت</button><p className="text-[10px] text-slate-500">پرداخت از مسیر A2U موجود انجام می‌شود و کلید idempotency برای retry حفظ می‌شود.</p></form>;
+  if(section==='payout-create') return <form onSubmit={submitPayout} className="rentora-card p-5 max-w-xl space-y-3"><h3 className="font-bold">ایجاد پرداخت از خزانه</h3><label className="block text-xs font-bold">مبلغ پرداخت (π)<input aria-label="مبلغ پرداخت از خزانه به پی" value={payoutAmount} onChange={e=>setPayoutAmount(e.target.value)} type="number" min="0" step="0.0001" placeholder="مبلغ (π)" className="mt-1 w-full p-3 rounded-lg border bg-transparent text-sm"/></label><label className="block text-xs font-bold">آدرس کیف پول Pi<input aria-label="آدرس کیف پول Pi برای پرداخت خزانه" value={walletAddress} onChange={e=>setWalletAddress(e.target.value)} placeholder="آدرس کیف پول Pi (اختیاری)" className="mt-1 w-full p-3 rounded-lg border bg-transparent text-sm"/></label><label className="block text-xs font-bold">یادداشت پرداخت<input aria-label="یادداشت پرداخت خزانه" value={payoutMemo} onChange={e=>setPayoutMemo(e.target.value)} placeholder="یادداشت" className="mt-1 w-full p-3 rounded-lg border bg-transparent text-sm"/></label>{payoutMessage&&<div className="text-xs p-3 rounded-lg bg-slate-50 dark:bg-slate-800">{payoutMessage}</div>}<button className="btn-primary px-4 py-2 text-xs flex items-center gap-2"><ArrowUpRight className="w-4 h-4"/> ثبت پرداخت</button><p className="text-[10px] text-slate-500">پرداخت از مسیر A2U موجود انجام می‌شود و کلید idempotency برای retry حفظ می‌شود.</p></form>;
   let rows=payouts;
   if(section==='payout-pending') rows=rows.filter(x=>['reserved'].includes(x.status));
   if(section==='payout-processing') rows=rows.filter(x=>['creating','pi_created','approving','approved','completing'].includes(x.status));
   if(section==='payout-completed') rows=rows.filter(x=>x.status==='completed');
   if(section==='payout-failed') rows=rows.filter(x=>['cancelled'].includes(x.status) || x.error);
   if(section==='payout-reconcile') rows=reconciliation;
-  return <div className="rentora-card overflow-x-auto"><table className="w-full min-w-[820px] text-xs"><thead><tr className="border-b"><th className="p-3 text-right">Operation</th><th className="p-3 text-right">Amount</th><th className="p-3 text-right">Status</th><th className="p-3 text-right">Recipient</th><th className="p-3 text-right">Updated</th><th className="p-3 text-right">Action</th></tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={r.id||i} className="border-b last:border-0"><td className="p-3">{r.operation_key||r.id}</td><td className="p-3">{money(r.amount)}</td><td className="p-3"><Status s={r.status}/></td><td className="p-3">{r.recipient||r.pi_payment_id||'—'}</td><td className="p-3">{date(r.updated_at)}</td><td className="p-3">{section==='payout-reconcile'?<button type="button" aria-label={`تلاش مجدد برای تطبیق پرداخت ${r.id}`} disabled={busyId===r.id} onClick={()=>retryReconciliation(r.id)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{busyId===r.id?'...':'Retry / Resolve'}</button>:'—'}</td></tr>):<tr><td colSpan="6" className="p-8 text-center text-slate-400">موردی وجود ندارد.</td></tr>}</tbody></table></div>;
+  return <div className="rentora-card overflow-x-auto"><table className="w-full min-w-[820px] text-xs"><thead><tr className="border-b"><th className="p-3 text-right">عملیات</th><th className="p-3 text-right">مبلغ</th><th className="p-3 text-right">Status</th><th className="p-3 text-right">دریافت‌کننده</th><th className="p-3 text-right">آخرین تغییر</th><th className="p-3 text-right">عملیات</th></tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={r.id||i} className="border-b last:border-0"><td className="p-3">{r.operation_key||r.id}</td><td className="p-3">{money(r.amount)}</td><td className="p-3"><Status s={r.status}/></td><td className="p-3">{r.recipient||r.pi_payment_id||'—'}</td><td className="p-3">{date(r.updated_at)}</td><td className="p-3">{section==='payout-reconcile'?<button type="button" aria-label={`تلاش مجدد برای تطبیق پرداخت ${r.id}`} disabled={busyId===r.id} onClick={()=>retryReconciliation(r.id)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{busyId===r.id?'...':'تلاش مجدد / حل مشکل'}</button>:'—'}</td></tr>):<tr><td colSpan="6" className="p-8 text-center text-slate-400">موردی وجود ندارد.</td></tr>}</tbody></table></div>;
 }
 
 function UsersView({rows,section,busyId,updateUser,onDetails,renderTable}) {
@@ -349,12 +350,12 @@ function UsersView({rows,section,busyId,updateUser,onDetails,renderTable}) {
       {[['نمایش', rows.length], ['KYC تاییدشده', verified], ['تعلیق‌شده', suspended]].map(([l,v]) => <div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
     </div>
     {section === 'users-kyc' && <div className="p-3 rounded-xl bg-[#EEEDFE] dark:bg-[#211E45] text-xs">صفحه KYC فقط کاربرانی را نشان می‌دهد که هنوز وضعیت تاییدشده ندارند. {pending} مورد در این فهرست است.</div>}
-    {renderTable([['Username',r=>`@${r.username||'—'}`],['Status',r=><Status s={r.status}/>],['KYC',r=><Status s={r.kycStatus||'unknown'}/>],['Role',r=>r.role],['Joined',r=>date(r.created_at||r.joinedDate)],['Actions',r=><div className="flex gap-1 flex-wrap"><button type="button" aria-label={r.status==='active'?`تعلیق کاربر ${r.username||r.id}`:`فعال‌سازی کاربر ${r.username||r.id}`} disabled={busyId===r.id} onClick={()=>updateUser(r,'status')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'Suspend':'Activate'}</button><button type="button" aria-label={r.kycStatus==='verified'?`لغو تایید KYC کاربر ${r.username||r.id}`:`تایید KYC کاربر ${r.username||r.id}`} disabled={busyId===r.id} onClick={()=>updateUser(r,'kyc')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.kycStatus==='verified'?'Unverify':'Verify KYC'}</button><button type="button" aria-label={`مشاهده جزئیات کاربر ${r.username||r.id}`} onClick={()=>onDetails(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Details</button></div>]],rows)}
+    {renderTable([['نام کاربری',r=>`@${r.username||'—'}`],['Status',r=><Status s={r.status}/>],['احراز هویت',r=><Status s={r.kycStatus||'unknown'}/>],['نقش',r=>r.role],['تاریخ عضویت',r=>date(r.created_at||r.joinedDate)],['Actions',r=><div className="flex gap-1 flex-wrap"><button type="button" aria-label={r.status==='active'?`تعلیق کاربر ${r.username||r.id}`:`فعال‌سازی کاربر ${r.username||r.id}`} disabled={busyId===r.id} onClick={()=>updateUser(r,'status')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'تعلیق':'فعال‌سازی'}</button><button type="button" aria-label={r.kycStatus==='verified'?`لغو تایید KYC کاربر ${r.username||r.id}`:`تایید KYC کاربر ${r.username||r.id}`} disabled={busyId===r.id} onClick={()=>updateUser(r,'kyc')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.kycStatus==='verified'?'لغو تأیید':'تأیید احراز هویت'}</button><button type="button" aria-label={`مشاهده جزئیات کاربر ${r.username||r.id}`} onClick={()=>onDetails(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">جزئیات</button></div>]],rows)}
   </div>;
 }
 function UserDetails({user,onBack}) {
   if (!user) return <div className="rentora-card p-6 text-sm text-slate-500">کاربری برای نمایش وجود ندارد.</div>;
-  const fields=[['Username',user.username?`@${user.username}`:'—'],['Pi UID',user.piUid || user.uid || '—'],['Role',user.role || 'user'],['Status',user.status || '—'],['KYC',user.kycStatus || 'unknown'],['Joined',user.joinedDate || user.created_at || '—'],['Display Name',user.displayName || '—'],['Location',user.location || '—'],['Bio',user.bio || '—']];
+  const fields=[['نام کاربری',user.username?`@${user.username}`:'—'],['شناسه Pi',user.piUid || user.uid || '—'],['نقش',user.role || 'user'],['Status',user.status || '—'],['احراز هویت',user.kycStatus || 'unknown'],['تاریخ عضویت',user.joinedDate || user.created_at || '—'],['نام نمایشی',user.displayName || '—'],['موقعیت',user.location || '—'],['معرفی',user.bio || '—']];
   return <div className="space-y-3"><button type="button" aria-label="بازگشت به فهرست کاربران" onClick={onBack} className="btn-secondary px-3 py-2 text-xs">بازگشت به کاربران</button><div className="rentora-card p-5 grid sm:grid-cols-2 gap-4">{fields.map(([label,value])=><div key={label}><div className="text-[10px] text-slate-500">{label}</div><div className="text-sm font-bold mt-1 break-words">{String(value)}</div></div>)}</div></div>;
 }
 function ListingsView({rows,section,busyId,updateListing,renderTable}) {
@@ -363,10 +364,10 @@ function ListingsView({rows,section,busyId,updateListing,renderTable}) {
   const moderation=rows.filter(r=>['pending','moderation','pending_moderation','review'].includes(r.status)).length;
   return <div className="space-y-3">
     <div className="grid grid-cols-3 gap-2">
-      {[['Active',active],['Paused',paused],['Moderation',moderation]].map(([l,v]) => <div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
+      {[['فعال',active],['متوقف',paused],['نظارت و بررسی',moderation]].map(([l,v]) => <div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
     </div>
     {section==='listings-moderation' && <div className="p-3 rounded-xl bg-[#EEEDFE] dark:bg-[#211E45] text-xs">صف بررسی محتوا و وضعیت آگهی‌ها. تغییر وضعیت فقط از مسیر مدیریتی و سرویس سمت سرور انجام می‌شود.</div>}
-    {renderTable([['Title','title'],['Owner',r=>`@${r.owner_username||'—'}`],['Price',r=>money(r.price_per_day)],['Status',r=><Status s={r.status}/>],['Updated',r=>date(r.updated_at)],['Action',r=><button type="button" aria-label={`${r.status==='active'?'توقف' : 'فعال‌سازی'} آگهی ${r.title||r.id}`} disabled={busyId===r.id} onClick={()=>updateListing(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'Pause':'Activate'}</button>]],rows,section==='listings-moderation'?'آگهی‌ای در صف بررسی نیست.':'آگهی‌ای وجود ندارد.')}
+    {renderTable([['Title','title'],['Owner',r=>`@${r.owner_username||'—'}`],['Price',r=>money(r.price_per_day)],['Status',r=><Status s={r.status}/>],['آخرین تغییر',r=>date(r.updated_at)],['عملیات',r=><button type="button" aria-label={`${r.status==='active'?'توقف' : 'فعال‌سازی'} آگهی ${r.title||r.id}`} disabled={busyId===r.id} onClick={()=>updateListing(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'Pause':'فعال‌سازی'}</button>]],rows,section==='listings-moderation'?'آگهی‌ای در صف بررسی نیست.':'آگهی‌ای وجود ندارد.')}
   </div>;
 }
 function ReportsView({rows,busyId,updateReport,renderTable}) {
@@ -375,18 +376,18 @@ function ReportsView({rows,busyId,updateReport,renderTable}) {
   const resolved=rows.filter(r=>['resolved','dismissed'].includes(r.status)).length;
   return <div className="space-y-3">
     <div className="grid grid-cols-3 gap-2">
-      {[['Open',open],['Reviewing',reviewing],['Resolved',resolved]].map(([l,v]) => <div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
+      {[['باز',open],['در حال بررسی',reviewing],['حل‌شده',resolved]].map(([l,v]) => <div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
     </div>
     <div className="p-3 rounded-xl bg-[#EEEDFE] dark:bg-[#211E45] text-xs">گزارش‌ها برای بررسی Trust & Safety دسته‌بندی شده‌اند. تغییر وضعیت فقط از مسیر مدیریتی انجام می‌شود و نتیجه مستقیماً از API دریافت می‌شود.</div>
     {renderTable([
-      ['Reporter',r=>`@${r.reporter_username||'—'}`],
-      ['Target',r=>`${r.target_type||'—'} / ${r.target_id||'—'}`],
-      ['Reason','reason'],
+      ['گزارش‌دهنده',r=>`@${r.reporter_username||'—'}`],
+      ['هدف',r=>`${r.target_type||'—'} / ${r.target_id||'—'}`],
+      ['دلیل','reason'],
       ['Status',r=><Status s={r.status}/>],
-      ['Date',r=>date(r.created_at)],
-      ['Action',r=><div className="flex gap-1 flex-wrap">
-        {r.status==='open'&&<button type="button" aria-label={`انتقال گزارش ${r.id} به بررسی`} disabled={busyId===r.id} onClick={()=>updateReport(r,'reviewing')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Review</button>}
-        {r.status==='reviewing'&&<button type="button" aria-label={`بستن گزارش ${r.id}`} disabled={busyId===r.id} onClick={()=>updateReport(r,'resolved')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">Resolve</button>}
+      ['تاریخ',r=>date(r.created_at)],
+      ['عملیات',r=><div className="flex gap-1 flex-wrap">
+        {r.status==='open'&&<button type="button" aria-label={`انتقال گزارش ${r.id} به بررسی`} disabled={busyId===r.id} onClick={()=>updateReport(r,'reviewing')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">بررسی</button>}
+        {r.status==='reviewing'&&<button type="button" aria-label={`بستن گزارش ${r.id}`} disabled={busyId===r.id} onClick={()=>updateReport(r,'resolved')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">حل کردن</button>}
       </div>]
     ],rows,'گزارشی در این وضعیت وجود ندارد.')}
   </div>;
@@ -396,21 +397,20 @@ function AuditView({audit}) {
   const recent = audit.slice(0, 8);
   return <div className="space-y-3">
     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-      {[['Total Events',audit.length],['Admins',new Set(audit.map(r=>r.adminUsername).filter(Boolean)).size],['Action Types',Object.keys(actions).length],['Recent',recent.length]].map(([l,v])=><div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
+      {[['کل رویدادها',audit.length],['مدیران',new Set(audit.map(r=>r.adminUsername).filter(Boolean)).size],['نوع عملیات',Object.keys(actions).length],['اخیر',recent.length]].map(([l,v])=><div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
     </div>
     <div className="p-3 rounded-xl bg-[#EEEDFE] dark:bg-[#211E45] text-xs">Audit Logs برای مشاهده رویدادهای مدیریتی است. این نما داده‌های ثبت‌شده را فقط نمایش می‌دهد و هیچ رکورد یا وضعیت عملیاتی را تغییر نمی‌دهد.</div>
-    <div className="rentora-card overflow-x-auto"><table className="w-full min-w-[760px] text-xs"><thead><tr className="border-b"><th className="p-3 text-right">Time</th><th className="p-3 text-right">Admin</th><th className="p-3 text-right">Action</th><th className="p-3 text-right">Details</th></tr></thead><tbody>{audit.length?audit.map((r,i)=><tr key={r.id||i} className="border-b last:border-0"><td className="p-3">{date(r.timestamp||r.created_at)}</td><td className="p-3">@{r.adminUsername||'—'}</td><td className="p-3 font-bold">{r.action||'—'}</td><td className="p-3 max-w-[420px] truncate">{JSON.stringify(r.details||{})}</td></tr>):<tr><td colSpan="4" className="p-8 text-center text-slate-400">رویداد مدیریتی ثبت نشده است.</td></tr>}</tbody></table></div>
+    <div className="rentora-card overflow-x-auto"><table className="w-full min-w-[760px] text-xs"><thead><tr className="border-b"><th className="p-3 text-right">زمان</th><th className="p-3 text-right">مدیر</th><th className="p-3 text-right">عملیات</th><th className="p-3 text-right">جزئیات</th></tr></thead><tbody>{audit.length?audit.map((r,i)=><tr key={r.id||i} className="border-b last:border-0"><td className="p-3">{date(r.timestamp||r.created_at)}</td><td className="p-3">@{r.adminUsername||'—'}</td><td className="p-3 font-bold">{r.action||'—'}</td><td className="p-3 max-w-[420px] truncate">{JSON.stringify(r.details||{})}</td></tr>):<tr><td colSpan="4" className="p-8 text-center text-slate-400">رویداد مدیریتی ثبت نشده است.</td></tr>}</tbody></table></div>
   </div>;
 }
 
 function SystemView({system,section,onCleanup,feeRatePercent,setFeeRatePercent,feeSaving,feeMessage,saveFeeRate}) {
-  if(section==='system-db') return <div className="rentora-card p-5"><div className="flex items-center gap-2 font-bold"><Database className="w-4 h-4"/> Database Maintenance</div><p className="text-xs text-slate-500 mt-2">پاکسازی فقط رکوردهای stale تعریف‌شده در backend را هدف می‌گیرد.</p><button type="button" aria-label="اجرای پاکسازی پایگاه داده" onClick={onCleanup} className="btn-primary px-4 py-2 text-xs mt-4">Run Cleanup</button></div>;
+  if(section==='system-db') return <div className="rentora-card p-5"><div className="flex items-center gap-2 font-bold"><Database className="w-4 h-4"/>نگهداری پایگاه داده</div><p className="text-xs text-slate-500 mt-2">پاکسازی فقط رکوردهای stale تعریف‌شده در backend را هدف می‌گیرد.</p><button type="button" aria-label="اجرای پاکسازی پایگاه داده" onClick={onCleanup} className="btn-primary px-4 py-2 text-xs mt-4">اجرای پاکسازی</button></div>;
   if(section==='system-fee') return <div className="space-y-3">
     <form onSubmit={saveFeeRate} className="rentora-card p-5 max-w-2xl space-y-4">
-      <div><h3 className="font-bold">Platform Fee</h3><p className="text-xs text-slate-500 mt-1">نرخ کارمزد پلتفرم بین ۱٪ تا ۵٪ تنظیم می‌شود. مبلغ نهایی همیشه بر اساس قیمت معتبر سرور محاسبه می‌شود.</p></div>
+      <div><h3 className="font-bold">کارمزد پلتفرم</h3><p className="text-xs text-slate-500 mt-1">نرخ کارمزد پلتفرم بین ۱٪ تا ۵٪ تنظیم می‌شود. مبلغ نهایی همیشه بر اساس قیمت معتبر سرور محاسبه می‌شود.</p></div>
       <div className="grid sm:grid-cols-[1fr_auto] gap-3 items-end">
-        <label className="text-xs font-bold">Fee rate (%)
-          <input value={feeRatePercent} onChange={e=>setFeeRatePercent(e.target.value)} type="number" min="1" max="5" step="0.01" inputMode="decimal" className="mt-2 w-full p-3 rounded-lg border bg-transparent text-sm" />
+        <label className="text-xs font-bold">نرخ کارمزد (%)<input value={feeRatePercent} onChange={e=>setFeeRatePercent(e.target.value)} type="number" min="1" max="5" step="0.01" inputMode="decimal" className="mt-2 w-full p-3 rounded-lg border bg-transparent text-sm" />
         </label>
         <div className="px-4 py-3 rounded-lg bg-slate-50 dark:bg-slate-800 text-sm font-black">{Number(feeRatePercent||0).toFixed(2)}%</div>
       </div>
@@ -418,8 +418,8 @@ function SystemView({system,section,onCleanup,feeRatePercent,setFeeRatePercent,f
       {feeMessage && <div className="text-xs p-3 rounded-lg bg-slate-50 dark:bg-slate-800">{feeMessage}</div>}
       <button disabled={feeSaving} className="btn-primary px-4 py-2 text-xs">{feeSaving ? 'در حال ذخیره...' : 'ذخیره نرخ کارمزد'}</button>
     </form>
-    <div className="grid md:grid-cols-2 gap-3">{[['D1',system.d1Configured?'Ready':'Missing'],['KV',system.kvConfigured?'Ready':'Missing'],['R2',system.r2Configured?'Ready':'Optional'],['Pi API',system.piApiConfigured?'Configured':'Missing']].map(([l,v])=><div key={l} className="rentora-card p-4"><div className="text-[10px] text-slate-500">{l}</div><div className="font-bold mt-1">{v}</div></div>)}</div>
+    <div className="grid md:grid-cols-2 gap-3">{[['D1',system.d1Configured?'آماده':'ناقص'],['KV',system.kvConfigured?'آماده':'ناقص'],['R2',system.r2Configured?'آماده':'اختیاری'],['API Pi',system.piApiConfigured?'پیکربندی‌شده':'ناقص']].map(([l,v])=><div key={l} className="rentora-card p-4"><div className="text-[10px] text-slate-500">{l}</div><div className="font-bold mt-1">{v}</div></div>)}</div>
   </div>;
-  return <div className="grid md:grid-cols-2 gap-3">{[['Platform Fee',`${(Number(feeRatePercent||system.platformFeeRate||0)).toFixed(2)}%`],['D1',system.d1Configured?'Ready':'Missing'],['KV',system.kvConfigured?'Ready':'Missing'],['R2',system.r2Configured?'Ready':'Optional'],['Pi API',system.piApiConfigured?'Configured':'Missing']].map(([l,v])=><div key={l} className="rentora-card p-4"><div className="text-[10px] text-slate-500">{l}</div><div className="font-bold mt-1">{v}</div></div>)}</div>;
+  return <div className="grid md:grid-cols-2 gap-3">{[['کارمزد پلتفرم',`${(Number(feeRatePercent||system.platformFeeRate||0)).toFixed(2)}%`],['D1',system.d1Configured?'آماده':'ناقص'],['KV',system.kvConfigured?'آماده':'ناقص'],['R2',system.r2Configured?'آماده':'اختیاری'],['API Pi',system.piApiConfigured?'پیکربندی‌شده':'ناقص']].map(([l,v])=><div key={l} className="rentora-card p-4"><div className="text-[10px] text-slate-500">{l}</div><div className="font-bold mt-1">{v}</div></div>)}</div>;
 }
 function Status({s}) { return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800"><span className="w-1.5 h-1.5 rounded-full bg-current"/>{statusLabel(s)}</span>; }
