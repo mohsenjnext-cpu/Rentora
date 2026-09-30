@@ -687,9 +687,14 @@ function parseMetadata(value) { if (!value) return {}; try { return JSON.parse(v
 function userView(row, env, options = {}) {
   const meta = parseMetadata(row.metadata);
   const isAdm = env ? (row.role === 'admin' && isAdmin(row.pi_uid, env)) : row.role === 'admin';
-  const piKycStatus = meta.kycStatus || row.kyc_status;
-  const resolvedKycStatus = piKycStatus === 'verified' ? 'verified' : (piKycStatus === 'unverified' ? 'unverified' : 'unknown');
-  const { adminKycStatus, ...publicMeta } = meta;
+  const legacyKycStatus = meta.kycStatus || row.kyc_status;
+  const adminKycStatus = ['verified', 'unverified', 'unknown', 'pending'].includes(meta.adminKycStatus) ? meta.adminKycStatus : 'unknown';
+  // Public KYC state is derived from the server-side Rentora review record.
+  // Never infer KYC from Pi SDK presentation data or an unverified client field.
+  const resolvedKycStatus = adminKycStatus !== 'unknown'
+    ? adminKycStatus
+    : (legacyKycStatus === 'verified' ? 'verified' : (legacyKycStatus === 'unverified' ? 'unverified' : 'unknown'));
+  const { adminKycStatus: _hiddenAdminKycStatus, ...publicMeta } = meta;
   const view = {
     ...publicMeta,
     id: row.id,
@@ -1384,9 +1389,18 @@ export default {
         const target = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1 OR pi_uid=?1 OR lower(username)=lower(?1) LIMIT 1").bind(targetUserId).first();
         if (!target) return errorResponse('User not found', 404, env, undefined, origin);
         const targetMeta = parseMetadata(target.metadata);
-        const updatedMeta = { ...targetMeta, adminKycStatus: newKycStatus };
+        const updatedMeta = {
+          ...targetMeta,
+          adminKycStatus: newKycStatus,
+          adminKycUpdatedAt: now(),
+          adminKycUpdatedBy: user.pi_uid
+        };
         await env.RENTORA_DB.prepare("UPDATE users SET metadata=?1, updated_at=?2 WHERE id=?3").bind(JSON.stringify(updatedMeta), now(), target.id).run();
-        await recordAdminAuditLog(env, user, 'USER_KYC_UPDATED', { targetUser: target.username, kycStatus: newKycStatus });
+        await recordAdminAuditLog(env, user, 'USER_KYC_UPDATED', {
+          targetUser: target.username,
+          kycStatus: newKycStatus,
+          verificationSource: 'rentora_admin_review'
+        });
         const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
         return jsonResponse({ success: true, user: userView(updated, env, { includeAdminReview: true }) }, 200, env, origin);
       }
