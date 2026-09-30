@@ -101,7 +101,7 @@ export default function PublicProfilePage({ username, onBack, onSelectItem, onRe
               <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{targetUser?.displayName || '@' + targetUsername}</h1>
               <p className="text-sm text-slate-500" dir="ltr">@{targetUsername}</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {targetUser?.kycStatus === 'verified' && <span className="badge-trust px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5" />KYC Verified</span>}
+                {targetUser?.kycStatus === 'verified' ? <span className="badge-trust px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1"><ShieldCheck className="w-3.5 h-3.5" />{l('احراز هویت تأییدشده', 'Identity verified', 'تم التحقق من الهوية', '身份已验证')}</span> : <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-500 dark:text-slate-400">{l('احراز هویت تأیید نشده', 'Identity not verified', 'لم يتم التحقق من الهوية', '身份未验证')}</span>}
                 <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300">{l('پروفایل عمومی', 'Public profile', 'ملف عام', '公开主页')}</span>
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 max-w-2xl">{targetUser?.bio || l('عضو جامعه Rentora.', 'Rentora community member.', 'عضو مجتمع Rentora.', 'Rentora 社区成员。')}</p>
@@ -113,7 +113,7 @@ export default function PublicProfilePage({ username, onBack, onSelectItem, onRe
             <div className="text-center"><div className="text-lg font-bold">{userItems.length}</div><span className="text-[11px] text-slate-400">{t('ownerStatsListings')}</span></div>
           </div>
         </div>
-        <div className="rounded-3xl bg-[#EEEDFE] dark:bg-[#26215C] p-5 space-y-3"><p className="text-xs font-bold text-[#26215C] dark:text-white">{l('اعتماد در معامله', 'Trust for rentals', 'الثقة في الإيجار', '租赁信任')}</p><p className="text-xs leading-5 text-slate-600 dark:text-slate-300">{l('اطلاعات عمومی، KYC و امتیازها برای کمک به تصمیم‌گیری قبل از هماهنگی اجاره نمایش داده می‌شوند.', 'Public identity, KYC and reputation help people assess a rental before coordinating.', 'تساعد الهوية العامة وKYC والسمعة في تقييم الإيجار قبل التنسيق.', '公开身份、KYC 和信誉帮助用户在租赁前了解对方。')}</p></div>
+        <div className="rounded-3xl bg-[#EEEDFE] dark:bg-[#26215C] p-5 space-y-3"><div className="flex items-center justify-between"><p className="text-xs font-bold text-[#26215C] dark:text-white">{l('اعتماد در معامله', 'Trust for rentals', 'الثقة في الإيجار', '租赁信任')}</p><ShieldCheck className="w-5 h-5 text-[#534AB7] dark:text-[#AFA9EC]" /></div><p className="text-xs leading-5 text-slate-600 dark:text-slate-300">{l('وضعیت احراز هویت فقط وقتی نمایش «تأییدشده» دارد که رکورد تأیید سمت سرور Rentora ثبت شده باشد. اطلاعات Pi به‌تنهایی نشانه KYC نیست.', 'Identity is shown as verified only when Rentora has a server-side verification record. Pi identity alone is not a KYC claim.', 'تظهر الهوية كمتحقق منها فقط عند وجود سجل تحقق على خادم Rentora. هوية Pi وحدها ليست دليلاً على KYC.', '只有在 Rentora 服务器存在验证记录时才显示已验证。Pi 身份本身并不代表 KYC。')}</p></div>
       </section>
 
       <section>
