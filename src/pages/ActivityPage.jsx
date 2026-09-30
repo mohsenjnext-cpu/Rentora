@@ -262,7 +262,7 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
 
   const expiredRentals = useMemo(() => {
     return myRentals.filter(r =>
-      (r.status === RENTAL_STATES.CONFIRMED || r.status === RENTAL_STATES.ACTIVE) &&
+      (r.status === RENTAL_STATES.CONFIRMED || r.status === RENTAL_STATES.ACTIVE || r.status === RENTAL_STATES.EXPIRED) &&
       isRentalDateExpired(r)
     );
   }, [myRentals]);
@@ -282,7 +282,8 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
         r.status === RENTAL_STATES.COMPLETED ||
         r.status === RENTAL_STATES.CANCELLED ||
         r.status === RENTAL_STATES.REJECTED ||
-        r.status === RENTAL_STATES.DISPUTED
+        r.status === RENTAL_STATES.DISPUTED ||
+        r.status === RENTAL_STATES.EXPIRED
       );
       if (!isHistoryStatus) return false;
 
