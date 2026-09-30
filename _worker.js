@@ -1306,6 +1306,55 @@ export default {
         const rows = await env.RENTORA_DB.prepare("SELECT * FROM users ORDER BY created_at DESC").all();
         return jsonResponse({ success: true, users: (rows.results || []).map((u) => userView(u, env, { includeAdminReview: true })) }, 200, env, origin);
       }
+      if (method === 'DELETE' && path.startsWith('/api/admin/users/')) {
+        const targetUserId = decodeURIComponent(path.slice('/api/admin/users/'.length).split('/')[0]).trim();
+        if (!targetUserId) return errorResponse('Missing target user ID', 400, env, undefined, origin);
+        const { user } = await requireAdmin(request, env);
+        const target = await env.RENTORA_DB.prepare(
+          "SELECT * FROM users WHERE id=?1 OR pi_uid=?1 OR lower(username)=lower(?1) LIMIT 1"
+        ).bind(targetUserId).first();
+        if (!target) return errorResponse('User not found', 404, env, undefined, origin);
+        if (target.id === user.id || target.role === 'admin' || isAdmin(target.pi_uid, env)) {
+          return errorResponse('حذف حساب مدیر یا حساب فعلی مجاز نیست.', 403, env, undefined, origin);
+        }
+
+        const activeRental = await env.RENTORA_DB.prepare(
+          "SELECT id FROM rentals WHERE renter_user_id=?1 AND status IN ('pending_payment','paid','confirmed','active','disputed') LIMIT 1"
+        ).bind(target.id).first();
+        if (activeRental) {
+          return errorResponse('این کاربر یک اجاره فعال یا در حال انجام دارد و فعلاً قابل حذف نیست.', 409, env, undefined, origin);
+        }
+
+        const username = String(target.username || target.id).replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 32) || 'user';
+        const tombstone = `deleted_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+        const anonymizedMeta = JSON.stringify({
+          accountDeleted: true,
+          deletedAt: now(),
+          deletedBy: user.pi_uid,
+          previousUsername: username
+        });
+
+        await env.RENTORA_DB.batch([
+          env.RENTORA_DB.prepare(
+            "UPDATE listings SET status='deleted', updated_at=?1 WHERE owner_user_id=?2 AND status <> 'deleted'"
+          ).bind(now(), target.id),
+          env.RENTORA_DB.prepare(
+            "UPDATE users SET username=?1, display_name='Deleted user', avatar_url=NULL, status='suspended', metadata=?2, updated_at=?3 WHERE id=?4"
+          ).bind(tombstone, anonymizedMeta, now(), target.id),
+          env.RENTORA_DB.prepare(
+            "UPDATE reports SET metadata=COALESCE(metadata,'{}'), updated_at=?1 WHERE reporter_user_id=?2"
+          ).bind(now(), target.id)
+        ]);
+
+        await recordAdminAuditLog(env, user, 'USER_ACCOUNT_DELETED', {
+          targetUserId: target.id,
+          targetPiUid: target.pi_uid,
+          previousUsername: username
+        });
+
+        const updated = await env.RENTORA_DB.prepare("SELECT * FROM users WHERE id=?1").bind(target.id).first();
+        return jsonResponse({ success: true, deleted: true, user: userView(updated, env, { includeAdminReview: true }) }, 200, env, origin);
+      }
       if (method === 'POST' && path.startsWith('/api/admin/users/') && path.endsWith('/status')) {
         const targetUserId = path.slice('/api/admin/users/'.length, -'/status'.length).trim();
         if (!targetUserId) return errorResponse('Missing target user ID', 400, env, undefined, origin);
