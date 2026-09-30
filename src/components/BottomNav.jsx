@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useRentora } from '../context/RentoraContext';
 import { usePiAuth } from '../context/PiAuthContext';
@@ -11,6 +11,27 @@ export default function BottomNav({ currentTab, onNavigate }) {
   const ACTIONABLE_RENTAL_STATUSES = new Set(['draft', 'pending_payment', 'payment_approved', 'requested', 'accepted']);
   const myUsername = String(currentUser?.username || '').toLowerCase().replace(/^@+/, '').trim();
   const myUid = currentUser?.uid || currentUser?.id;
+  const activityClearedKey = currentUser ? `rentora_cleared_activity_${currentUser.username || currentUser.uid}` : null;
+  const [activityClearedAt, setActivityClearedAt] = useState(0);
+
+  useEffect(() => {
+    if (!activityClearedKey) {
+      setActivityClearedAt(0);
+      return;
+    }
+    try {
+      setActivityClearedAt(Number(localStorage.getItem(activityClearedKey) || 0));
+    } catch (_) {
+      setActivityClearedAt(0);
+    }
+  }, [activityClearedKey]);
+
+  useEffect(() => {
+    if (currentTab !== 'activity' || !activityClearedKey) return;
+    const viewedAt = Date.now();
+    setActivityClearedAt(viewedAt);
+    try { localStorage.setItem(activityClearedKey, String(viewedAt)); } catch (_) {}
+  }, [currentTab, activityClearedKey]);
 
   const actionableRentalsCount = (rentals || []).filter(r => {
     const renterUsername = String(r?.renterUsername || r?.renter_username || '').toLowerCase().replace(/^@+/, '').trim();
@@ -20,6 +41,10 @@ export default function BottomNav({ currentTab, onNavigate }) {
       (myUsername && renterUsername && renterUsername === myUsername);
     const belongsToCurrentUserAndActionable = belongsToCurrentUser && ACTIONABLE_RENTAL_STATUSES.has(String(r?.status || '').toLowerCase());
     if (!belongsToCurrentUserAndActionable) return false;
+
+    const updatedAt = String(r?.updatedAt || r?.updated_at || r?.createdAt || r?.created_at || '').trim();
+    const updatedMs = Date.parse(updatedAt);
+    if (!Number.isFinite(updatedMs) || updatedMs <= activityClearedAt) return false;
 
     const endDate = String(r?.endDate || r?.end_date || '').trim();
     if (endDate) {
