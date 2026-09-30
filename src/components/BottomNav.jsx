@@ -8,22 +8,22 @@ export default function BottomNav({ currentTab, onNavigate }) {
   const { t } = useLanguage();
   const { rentals } = useRentora();
   const { currentUser } = usePiAuth();
-  const ACTIVE_RENTAL_STATUSES = new Set(['draft', 'pending_payment', 'payment_approved', 'confirmed', 'active', 'requested', 'accepted']);
+  const ACTIONABLE_RENTAL_STATUSES = new Set(['draft', 'pending_payment', 'payment_approved', 'confirmed', 'requested', 'accepted']);
   const myUsername = String(currentUser?.username || '').toLowerCase().replace(/^@+/, '').trim();
   const myUid = currentUser?.uid || currentUser?.id;
-  const activeRentalsCount = (rentals || []).filter(r => {
+  const actionableRentalsCount = (rentals || []).filter(r => {
     const renterUsername = String(r?.renterUsername || r?.renter_username || '').toLowerCase().replace(/^@+/, '').trim();
     const renterUid = r?.renterUid || r?.renter_pi_uid;
     const belongsToCurrentUser =
       (myUid && renterUid && renterUid === myUid) ||
       (myUsername && renterUsername && renterUsername === myUsername);
-    return belongsToCurrentUser && ACTIVE_RENTAL_STATUSES.has(String(r?.status || '').toLowerCase());
+    return belongsToCurrentUser && ACTIONABLE_RENTAL_STATUSES.has(String(r?.status || '').toLowerCase());
   }).length;
 
   const navItems = [
     { id: 'home', label: t('navHome'), icon: Home },
     { id: 'discover', label: t('navDiscover'), icon: Search },
-    { id: 'activity', label: t('navActivity'), icon: Clock, badge: activeRentalsCount },
+    { id: 'activity', label: t('navActivity'), icon: Clock, badge: actionableRentalsCount },
     { id: 'profile', label: t('navProfile'), icon: User }
   ];
 
