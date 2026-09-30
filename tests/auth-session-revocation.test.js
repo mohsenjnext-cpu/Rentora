@@ -40,6 +40,9 @@ test('gateway forwards the session cookie into the legacy worker as an Authoriza
   assert.ok(gateway.includes("cookies['__Host-rentora_session']"));
   assert.ok(gateway.includes("headers.set('Authorization', `Bearer ${cookieToken}`);"));
   assert.ok(gateway.includes("path === '/api/auth/pi-login'"));
-  assert.ok(gateway.includes("__Host-rentora_session=${encodeURIComponent(data.sessionToken)}; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=None; Partitioned"));
-  assert.ok(gateway.includes('delete cleanData.sessionToken;'));
+  assert.ok(gateway.includes("const setCookie = headers.get('Set-Cookie') || ''"));
+  assert.ok(gateway.includes("setCookie.includes('__Host-rentora_session='"));
+  assert.ok(gateway.includes('SameSite=None'));
+  assert.ok(gateway.includes('Partitioned'));
+  assert.ok(!gateway.includes('data.sessionToken'));
 });
