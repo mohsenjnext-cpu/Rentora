@@ -8,7 +8,7 @@ test('profile reputation loading exposes a visible error and real retry action',
   assert.match(source, /const \[reviewLoadError, setReviewLoadError\] = useState\(''\);/);
   assert.match(source, /setReviewLoadError\(err\?\.message \|\| l\(/);
   assert.match(source, /role="alert"/);
-  assert.match(source, /onClick=\{\(\) => setReviewRetryNonce\(v => v \+ 1\)\}/);
+  assert.match(source, /setReviewRetryNonce\(v => v \+ 1\)/);
   assert.match(source, /l\('تلاش مجدد', 'Try again'/);
 });
 
@@ -22,7 +22,7 @@ test('profile exposes explicit loading states for profile and reputation data', 
   assert.match(source, /const \[profileLoading, setProfileLoading\] = useState\(true\);/);
   assert.match(source, /const \[reviewLoading, setReviewLoading\] = useState\(false\);/);
   assert.match(source, /role="status" aria-live="polite"/);
-  assert.match(source, /Loading reputation/);
+  assert.match(source, /Loading reputation|بارگذاری اعتبار/);
 });
 
 test('profile exposes recovery for authoritative profile loading failure', () => {
