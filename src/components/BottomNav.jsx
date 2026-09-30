@@ -8,16 +8,35 @@ export default function BottomNav({ currentTab, onNavigate }) {
   const { t } = useLanguage();
   const { rentals } = useRentora();
   const { currentUser } = usePiAuth();
-  const ACTIONABLE_RENTAL_STATUSES = new Set(['draft', 'pending_payment', 'payment_approved', 'confirmed', 'requested', 'accepted']);
+  const ACTIONABLE_RENTAL_STATUSES = new Set(['draft', 'pending_payment', 'payment_approved', 'requested', 'accepted']);
   const myUsername = String(currentUser?.username || '').toLowerCase().replace(/^@+/, '').trim();
   const myUid = currentUser?.uid || currentUser?.id;
+  const activityClearedKey = currentUser ? \`rentora_cleared_activity_\${currentUser.username || currentUser.uid}\` : null;
+  const [activityClearedAt, setActivityClearedAt] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!activityClearedKey) {
+      setActivityClearedAt(0);
+      return;
+    }
+    try {
+      setActivityClearedAt(Number(localStorage.getItem(activityClearedKey)) || 0);
+    } catch (_) {
+      setActivityClearedAt(0);
+    }
+  }, [activityClearedKey]);
+
   const actionableRentalsCount = (rentals || []).filter(r => {
     const renterUsername = String(r?.renterUsername || r?.renter_username || '').toLowerCase().replace(/^@+/, '').trim();
     const renterUid = r?.renterUid || r?.renter_pi_uid;
     const belongsToCurrentUser =
       (myUid && renterUid && renterUid === myUid) ||
       (myUsername && renterUsername && renterUsername === myUsername);
-    return belongsToCurrentUser && ACTIONABLE_RENTAL_STATUSES.has(String(r?.status || '').toLowerCase());
+    if (!belongsToCurrentUser || !ACTIONABLE_RENTAL_STATUSES.has(String(r?.status || '').toLowerCase())) return false;
+    if (!activityClearedAt) return true;
+    const activityTime = r?.updatedAt || r?.createdAt;
+    const timestamp = activityTime ? new Date(activityTime).getTime() : 0;
+    return timestamp > activityClearedAt;
   }).length;
 
   const navItems = [
