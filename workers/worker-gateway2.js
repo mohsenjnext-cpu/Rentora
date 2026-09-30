@@ -1251,12 +1251,12 @@ export default {
         const setCookie = headers.get('Set-Cookie') || '';
         if (setCookie.includes('__Host-rentora_session=')) {
           let normalizedCookie = setCookie
-            .replace(/;\\s*SameSite=Lax/ig, '; SameSite=None')
-            .replace(/;\\s*SameSite=Strict/ig, '; SameSite=None');
-          if (!/;\\s*SameSite=/i.test(normalizedCookie)) {
+            .replace(/;\s*SameSite=Lax/ig, '; SameSite=None')
+            .replace(/;\s*SameSite=Strict/ig, '; SameSite=None');
+          if (!/;\s*SameSite=/i.test(normalizedCookie)) {
             normalizedCookie += '; SameSite=None';
           }
-          if (!/;\\s*Partitioned/i.test(normalizedCookie)) {
+          if (!/;\s*Partitioned/i.test(normalizedCookie)) {
             normalizedCookie += '; Partitioned';
           }
           headers.set('Set-Cookie', normalizedCookie);
