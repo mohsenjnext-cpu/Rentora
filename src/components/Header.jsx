@@ -42,7 +42,7 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
 
   const getPageTitle = (page) => {
     switch (page) {
-      case 'home': return t('appName');
+      case 'home': return '';
       case 'discover': return t('navDiscover');
       case 'item-detail': return t('itemDetailsTitle');
       case 'list-item': return t('navPostItem');
@@ -196,25 +196,12 @@ export default function Header({ onNavigate, currentPage, onOpenSidebar, onOpenC
           <Menu className="w-5 h-5 stroke-[1.8]" />
         </button>
 
-        {/* Page Title or Logo Centered */}
-        {currentPage === 'home' ? (
-          <div className="flex items-center gap-1.5">
-            <div className="w-6 h-6 rounded-md bg-[#26215C] dark:bg-[#534AB7] flex items-center justify-center text-white p-1">
-              <svg viewBox="0 0 100 100" fill="none" className="w-full h-full">
-                <circle cx="50" cy="38" r="22" stroke="#FFFFFF" strokeWidth="6"/>
-                <path d="M38 38h24M43 38v34M57 38v34" stroke="#FFFFFF" strokeWidth="6"/>
-                <circle cx="50" cy="20" r="5" fill="#FACC15"/>
-              </svg>
-            </div>
-            <span className="font-bold text-sm text-[#26215C] dark:text-white tracking-tight">
-              {t('appName')}
-            </span>
-          </div>
-        ) : (
+        {/* Home has no centered brand. Other pages keep their section title. */}
+        {currentPage !== 'home' ? (
           <h1 className="font-semibold text-sm text-slate-800 dark:text-slate-100 truncate px-2">
             {getPageTitle(currentPage)}
           </h1>
-        )}
+        ) : <span aria-hidden="true" className="w-1" />}
 
         {/* Mobile Right Icons: Refresh, Chat, Avatar */}
         <div className="flex items-center gap-1.5">
