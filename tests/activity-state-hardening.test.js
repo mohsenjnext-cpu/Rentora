@@ -13,3 +13,21 @@ assert.match(source, /fetchRentalContact/, 'activity must retain real secure con
 assert.match(source, /onClick=\{\(\) => selectedContactRental && handleOpenContactModal\(selectedContactRental\)\}/, 'contact recovery must remain available');
 
 console.log('Activity state and authority checks passed.');
+
+
+assert.match(source, /const isRentalDateExpired = \(rental\) =>/, 'activity must detect rentals whose end date has passed');
+assert.match(source, /const expiredRentals = useMemo/, 'expired rentals must have a separate view model');
+assert.match(source, /activeTab === 'expired'/, 'activity must expose an expired-rentals workspace');
+assert.match(source, /تاریخ اجاره گذشته/, 'expired rentals must be visibly labeled as expired');
+assert.match(source, /به‌صورت خودکار «تکمیل‌شده» نمی‌شود/, 'expiry must not falsely mark a rental as completed');
+
+const bottomNav = fs.readFileSync('src/components/BottomNav.jsx', 'utf8');
+assert.match(bottomNav, /const ACTIONABLE_RENTAL_STATUSES = new Set/, 'activity badge must be scoped to actionable states');
+assert.doesNotMatch(bottomNav, /ACTIONABLE_RENTAL_STATUSES[^\n]*active/, 'ordinary active rentals must not keep the activity badge alive');
+
+const notifications = fs.readFileSync('src/pages/NotificationsPage.jsx', 'utf8');
+assert.match(notifications, /rentora_notification_reads_/, 'notification read state must be user scoped');
+assert.match(notifications, /localStorage\.setItem\(notificationReadKey/, 'notification read state must persist');
+assert.match(notifications, /persistReadIds/, 'notification read actions must use the persistent read state');
+
+console.log('Activity expiry, badge, and notification persistence checks passed.');
