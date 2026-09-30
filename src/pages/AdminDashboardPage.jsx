@@ -101,7 +101,7 @@ export default function AdminDashboardPage({ onNavigate }) {
     setBusyId(id);
     try {
       if (kind === 'status') await cloudSyncService.setAdminUserStatus(id, user.status === 'active' ? 'suspended' : 'active');
-      if (kind === 'kyc') await cloudSyncService.setAdminUserKycStatus(id, user.kycStatus === 'verified' ? 'unverified' : 'verified');
+      if (kind === 'kyc') await cloudSyncService.setAdminUserKycStatus(id, (user.adminKycStatus || user.kycStatus) === 'verified' ? 'unverified' : 'verified');
       await load();
     } catch (e) { setError(e.message); }
     finally { setBusyId(''); }
