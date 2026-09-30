@@ -403,6 +403,26 @@ export class CloudSyncService {
     return data.users || [];
   }
 
+  async deleteAdminUser(userId) {
+    if (!userId) throw new Error('userId is required');
+    const apiBase = getApiBaseUrl();
+    if (!apiBase) throw new Error('API Base URL is not configured');
+
+    const res = await fetch(`${apiBase}/api/admin/users/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+      credentials: 'include'
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      const err = new Error(data?.error || 'حذف حساب کاربر ناموفق بود.');
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  }
+
   async setAdminUserStatus(userId, status) {
     if (!userId) throw new Error('userId is required');
     const apiBase = getApiBaseUrl();
