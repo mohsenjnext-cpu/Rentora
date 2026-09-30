@@ -810,7 +810,26 @@ function listingView(row) {
     updatedAt: row.updated_at
   };
 }
-function rentalView(row) { const meta = parseMetadata(row.metadata); return { ...meta, id: row.id, itemId: row.listing_id, renterUid: row.renter_pi_uid, renterUsername: row.renter_username, ownerUid: row.owner_pi_uid, ownerUsername: row.owner_username, startDate: row.start_date, endDate: row.end_date, pricePerDay: row.price_per_day, rentalTotal: row.rental_amount, baseAmount: row.rental_amount, deposit: row.deposit_amount, securityDeposit: row.deposit_amount, rentoraFee: row.platform_fee, totalPlatformFee: row.platform_fee, totalAmount: row.total_amount, status: row.status, paymentStatus: row.payment_status, createdAt: row.created_at, updatedAt: row.updated_at }; }
+function rentalLifecycleStatus(row, at = Date.now()) {
+  const original = String(row?.status || '').toLowerCase();
+  if (!['confirmed', 'active', 'expired'].includes(original)) return original;
+  const startMs = Date.parse(row?.start_date);
+  const endMs = Date.parse(row?.end_date);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return original;
+  const paymentCompleted = String(row?.payment_status || '').toLowerCase() === 'completed';
+  if (endMs <= at) return 'expired';
+  if (paymentCompleted && startMs <= at) return 'active';
+  return original === 'active' ? 'confirmed' : original;
+}
+
+function listingLifecycleStatus(row, activeListingIds = null) {
+  const original = String(row?.status || '').toLowerCase();
+  if (original !== 'in_use') return row?.status;
+  if (activeListingIds instanceof Set && activeListingIds.has(String(row.id))) return row.status;
+  return 'active';
+}
+
+function rentalView(row) { const meta = parseMetadata(row.metadata); return { ...meta, id: row.id, itemId: row.listing_id, renterUid: row.renter_pi_uid, renterUsername: row.renter_username, ownerUid: row.owner_pi_uid, ownerUsername: row.owner_username, startDate: row.start_date, endDate: row.end_date, pricePerDay: row.price_per_day, rentalTotal: row.rental_amount, baseAmount: row.rental_amount, deposit: row.deposit_amount, securityDeposit: row.deposit_amount, rentoraFee: row.platform_fee, totalPlatformFee: row.platform_fee, totalAmount: row.total_amount, status: rentalLifecycleStatus(row), paymentStatus: row.payment_status, createdAt: row.created_at, updatedAt: row.updated_at }; }
 function transactionView(row) {
   return {
     id: row.id,
@@ -876,8 +895,16 @@ async function listAll(env, auth) {
     }
   }
 
+  const activeListingIds = new Set(
+    (rentals.results || [])
+      .filter((row) => rentalLifecycleStatus(row) === 'active' && String(row.payment_status || '').toLowerCase() === 'completed')
+      .map((row) => String(row.listing_id))
+  );
   const out = {
-    items: (items.results || []).map(listingView),
+    items: (items.results || []).map((row) => ({
+      ...listingView(row),
+      status: listingLifecycleStatus(row, activeListingIds)
+    })),
     rentals: dedupedRentals,
     transactions: (transactions.results || []).map(transactionView),
     users: (users.results || []).map((u) => userView(u, env)),
@@ -1146,7 +1173,22 @@ export default {
         } else {
           rows = await env.RENTORA_DB.prepare(`SELECT l.*, u.pi_uid owner_pi_uid, u.username owner_username, u.avatar_url owner_avatar, u.metadata owner_metadata FROM listings l JOIN users u ON u.id=l.owner_user_id WHERE l.status = 'active' ORDER BY l.created_at DESC`).bind().all();
         }
-        return jsonResponse({ success: true, items: (rows.results || []).map(listingView) }, 200, env, origin);
+        const activeListingIds = new Set(
+          (await env.RENTORA_DB.prepare(`
+            SELECT listing_id, start_date, end_date, payment_status, status
+            FROM rentals
+            WHERE payment_status='completed' AND status IN ('confirmed','active')
+              AND julianday(start_date) <= julianday('now')
+              AND julianday(end_date) > julianday('now')
+          `).all()).results.map((row) => String(row.listing_id))
+        );
+        return jsonResponse({
+          success: true,
+          items: (rows.results || []).map((row) => ({
+            ...listingView(row),
+            status: listingLifecycleStatus(row, activeListingIds)
+          }))
+        }, 200, env, origin);
       }
       if (method === 'GET' && path.startsWith('/api/listings/') && !path.slice('/api/listings/'.length).includes('/')) {
         await reconcileRentalLifecycle(env);
