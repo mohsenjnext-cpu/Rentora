@@ -121,7 +121,7 @@ export function RentoraProvider({ children }) {
 
   const toggleFavorite = (itemId) => setFavorites(prev => prev.includes(itemId) ? prev.filter(id => id !== itemId) : [...prev, itemId]);
 
-  const refreshApp = async () => {
+  const refreshApp = useCallback(async () => {
     setIsRefreshing(true);
     try {
       const data = await cloudSyncService.fetchSharedData(true);
@@ -138,7 +138,7 @@ export function RentoraProvider({ children }) {
     } finally {
       setTimeout(() => setIsRefreshing(false), 500);
     }
-  };
+  }, [currentUser, refreshConversations]);
 
   const purgeDatabase = async () => {
     if (!isAdmin) throw new Error('پاکسازی دیتابیس فقط برای مدیر مجاز است.');
