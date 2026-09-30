@@ -9,5 +9,5 @@ test('mobile activity badge is scoped to the authenticated renter', () => {
   assert.match(source, /renterUsername/);
   assert.match(source, /renterUid/);
   assert.match(source, /belongsToCurrentUser/);
-  assert.match(source, /belongsToCurrentUser && ACTIVE_RENTAL_STATUSES/);
+  assert.match(source, /belongsToCurrentUser && ACTIONABLE_RENTAL_STATUSES/);
 });
