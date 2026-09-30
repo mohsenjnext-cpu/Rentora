@@ -59,6 +59,15 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [isClearHistoryModalOpen, setIsClearHistoryModalOpen] = useState(false);
   const [clearSuccessNotice, setClearSuccessNotice] = useState(false);
+  const clearedActivityKey = currentUser ? `rentora_cleared_activity_${currentUser.username || currentUser.uid}` : null;
+  const [clearedActivityTime, setClearedActivityTime] = useState(() => {
+    if (!clearedActivityKey) return 0;
+    try {
+      return Number(localStorage.getItem(clearedActivityKey)) || 0;
+    } catch (_) {
+      return 0;
+    }
+  });
 
   const clearedKey = currentUser ? `rentora_cleared_history_${currentUser.username || currentUser.uid}` : null;
   const [clearedHistoryTime, setClearedHistoryTime] = useState(() => {
@@ -188,9 +197,17 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
     }).slice(0, 50);
   }, [rentals, transactions, conversations, items, currentUser, l]);
 
+  const visibleActivityFeed = useMemo(() => {
+    if (!clearedActivityTime) return activityFeed;
+    return activityFeed.filter((event) => {
+      const eventTime = event.time ? new Date(event.time).getTime() : 0;
+      return !eventTime || eventTime > clearedActivityTime;
+    });
+  }, [activityFeed, clearedActivityTime]);
+
   const filteredActivity = useMemo(
-    () => activityFilter === 'all' ? activityFeed : activityFeed.filter(e => e.type === activityFilter),
-    [activityFeed, activityFilter]
+    () => activityFilter === 'all' ? visibleActivityFeed : visibleActivityFeed.filter(e => e.type === activityFilter),
+    [visibleActivityFeed, activityFilter]
   );
 
   const formatActivityTime = (value) => {
@@ -239,7 +256,7 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
   const isRentalDateExpired = (rental) => {
     if (!rental?.endDate) return false;
     const endDate = String(rental.endDate).trim();
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(endDate)) return false;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return false;
     return new Date().toISOString().slice(0, 10) > endDate;
   };
 
@@ -279,14 +296,20 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
     });
   }, [myRentals, clearedHistoryTime]);
 
-  const handleClearHistory = () => {
+  const handleClearAllActivity = () => {
     const nowTime = Date.now();
     if (clearedKey) {
       try {
         localStorage.setItem(clearedKey, String(nowTime));
       } catch (_) {}
     }
+    if (clearedActivityKey) {
+      try {
+        localStorage.setItem(clearedActivityKey, String(nowTime));
+      } catch (_) {}
+    }
     setClearedHistoryTime(nowTime);
+    setClearedActivityTime(nowTime);
     setIsClearHistoryModalOpen(false);
     setClearSuccessNotice(true);
     setTimeout(() => setClearSuccessNotice(false), 3000);
@@ -368,7 +391,18 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
             <h2 className="text-sm font-bold text-slate-900 dark:text-white">{l('رویدادهای اخیر', 'Recent activity', 'النشاط الأخير', '最近动态')}</h2>
             <p className="text-[10px] text-slate-400">{l('رویدادهای واقعی حساب، اجاره، پرداخت، آگهی و گفتگو', 'Real account, rental, payment, listing and conversation events', 'أحداث الحساب والإيجار والدفع والإعلانات والمحادثات', '真实账户、租赁、支付、物品和对话事件')}</p>
           </div>
-          <span className="text-[10px] font-mono text-slate-400">{filteredActivity.length}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-slate-400">{filteredActivity.length}</span>
+            <button
+              type="button"
+              onClick={() => setIsClearHistoryModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/60 dark:border-rose-800/60 transition cursor-pointer"
+              title={l('پاکسازی تمام بخش‌های این قسمت', 'Clear this entire activity area', 'مسح كل هذا القسم', '清理此活动区域')}
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>{l('پاکسازی', 'Clear', 'مسح', '清理')}</span>
+            </button>
+          </div>
         </div>
         <div className="flex gap-1.5 overflow-x-auto pb-1" role="tablist" aria-label={l('فیلتر فعالیت', 'Activity filters', 'فلاتر النشاط', '活动筛选')}>
           {activityFilters.map(([key, label]) => (
@@ -605,16 +639,9 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
             <span className="text-xs text-slate-500 font-medium">
               {historyRentals.length} {l('مورد در سوابق', 'records in history', 'سجلات في الأرشيف', '条历史记录')}
             </span>
-            <button
-              type="button"
-              onClick={() => setIsClearHistoryModalOpen(true)}
-              disabled={historyRentals.length === 0}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/60 dark:border-rose-800/60 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              title={t('btnClearHistory')}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>{t('btnClearHistory')}</span>
-            </button>
+            <span className="text-[10px] text-slate-400">
+              {l('پاکسازی سراسری از دکمه بالای فعالیت انجام می‌شود.', 'Use the Clear button above to clear this area.', 'استخدم زر المسح أعلاه لمسح هذا القسم.', '使用上方清理按钮清除此区域。')}
+            </span>
           </div>
 
           {clearSuccessNotice && (
@@ -692,16 +719,16 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
             </div>
             <div>
               <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                {t('clearHistoryConfirmTitle')}
+                {l('پاکسازی تمام بخش‌های فعالیت', 'Clear all activity sections', 'مسح جميع أقسام النشاط', '清理所有活动区域')}
               </h4>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-                {t('clearHistoryConfirmDesc')}
+                {l('رویدادهای فعالیت و سوابق منقضی/تکمیل‌شده از نمایش این دستگاه پاک می‌شوند. اجاره‌های جاری که هنوز در حال استفاده هستند از سرور حذف نمی‌شوند.', 'Activity events and historical/expired records will be cleared from this device view. Current rentals will not be deleted from the server.', 'سيتم مسح أحداث النشاط والسجلات التاريخية والمنتهية من عرض هذا الجهاز. لن تُحذف الإيجارات الحالية من الخادم.', '活动事件和历史/过期记录将从此设备视图中清除。当前租赁不会从服务器删除。')}
               </p>
             </div>
             <div className="flex items-center gap-2 pt-2">
               <button
                 type="button"
-                onClick={handleClearHistory}
+                onClick={handleClearAllActivity}
                 className="flex-1 py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs"
               >
                 <Trash2 className="w-3.5 h-3.5" />
