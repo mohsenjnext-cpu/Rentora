@@ -113,7 +113,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
   );
 
   const filteredItems = myItems.filter(item => {
-    if (activeTab === 'active') return !item.status || item.status === 'active';
+    if (activeTab === 'active') return !item.status || item.status === 'active' || item.status === 'in_use';
     if (activeTab === 'inactive') return item.status === 'paused' || item.status === 'inactive';
     return true;
   });
@@ -342,6 +342,7 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {filteredItems.map((item) => {
               const isItemActive = !item.status || item.status === 'active';
+              const isItemInUse = item.status === 'in_use';
               return (
                 <div key={item.id} className="p-3 rounded-xl rentora-card flex items-center justify-between gap-3">
                   <button
@@ -388,21 +389,31 @@ export default function OwnerHubPage({ onNavigate, onSelectItem, onEditItem, onR
                       <span className="text-[11px]">{l('ویرایش', 'Edit', 'تعديل', '编辑')}</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => toggleItemStatus(item.id)}
-                      aria-pressed={isItemActive}
-                      aria-label={isItemActive ? l(`توقف نمایش آگهی ${item.title || ''}`, `Pause listing ${item.title || ''}`, `إيقاف الإعلان ${item.title || ''}`, `暂停物品 ${item.title || ''}`) : l(`فعال‌سازی آگهی ${item.title || ''}`, `Activate listing ${item.title || ''}`, `تفعيل الإعلان ${item.title || ''}`, `激活物品 ${item.title || ''}`)}
-                      className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
-                        isItemActive 
-                          ? 'bg-[#E1F5EE] text-[#0F6E56]' 
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                      }`}
-                      title={isItemActive ? l('توقف موقت نمایش آگهی', 'Pause listing', 'إيقاف مؤقت', '暂停展示') : l('فعال‌سازی نمایش آگهی', 'Activate listing', 'تفعيل', '激活展示')}
-                    >
-                      {isItemActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-                      <span className="text-[10px] hidden sm:inline">{isItemActive ? t('ownerToggleActive') : t('ownerToggleInactive')}</span>
-                    </button>
+                    {isItemInUse ? (
+                      <span
+                        className="px-2 py-1 rounded-lg text-[10px] font-bold bg-[#EEEDFE] text-[#534AB7] dark:bg-[#26215C] dark:text-[#EEEDFE] inline-flex items-center gap-1"
+                        title={l('این آگهی تا پایان تاریخ اجاره خودکار در دسترس نخواهد بود.', 'This listing is automatically unavailable until the rental end date.', 'هذا الإعلان غير متاح تلقائياً حتى نهاية الإيجار.', '该物品在租赁结束前自动不可用。')}
+                      >
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>{l('در حال استفاده', 'In use', 'قيد الاستخدام', '使用中')}</span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => toggleItemStatus(item.id)}
+                        aria-pressed={isItemActive}
+                        aria-label={isItemActive ? l(`توقف نمایش آگهی ${item.title || ''}`, `Pause listing ${item.title || ''}`, `إيقاف الإعلان ${item.title || ''}`, `暂停物品 ${item.title || ''}`) : l(`فعال‌سازی آگهی ${item.title || ''}`, `Activate listing ${item.title || ''}`, `تفعيل الإعلان ${item.title || ''}`, `激活物品 ${item.title || ''}`)}
+                        className={`px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer ${
+                          isItemActive 
+                            ? 'bg-[#E1F5EE] text-[#0F6E56]' 
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                        }`}
+                        title={isItemActive ? l('توقف موقت نمایش آگهی', 'Pause listing', 'إيقاف مؤقت', '暂停展示') : l('فعال‌سازی نمایش آگهی', 'Activate listing', 'تفعيل', '激活展示')}
+                      >
+                        {isItemActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                        <span className="text-[10px] hidden sm:inline">{isItemActive ? t('ownerToggleActive') : t('ownerToggleInactive')}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               );
