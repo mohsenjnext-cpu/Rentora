@@ -791,7 +791,9 @@ async function reconcileRentalLifecycle(env) {
 function listingView(row) {
   const meta = sanitizeListingPublicMetadata(parseMetadata(row.metadata));
   const ownerMeta = parseMetadata(row.owner_metadata);
-  const isOwnerKyc = Boolean(meta.ownerKYC || ownerMeta.kycStatus === 'verified' || row.owner_kyc_status === 'verified');
+  const ownerReviewStatus = ['verified', 'unverified', 'unknown', 'pending'].includes(ownerMeta.adminKycStatus) ? ownerMeta.adminKycStatus : 'unknown';
+  const legacyOwnerKyc = ownerMeta.kycStatus || row.owner_kyc_status;
+  const isOwnerKyc = ownerReviewStatus === 'verified' || (ownerReviewStatus === 'unknown' && (meta.ownerKYC === true || legacyOwnerKyc === 'verified'));
   return {
     ...meta,
     id: row.id,
