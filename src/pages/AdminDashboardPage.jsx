@@ -107,6 +107,18 @@ export default function AdminDashboardPage({ onNavigate }) {
     finally { setBusyId(''); }
   };
 
+  const deleteUser = async (user) => {
+    const id = user.id || user.uid;
+    if (!id) return;
+    if (!window.confirm(`حذف حساب @${user.username || id}؟ این عملیات حساب را غیرفعال، اطلاعات هویتی را ناشناس و آگهی‌های او را حذف می‌کند و قابل بازگشت نیست.`)) return;
+    setBusyId(id); setError('');
+    try {
+      await cloudSyncService.deleteAdminUser(id);
+      await load();
+    } catch (e) { setError(e.message || 'حذف حساب کاربر ناموفق بود.'); }
+    finally { setBusyId(''); }
+  };
+
   const updateListing = async (item) => {
     setBusyId(item.id);
     try {
@@ -216,7 +228,7 @@ export default function AdminDashboardPage({ onNavigate }) {
     }
     if (section.startsWith('users')) {
       const rows = section === 'users-kyc' ? users.filter(u => u.kycStatus !== 'verified') : section === 'users-suspended' ? users.filter(u => u.status === 'suspended') : filtered(users,['username','display_name','pi_uid','status','kycStatus']);
-      return <UsersView rows={rows} section={section} busyId={busyId} updateUser={updateUser} onDetails={(u)=>{setSelectedUserId(u.id || u.uid); go('users-details')}} renderTable={renderTable}/>;
+      return <UsersView rows={rows} section={section} busyId={busyId} updateUser={updateUser} deleteUser={deleteUser} onDetails={(u)=>{setSelectedUserId(u.id || u.uid); go('users-details')}} renderTable={renderTable}/>;
     }
     if (section.startsWith('listings')) {
       let rows = filtered(listings,['title','owner_username','location','status']);
@@ -371,7 +383,7 @@ function Payouts({payouts,reconciliation,section,submitPayout,payoutAmount,setPa
   return <div className="rentora-card overflow-x-auto"><table className="w-full min-w-[820px] text-xs"><thead><tr className="border-b"><th className="p-3 text-right">عملیات</th><th className="p-3 text-right">مبلغ</th><th className="p-3 text-right">Status</th><th className="p-3 text-right">دریافت‌کننده</th><th className="p-3 text-right">آخرین تغییر</th><th className="p-3 text-right">عملیات</th></tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={r.id||i} className="border-b last:border-0"><td className="p-3">{r.operation_key||r.id}</td><td className="p-3">{money(r.amount)}</td><td className="p-3"><Status s={r.status}/></td><td className="p-3">{r.recipient||r.pi_payment_id||'—'}</td><td className="p-3">{date(r.updated_at)}</td><td className="p-3">{section==='payout-reconcile'?<button type="button" aria-label={`تلاش مجدد برای تطبیق پرداخت ${r.id}`} disabled={busyId===r.id} onClick={()=>retryReconciliation(r.id)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{busyId===r.id?'...':'تلاش مجدد / حل مشکل'}</button>:'—'}</td></tr>):<tr><td colSpan="6" className="p-8 text-center text-slate-400">موردی وجود ندارد.</td></tr>}</tbody></table></div>;
 }
 
-function UsersView({rows,section,busyId,updateUser,onDetails,renderTable}) {
+function UsersView({rows,section,busyId,updateUser,deleteUser,onDetails,renderTable}) {
   const verified = rows.filter(r => r.kycStatus === 'verified').length;
   const pending = rows.filter(r => r.kycStatus && r.kycStatus !== 'verified').length;
   const suspended = rows.filter(r => r.status === 'suspended').length;
@@ -380,7 +392,7 @@ function UsersView({rows,section,busyId,updateUser,onDetails,renderTable}) {
       {[['نمایش', rows.length], ['KYC تاییدشده', verified], ['تعلیق‌شده', suspended]].map(([l,v]) => <div key={l} className="rentora-card p-3"><div className="text-[10px] text-slate-500">{l}</div><div className="text-lg font-black mt-1">{v}</div></div>)}
     </div>
     {section === 'users-kyc' && <div className="p-3 rounded-xl bg-[#EEEDFE] dark:bg-[#211E45] text-xs">صفحه KYC فقط کاربرانی را نشان می‌دهد که هنوز وضعیت تاییدشده ندارند. {pending} مورد در این فهرست است.</div>}
-    {renderTable([['نام کاربری',r=>`@${r.username||'—'}`],['Status',r=><Status s={r.status}/>],['احراز هویت',r=><Status s={r.kycStatus||'unknown'}/>],['نقش',r=>r.role],['تاریخ عضویت',r=>date(r.created_at||r.joinedDate)],['Actions',r=><div className="flex gap-1 flex-wrap"><button type="button" aria-label={r.status==='active'?`تعلیق کاربر ${r.username||r.id}`:`فعال‌سازی کاربر ${r.username||r.id}`} disabled={busyId===r.id} onClick={()=>updateUser(r,'status')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'تعلیق':'فعال‌سازی'}</button><button type="button" aria-label={r.kycStatus==='verified'?`لغو تایید KYC کاربر ${r.username||r.id}`:`تایید KYC کاربر ${r.username||r.id}`} disabled={busyId===r.id} onClick={()=>updateUser(r,'kyc')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.kycStatus==='verified'?'لغو تأیید':'تأیید احراز هویت'}</button><button type="button" aria-label={`مشاهده جزئیات کاربر ${r.username||r.id}`} onClick={()=>onDetails(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">جزئیات</button></div>]],rows)}
+    {renderTable([['نام کاربری',r=>`@${r.username||'—'}`],['Status',r=><Status s={r.status}/>],['احراز هویت',r=><Status s={r.kycStatus||'unknown'}/>],['نقش',r=>r.role],['تاریخ عضویت',r=>date(r.created_at||r.joinedDate)],['Actions',r=><div className="flex gap-1 flex-wrap"><button type="button" aria-label={r.status==='active'?`تعلیق کاربر ${r.username||r.id}`:`فعال‌سازی کاربر ${r.username||r.id}`} disabled={busyId===r.id} onClick={()=>updateUser(r,'status')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.status==='active'?'تعلیق':'فعال‌سازی'}</button><button type="button" aria-label={r.kycStatus==='verified'?`لغو تایید KYC کاربر ${r.username||r.id}`:`تایید KYC کاربر ${r.username||r.id}`} disabled={busyId===r.id} onClick={()=>updateUser(r,'kyc')} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">{r.kycStatus==='verified'?'لغو تأیید':'تأیید احراز هویت'}</button><button type="button" aria-label={`مشاهده جزئیات کاربر ${r.username||r.id}`} onClick={()=>onDetails(r)} className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800">جزئیات</button>{r.role !== 'admin' && <button type="button" aria-label={`حذف حساب کاربر ${r.username||r.id}`} disabled={busyId===r.id} onClick={()=>deleteUser(r)} className="px-2 py-1 rounded bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300">حذف حساب</button>}</div>]],rows)}
   </div>;
 }
 function UserDetails({user,onBack}) {
