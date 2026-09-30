@@ -717,6 +717,77 @@ function userView(row, env, options = {}) {
   }
   return view;
 }
+async function reconcileRentalLifecycle(env) {
+  if (!env?.RENTORA_DB) return;
+  const current = now();
+
+  // Date is authoritative for physical availability. Handover/return buttons are
+  // optional evidence, not a prerequisite for making a listing unavailable/available.
+  const rentals = await env.RENTORA_DB.prepare(`
+    SELECT r.id, r.listing_id, r.status, r.payment_status, r.start_date, r.end_date, l.status AS listing_status
+    FROM rentals r
+    JOIN listings l ON l.id = r.listing_id
+    WHERE r.status IN ('confirmed', 'active', 'expired')
+       OR l.status = 'in_use'
+  `).all().catch(() => ({ results: [] }));
+
+  for (const rental of (rentals.results || [])) {
+    const startMs = Date.parse(rental.start_date);
+    const endMs = Date.parse(rental.end_date);
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) continue;
+
+    const hasValidPayment = rental.payment_status === 'completed';
+    const currentlyInUse = hasValidPayment && startMs <= Date.parse(current) && Date.parse(current) < endMs;
+
+    if (currentlyInUse) {
+      if (rental.status === 'confirmed' && rental.payment_status === 'completed') {
+        await env.RENTORA_DB.prepare(
+          "UPDATE rentals SET status='active', updated_at=?1 WHERE id=?2 AND status='confirmed' AND payment_status='completed'"
+        ).bind(current, rental.id).run().catch(() => {});
+      }
+      if (rental.listing_status === 'active') {
+        await env.RENTORA_DB.prepare(
+          "UPDATE listings SET status='in_use', updated_at=?1 WHERE id=?2 AND status='active'"
+        ).bind(current, rental.listing_id).run().catch(() => {});
+      }
+      continue;
+    }
+
+    if (endMs <= Date.parse(current)) {
+      if (rental.status === 'confirmed' || rental.status === 'active') {
+        await env.RENTORA_DB.prepare(
+          "UPDATE rentals SET status='expired', updated_at=?1 WHERE id=?2 AND status IN ('confirmed','active')"
+        ).bind(current, rental.id).run().catch(() => {});
+      }
+      if (rental.listing_status === 'in_use') {
+        await env.RENTORA_DB.prepare(
+          "UPDATE listings SET status='active', updated_at=?1 WHERE id=?2 AND status='in_use'"
+        ).bind(current, rental.listing_id).run().catch(() => {});
+      }
+    }
+  }
+
+  // Safety net: an in-use listing without a currently valid rental must never stay locked.
+  const orphaned = await env.RENTORA_DB.prepare(`
+    SELECT l.id
+    FROM listings l
+    WHERE l.status='in_use'
+      AND NOT EXISTS (
+        SELECT 1 FROM rentals r
+        WHERE r.listing_id=l.id
+          AND r.payment_status='completed'
+          AND r.status IN ('confirmed','active')
+          AND julianday(r.start_date) <= julianday('now')
+          AND julianday(r.end_date) > julianday('now')
+      )
+  `).all().catch(() => ({ results: [] }));
+  for (const row of (orphaned.results || [])) {
+    await env.RENTORA_DB.prepare(
+      "UPDATE listings SET status='active', updated_at=?1 WHERE id=?2 AND status='in_use'"
+    ).bind(current, row.id).run().catch(() => {});
+  }
+}
+
 function listingView(row) {
   const meta = sanitizeListingPublicMetadata(parseMetadata(row.metadata));
   const ownerMeta = parseMetadata(row.owner_metadata);
@@ -762,6 +833,7 @@ function transactionView(row) {
 }
 
 async function listAll(env, auth) {
+  await reconcileRentalLifecycle(env);
   const user = auth?.user || null;
   const isAdminUser = user ? (user.role === 'admin' && isAdmin(user.pi_uid, env)) : false;
 
@@ -1057,6 +1129,7 @@ export default {
       }
       if (method === 'GET' && path === '/api/listings') {
         requireBindings(env);
+        await reconcileRentalLifecycle(env);
         let auth = null;
         const authHeader = request.headers.get('Authorization') || '';
         if (authHeader.startsWith('Bearer ')) {
@@ -1076,6 +1149,7 @@ export default {
         return jsonResponse({ success: true, items: (rows.results || []).map(listingView) }, 200, env, origin);
       }
       if (method === 'GET' && path.startsWith('/api/listings/') && !path.slice('/api/listings/'.length).includes('/')) {
+        await reconcileRentalLifecycle(env);
         const listingId = path.slice('/api/listings/'.length).trim();
         if (!listingId) return errorResponse('Missing listing ID', 400, env, undefined, origin);
         requireBindings(env);
@@ -1717,12 +1791,15 @@ export default {
           if (existing.owner_user_id !== user.id && !isAdmin(user.pi_uid, env)) return errorResponse('Listing ownership denied', 403, env, undefined, origin);
           const isDeleting = item.status === 'deleted' && existing.status !== 'deleted';
           const existingMeta = parseMetadata(existing.metadata);
+          const requestedStatus = String(item.status || existing.status || 'active').toLowerCase();
+          const preservedInUseStatus = existing.status === 'in_use' && requestedStatus === 'active';
+          const nextListingStatus = preservedInUseStatus ? 'in_use' : requestedStatus;
           const price = Number(item.pricePerDay ?? existing.price_per_day);
           const deposit = Number(item.deposit ?? existing.deposit_amount);
           if (!Number.isFinite(price) || price < 0 || !Number.isFinite(deposit) || deposit < 0) {
             return errorResponse('Invalid listing price', 400, env, undefined, origin);
           }
-          await env.RENTORA_DB.prepare(`UPDATE listings SET title=?1,description=?2,category=?3,location=?4,price_per_day=?5,deposit_amount=?6,status=?7,metadata=?8,updated_at=?9 WHERE id=?10`).bind(String(item.title).trim(), item.description || '', item.category || null, item.location || null, price, deposit, item.status || 'active', JSON.stringify(sanitizedItem), now(), item.id).run();
+          await env.RENTORA_DB.prepare(`UPDATE listings SET title=?1,description=?2,category=?3,location=?4,price_per_day=?5,deposit_amount=?6,status=?7,metadata=?8,updated_at=?9 WHERE id=?10`).bind(String(item.title).trim(), item.description || '', item.category || null, item.location || null, price, deposit, nextListingStatus, JSON.stringify(sanitizedItem), now(), item.id).run();
           if (cInfo && typeof cInfo === 'object') {
             const cName = String(cInfo.contactName || cInfo.name || '').trim() || null;
             const cPhone = String(cInfo.contactPhone || cInfo.phone || cInfo.phoneContact || '').trim() || null;
@@ -2648,6 +2725,7 @@ export default {
       }
 
       if (method === 'POST' && path === '/api/rentals/quote') {
+        await reconcileRentalLifecycle(env);
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
         const listingId = String(body.listingId || '').trim();
@@ -2729,6 +2807,7 @@ export default {
       }
 
       if (method === 'POST' && path === '/api/rentals') {
+        await reconcileRentalLifecycle(env);
         const { user } = await requireUser(request, env);
         const body = await readJson(request);
 
