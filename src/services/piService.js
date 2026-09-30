@@ -98,27 +98,16 @@ class PiNetworkService {
         const sdkUser = authResult?.user;
         if (!accessToken || !sdkUser?.uid || !sdkUser?.username) throw new Error('اطلاعات معتبر از Pi Browser دریافت نشد.');
 
-        const isUserKyc = Boolean(
-          sdkUser?.kyc_status === true ||
-          sdkUser?.kyc_status === 'verified' ||
-          sdkUser?.is_kyc === true ||
-          sdkUser?.kyc === true ||
-          sdkUser?.credentials?.kyc === true ||
-          (Array.isArray(sdkUser?.roles) && (
-            sdkUser.roles.includes('kyc') ||
-            sdkUser.roles.includes('kyced') ||
-            sdkUser.roles.includes('pioneer_kyc')
-          ))
-        );
-
+        // Pi SDK identity is verified server-side through /me, but the SDK user
+        // object is not a trustworthy source for Rentora KYC. KYC shown in the
+        // product must come from the server-side Rentora verification record.
         const response = await fetch(`${apiBase}/api/auth/pi-login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({
             accessToken,
-            user: sdkUser,
-            kycStatus: isUserKyc ? 'verified' : 'unverified'
+            user: sdkUser
           })
         });
         const data = await response.json().catch(() => ({}));
@@ -129,7 +118,7 @@ class PiNetworkService {
           uid: data.user.uid,
           username: data.user.username,
           isOfficialSdk: true,
-          kycStatus: data.user.kycStatus === 'verified' ? 'verified' : 'unverified',
+          kycStatus: data.user?.kycStatus || 'unknown',
           user: data.user
         };
       } finally {
