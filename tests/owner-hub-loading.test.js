@@ -9,5 +9,5 @@ test('owner dashboard refresh callback is stable and cannot retrigger its loadin
   assert.match(context, /const refreshApp = useCallback\(async \(\) =>/);
   assert.match(context, /\}, \[currentUser, refreshConversations\]\);/);
   assert.match(owner, /refreshApp\?\.\(\)/);
-  assert.match(owner, /\}, \[isAuthenticated, currentUser\?\.uid, refreshApp, l\]\);/);
+  assert.match(owner, /\}, \[isAuthenticated, currentUser\?\.uid, refreshApp, lang\]\);/);
 });
