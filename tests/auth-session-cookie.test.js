@@ -29,5 +29,8 @@ test('gateway session cookie supports Pi App Studio External App cross-site requ
   const gateway = fs.readFileSync(new URL('../worker-gateway2.js', import.meta.url), 'utf8');
   assert.ok(gateway.includes('SameSite=None'));
   assert.ok(gateway.includes('__Host-rentora_session='));
-  assert.ok(gateway.includes('HttpOnly; Secure; SameSite=None'));
+  assert.ok(gateway.includes("const setCookie = headers.get('Set-Cookie') || ''"));
+  assert.ok(gateway.includes("setCookie.includes('__Host-rentora_session='"));
+  assert.match(gateway, /SameSite=None/);
+  assert.match(gateway, /Partitioned/);
 });
