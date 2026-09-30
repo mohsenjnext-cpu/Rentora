@@ -18,7 +18,8 @@ export default function BottomNav({ currentTab, onNavigate }) {
     const belongsToCurrentUser =
       (myUid && renterUid && renterUid === myUid) ||
       (myUsername && renterUsername && renterUsername === myUsername);
-    if (!belongsToCurrentUser || !ACTIONABLE_RENTAL_STATUSES.has(String(r?.status || '').toLowerCase())) return false;
+    const belongsToCurrentUserAndActionable = belongsToCurrentUser && ACTIONABLE_RENTAL_STATUSES.has(String(r?.status || '').toLowerCase());
+    if (!belongsToCurrentUserAndActionable) return false;
 
     const endDate = String(r?.endDate || r?.end_date || '').trim();
     if (endDate) {
