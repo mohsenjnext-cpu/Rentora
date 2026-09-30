@@ -236,13 +236,26 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
     return deduped;
   }, [rentals, myUsername, currentUser]);
 
+  const isRentalDateExpired = (rental) => {
+    if (!rental?.endDate) return false;
+    const endDate = String(rental.endDate).trim();
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(endDate)) return false;
+    return new Date().toISOString().slice(0, 10) > endDate;
+  };
+
+  const expiredRentals = useMemo(() => {
+    return myRentals.filter(r =>
+      (r.status === RENTAL_STATES.CONFIRMED || r.status === RENTAL_STATES.ACTIVE) &&
+      isRentalDateExpired(r)
+    );
+  }, [myRentals]);
+
   const activeRentals = useMemo(() => {
     return myRentals.filter(r =>
-      r.status === RENTAL_STATES.CONFIRMED ||
-      r.status === RENTAL_STATES.ACTIVE ||
-      r.status === RENTAL_STATES.PAYMENT_PENDING ||
-      r.status === RENTAL_STATES.REQUESTED ||
-      r.status === RENTAL_STATES.ACCEPTED
+      (r.status === RENTAL_STATES.CONFIRMED || r.status === RENTAL_STATES.ACTIVE ||
+       r.status === RENTAL_STATES.PAYMENT_PENDING || r.status === RENTAL_STATES.REQUESTED ||
+       r.status === RENTAL_STATES.ACCEPTED) &&
+      !isRentalDateExpired(r)
     );
   }, [myRentals]);
 
@@ -413,6 +426,18 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
 
         <button
           type="button"
+          onClick={() => setActiveTab('expired')}
+          role="tab"
+          aria-selected={activeTab === 'expired'}
+          aria-controls="activity-rentals-expired-panel"
+          className="flex-1 py-2 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+        >
+          <AlertTriangle className="w-3.5 h-3.5" />
+          <span>{l('منقضی', 'Expired', 'منتهية', '已过期')} ({expiredRentals.length})</span>
+        </button>
+
+        <button
+          type="button"
           role="tab"
           aria-selected={activeTab === 'history'}
           aria-controls="activity-rental-history-panel"
@@ -529,25 +554,68 @@ export default function ActivityPage({ onNavigate, onSelectItem, onOpenChat }) {
         </div>
       )}
 
+      {/* Expired rentals requiring resolution */}
+      {activeTab === 'expired' && (
+        <div id="activity-rentals-expired-panel" role="tabpanel" className="space-y-3">
+          {expiredRentals.length === 0 ? (
+            <div className="p-8 text-center rounded-xl rentora-card space-y-2">
+              <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500 stroke-[1.5]" />
+              <p className="text-xs text-slate-400">{l('رزرو منقضی و حل‌نشده‌ای وجود ندارد.', 'No expired unresolved rentals.', 'لا توجد إيجارات منتهية غير محسومة.', '没有待处理的过期租赁。')}</p>
+            </div>
+          ) : expiredRentals.map(rental => {
+            const bookingNumber = rental.bookingNumber || rental.rentalAgreement?.agreementId || rental.id.substring(0, 10);
+            return (
+              <div key={rental.id} className="p-4 rounded-xl rentora-card space-y-3 border border-amber-200 dark:border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/20">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="font-mono text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/60 px-1.5 py-0.5 rounded">#{bookingNumber}</span>
+                      <span className="text-[10px] text-slate-400 font-mono">{rental.startDate} ➔ {rental.endDate}</span>
+                    </div>
+                    <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">{rental.itemTitle}</h3>
+                    <span className="text-[11px] text-slate-400 font-mono block">{l('موجر:', 'Owner:', 'المؤجر:', '物主：')} @{rental.ownerUsername}</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 shrink-0">
+                    {l('تاریخ اجاره گذشته', 'Rental period expired', 'انتهت مدة الإيجار', '租期已结束')}
+                  </span>
+                </div>
+                <div className="p-3 rounded-lg bg-white/70 dark:bg-[#16152B]/70 text-[11px] border border-amber-200/70 dark:border-amber-900/50">
+                  <p className="font-semibold text-amber-900 dark:text-amber-200">{l('این رزرو به‌صورت خودکار «تکمیل‌شده» نمی‌شود؛ چون پایان تاریخ اجاره به‌تنهایی ثابت نمی‌کند کالا تحویل داده شده است.', 'This rental is not auto-completed because an expired date alone does not prove the item was returned.', 'لا يتم إكمال الإيجار تلقائياً لأن انتهاء التاريخ لا يثبت إعادة الغرض.', '租期结束本身不能证明物品已归还，因此不会自动标记为完成。')}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button type="button" onClick={() => handleOpenContactModal(rental)} className="btn-primary px-3 py-1.5 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer">
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>{l('هماهنگی بازگشت', 'Coordinate return', 'تنسيق الإعادة', '协调归还')}</span>
+                  </button>
+                  <button type="button" onClick={() => setSelectedAgreementRental(rental)} className="btn-secondary px-3 py-1.5 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer">
+                    <FileText className="w-3.5 h-3.5 text-[#534AB7]" />
+                    <span>{l('قرارداد', 'Agreement', 'العقد', '协议')}</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* History Tab */}
       {activeTab === 'history' && (
         <div id="activity-rental-history-panel" role="tabpanel" className="space-y-3">
-          {historyRentals.length > 0 && (
-            <div className="flex items-center justify-between px-1 py-1">
-              <span className="text-xs text-slate-500 font-medium">
-                {historyRentals.length} {l('مورد در سوابق', 'records in history', 'سجلات في الأرشيف', '条历史记录')}
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsClearHistoryModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/60 dark:border-rose-800/60 transition cursor-pointer"
-                title={t('btnClearHistory')}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{t('btnClearHistory')}</span>
-              </button>
-            </div>
-          )}
+          <div className="flex items-center justify-between px-1 py-1">
+            <span className="text-xs text-slate-500 font-medium">
+              {historyRentals.length} {l('مورد در سوابق', 'records in history', 'سجلات في الأرشيف', '条历史记录')}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsClearHistoryModalOpen(true)}
+              disabled={historyRentals.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 border border-rose-200/60 dark:border-rose-800/60 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title={t('btnClearHistory')}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{t('btnClearHistory')}</span>
+            </button>
+          </div>
 
           {clearSuccessNotice && (
             <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2 text-emerald-700 dark:text-emerald-400 text-xs font-bold animate-fadeIn">
