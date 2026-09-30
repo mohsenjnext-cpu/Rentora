@@ -7,7 +7,7 @@ const page = fs.readFileSync(new URL('../src/pages/AdminDashboardPage.jsx', impo
 test('admin reports view exposes trust and safety counters', () => {
   assert.match(page, /function ReportsView\(\{rows,busyId,updateReport,renderTable\}\)/);
   assert.match(page, /\['باز',open\],\['در حال بررسی',reviewing\],\['حل‌شده',resolved\]/);
-  assert.match(page, /امنیت و اعتماد/);
+  assert.match(page, /بررسی Trust & Safety/);
   assert.match(page, /r.status==='open'/);
   assert.match(page, /r.status==='reviewing'/);
 });
