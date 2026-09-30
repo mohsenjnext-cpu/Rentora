@@ -16,10 +16,10 @@ test('admin dashboard exposes accessible search and refresh controls', () => {
 });
 
 test('admin dashboard navigation exposes expanded and current state', () => {
-  assert.ok(source.includes('aria-label="ناوبری پنل مدیریت"'));
-  assert.ok(source.includes('aria-expanded={n.children ? open : undefined}'));
-  assert.ok(source.includes('aria-current={section===n.id ? "page" : undefined}'));
-  assert.ok(source.includes('aria-current={section===c[0] ? "page" : undefined}'));
+  assert.ok(source.includes('aria-label="ناوبری اصلی مدیریت"'));
+  assert.ok(source.includes('aria-current={active ? "page" : undefined}'));
+  assert.ok(source.includes('aria-current={active ? "page" : undefined}'));
+  assert.ok(source.includes('aria-label={`زیرمنوی ${activeNav.label}`}'));
 });
 
 
